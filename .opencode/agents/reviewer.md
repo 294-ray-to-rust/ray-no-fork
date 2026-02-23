@@ -96,10 +96,18 @@ gh pr review <NUMBER> --approve --body "Approved. All acceptance criteria met.
 - Code quality: acceptable"
 ```
 
-Then merge the PR:
+Then merge the PR with a descriptive commit message summarizing what was done:
 ```bash
-gh pr merge <NUMBER> --squash --delete-branch --body "Merged by Reviewer Agent."
+gh pr merge <NUMBER> --squash --delete-branch --subject "<PR title> (#<NUMBER>)" --body "<2-5 sentence summary of the changes made, what problem they solve, and which files were modified. Reference the issue number.>"
 ```
+
+The merge commit message should be meaningful to someone reading `git log`. Do NOT use generic messages like "Merged by Reviewer Agent." Instead describe the actual work, e.g.:
+
+> Add Rust FFI bindings for the raylet scheduler (#12)
+>
+> Introduces initial Rust crate with FFI boundary for the scheduler module.
+> Adds safe wrappers around C++ scheduling primitives in src/ray/scheduler/ffi.rs.
+> Includes unit tests for the FFI bridge. Closes #11.
 
 **3b. If the PR NEEDS CHANGES:**
 

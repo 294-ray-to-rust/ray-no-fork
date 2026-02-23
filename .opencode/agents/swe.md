@@ -48,7 +48,15 @@ Follow these steps IN ORDER every time you are invoked.
 
 ### Step 1: Find an Issue to Work On
 
-Query for available issues:
+**First, check for issues with existing draft PRs (partial work from a previous run):**
+
+```bash
+gh pr list --state open --draft --json number,title,body,headRefName,url --limit 10
+```
+
+If any draft PRs exist, look at their bodies for "Closes #N" to find the linked issue number. Check if that issue is labeled `ready`. If so, **prioritize that issue** — it has previous work you can build on. Note the draft PR's branch name for context.
+
+**Then, query for all available issues:**
 
 ```bash
 gh issue list --label "ready" --state open --json number,title,body --jq 'sort_by(.number)' --limit 10
@@ -58,11 +66,19 @@ gh issue list --label "ready" --state open --json number,title,body --jq 'sort_b
 Print "No ready issues available. Exiting." and stop. Do nothing else.
 
 **If `ready` issues exist:**
-Pick the issue with the LOWEST number (this is the highest priority).
+Pick the issue to work on using this priority order:
+1. Issues that have an existing draft PR (continue previous partial work)
+2. Otherwise, the issue with the LOWEST number
+
 Read its full body:
 
 ```bash
 gh issue view <NUMBER> --json number,title,body,comments
+```
+
+If continuing from a draft PR, also read the PR diff to understand what was already done:
+```bash
+gh pr diff <PR_NUMBER>
 ```
 
 Check if the issue has a dependency listed in its body (look for "Dependencies" or "Depends on #N"). If the dependency issue is still open, SKIP this issue and try the next one. If all ready issues have unmet dependencies, print "All ready issues have unmet dependencies. Exiting." and stop.

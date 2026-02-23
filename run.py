@@ -219,6 +219,7 @@ def create_pull_request(
     branch_name: str,
     base_branch: str,
     issue_number: int | None,
+    draft: bool = False,
 ) -> str | None:
     """Create a GitHub PR for the branch. Returns the PR URL or None on failure."""
     if issue_number:
@@ -239,22 +240,71 @@ def create_pull_request(
             f"No linked issue was found in commit messages.\n"
         )
 
-    result = subprocess.run(
-        ["gh", "pr", "create",
-         "--base", base_branch,
-         "--head", branch_name,
-         "--title", title,
-         "--body", body,
-         "--label", "needs-review"],
-        cwd=project_dir, capture_output=True, text=True,
-    )
+    cmd = [
+        "gh", "pr", "create",
+        "--base", base_branch,
+        "--head", branch_name,
+        "--title", title,
+        "--body", body,
+    ]
+    if draft:
+        cmd.append("--draft")
+    else:
+        cmd.extend(["--label", "needs-review"])
+
+    result = subprocess.run(cmd, cwd=project_dir, capture_output=True, text=True)
     if result.returncode != 0:
         log.error("Failed to create PR for '%s': %s", branch_name, result.stderr.strip())
         return None
 
     pr_url = result.stdout.strip()
     log.info("Created PR: %s", pr_url)
+
+    # Explicitly link the PR to the issue in GitHub's sidebar
+    if issue_number:
+        subprocess.run(
+            ["gh", "issue", "develop", "--issue", str(issue_number),
+             "--base", base_branch, "--name", branch_name],
+            cwd=project_dir, capture_output=True, text=True,
+        )
+
     return pr_url
+
+
+def is_issue_closed(project_dir: Path, issue_number: int) -> bool:
+    """Check if a GitHub issue is closed."""
+    result = subprocess.run(
+        ["gh", "issue", "view", str(issue_number), "--json", "state", "--jq", ".state"],
+        cwd=project_dir, capture_output=True, text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "CLOSED"
+
+
+def reset_issue_to_ready(project_dir: Path, issue_number: int) -> None:
+    """Reset an in-progress issue back to ready (SWE didn't finish)."""
+    subprocess.run(
+        ["gh", "issue", "edit", str(issue_number),
+         "--remove-label", "in-progress", "--add-label", "ready"],
+        cwd=project_dir, capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["gh", "issue", "comment", str(issue_number),
+         "--body", "SWE agent did not complete this issue. Resetting to ready. A draft PR with partial progress has been created."],
+        cwd=project_dir, capture_output=True, text=True,
+    )
+    log.info("Reset issue #%d to ready.", issue_number)
+
+
+def pull_base_branch(project_dir: Path, base_branch: str) -> None:
+    """Pull the latest base branch so new worktrees include merged PRs."""
+    result = subprocess.run(
+        ["git", "pull", "origin", base_branch],
+        cwd=project_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        log.warning("Failed to pull %s: %s", base_branch, result.stderr.strip())
+    else:
+        log.info("Pulled latest '%s'.", base_branch)
 
 
 # ---------------------------------------------------------------------------
@@ -275,15 +325,17 @@ You are the Manager Agent. Execute your full protocol now:
 
 SWE_PROMPT = """\
 You are the SWE Agent. Execute your full protocol now:
-1. Query for ready issues: gh issue list --label ready --state open --json number,title,body --jq 'sort_by(.number)' --limit 10
-2. If no ready issues, print 'No ready issues available. Exiting.' and stop
-3. Pick the lowest-numbered ready issue, check its dependencies
-4. Claim it (change label to in-progress, add a comment)
-5. Read goal.md to see overarching goal
-6. Understand the task from the issue body and codebase exploration
-7. Implement the solution
-8. Validate (run tests if they exist)
-9. Report results: commit and close if done, or mark blocked with explanation"""
+1. Check for draft PRs first: gh pr list --state open --draft --json number,title,body,headRefName,url --limit 10
+2. Query for ready issues: gh issue list --label ready --state open --json number,title,body --jq 'sort_by(.number)' --limit 10
+3. If no ready issues, print 'No ready issues available. Exiting.' and stop
+4. Prioritize issues with an existing draft PR (continue previous work), then lowest-numbered
+5. If continuing a draft PR, read its diff to understand what was already done
+6. Claim it (change label to in-progress, add a comment)
+7. Read goal.md to see overarching goal
+8. Understand the task from the issue body and codebase exploration
+9. Implement the solution
+10. Validate (run tests if they exist)
+11. Report results: commit and close if done, or mark blocked with explanation"""
 
 
 def run_agent(
@@ -552,9 +604,8 @@ def main() -> None:
             clear_state(project_dir)
             break
 
-        # --- Phase 2: SWE agent runs (each in its own worktree/branch) ---
+        # --- Phase 2: SWE runs, each followed by push + PR + review ---
         first_swe = start_swe_run if cycle == start_cycle else 1
-        created_branches_this_cycle: list[str] = []
 
         for swe_run in range(first_swe, args.swe_runs_per_cycle + 1):
 
@@ -584,39 +635,53 @@ def main() -> None:
                 if exit_code != 0:
                     log.warning("SWE exited with error on run %d. Continuing.", swe_run)
 
-                # Check if the SWE agent made any commits
-                if has_commits_ahead(worktree_path, args.base_branch):
-                    log.info("Branch '%s' has new commits.", branch_name)
-                    created_branches.append(branch_name)
-                    created_branches_this_cycle.append(branch_name)
-                else:
-                    log.info("No commits on '%s'. Cleaning up.", branch_name)
+                # Commit any uncommitted changes the SWE agent left behind
+                status = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=worktree_path, capture_output=True, text=True,
+                )
+                if status.returncode == 0 and status.stdout.strip():
+                    log.info("SWE left uncommitted changes. Auto-committing.")
+                    subprocess.run(["git", "add", "-A"], cwd=worktree_path, capture_output=True, text=True)
+                    subprocess.run(
+                        ["git", "commit", "-m", "WIP: uncommitted changes from SWE agent"],
+                        cwd=worktree_path, capture_output=True, text=True,
+                    )
+
+                # Check if the branch has any commits
+                has_work = has_commits_ahead(worktree_path, args.base_branch)
 
             finally:
                 # Always clean up the worktree (branch stays if it has commits)
                 remove_worktree(project_dir, worktree_path)
 
-            # Small delay between SWE runs
+            # Push, create PR, and run reviewer immediately after each SWE run
+            if has_work:
+                log.info("Branch '%s' has new commits.", branch_name)
+                created_branches.append(branch_name)
+
+                if push_branch(project_dir, branch_name):
+                    issue_num = extract_issue_number(project_dir, branch_name, args.base_branch)
+                    issue_complete = issue_num is not None and is_issue_closed(project_dir, issue_num)
+
+                    if issue_complete:
+                        # SWE finished the work — full PR + review
+                        pr_url = create_pull_request(project_dir, branch_name, args.base_branch, issue_num)
+                        if pr_url:
+                            exit_code = run_reviewer(cycle, timestamp, project_dir, log_dir)
+                            if exit_code != 0:
+                                log.warning("Reviewer exited with error. PR remains open.")
+                            pull_base_branch(project_dir, args.base_branch)
+                    else:
+                        # SWE didn't finish — draft PR + reset issue to ready
+                        log.info("Issue not closed. Creating draft PR for partial work.")
+                        create_pull_request(project_dir, branch_name, args.base_branch, issue_num, draft=True)
+                        if issue_num is not None:
+                            reset_issue_to_ready(project_dir, issue_num)
+            else:
+                log.info("No commits on '%s'. Cleaning up.", branch_name)
+
             time.sleep(3)
-
-        # --- Phase 3: Push branches and create PRs ---
-        print()
-        print(f"--- PUSH & PRs (cycle {cycle}) ---")
-        created_prs: list[str] = []
-        for branch in created_branches_this_cycle:
-            if push_branch(project_dir, branch):
-                issue_num = extract_issue_number(project_dir, branch, args.base_branch)
-                pr_url = create_pull_request(project_dir, branch, args.base_branch, issue_num)
-                if pr_url:
-                    created_prs.append(pr_url)
-
-        # --- Phase 4: Reviewer agent reviews and merges PRs ---
-        if created_prs:
-            exit_code = run_reviewer(cycle, timestamp, project_dir, log_dir)
-            if exit_code != 0:
-                log.warning("Reviewer exited with error. PRs remain open for next cycle.")
-        else:
-            log.info("No PRs created this cycle. Skipping reviewer.")
 
         # Save state pointing to next cycle
         save_state(project_dir, {

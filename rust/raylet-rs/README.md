@@ -21,3 +21,14 @@ cargo test -p raylet-rs
 
 The current tests are smoke-level to ensure the entry points stay
 callable. Expand them as subsystems migrate to Rust.
+
+## Continuous Integration
+
+Pushes and pull requests that touch this crate automatically run the
+`raylet-rs` GitHub Actions workflow:
+
+- `cargo fmt --all --check`
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo test -p raylet-rs`
+
+Keep these checks passing before merging any changes.

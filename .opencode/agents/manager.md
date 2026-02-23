@@ -1,7 +1,7 @@
 ---
 description: "Project manager: reads goals, reviews GitHub issues, creates work items, updates memory."
 mode: primary
-model: anthropic/claude-sonnet-4-20250514
+model: openai/gpt-5.1-codex
 temperature: 0.1
 steps: 30
 tools:
@@ -52,10 +52,6 @@ cat goal.md
 
 ```bash
 cat memory.md
-```
-
-```bash
-cd work
 ```
 
 ```bash

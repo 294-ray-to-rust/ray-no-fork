@@ -1,13 +1,10 @@
 {
   "$schema": "https://opencode.ai/config.json",
 
-  "model": "anthropic/claude-sonnet-4-20250514",
-  "small_model": "anthropic/claude-haiku-4-5",
+  "model": "openai/gpt-5.1-codex",
+  "small_model": "openai/gpt-5.1-codex",
 
-  "instructions": [
-    "AGENTS.md",
-    "goal.md"
-  ],
+  "instructions": ["AGENTS.md", "goal.md"],
 
   "tools": {
     "bash": true,
@@ -48,35 +45,27 @@
     "manager": {
       "description": "Project manager: reads goals, reviews issues, creates work items, updates memory.",
       "mode": "primary",
-      "model": "anthropic/claude-sonnet-4-20250514",
+      "model": "openai/gpt-5.1-codex",
       "temperature": 0.1,
       "steps": 30
     },
     "swe": {
       "description": "Software engineer: picks issues, implements solutions, reports progress.",
       "mode": "primary",
-      "model": "anthropic/claude-sonnet-4-20250514",
+      "model": "openai/gpt-5.1-codex",
       "temperature": 0.0,
       "steps": 50
-    }
-  },
-
-  "command": {
-    "manager-run": {
-      "description": "Run the manager agent to review and create issues",
-      "agent": "manager"
     },
-    "swe-run": {
-      "description": "Run the SWE agent to pick and implement an issue",
-      "agent": "swe"
+    "reviewer": {
+      "description": "Code reviewer: reviews PRs, approves and merges good work, requests changes on issues.",
+      "mode": "primary",
+      "model": "openai/gpt-5.1-codex",
+      "temperature": 0.1,
+      "steps": 40
     }
   },
 
   "watcher": {
-    "ignore": [
-      ".opencode/logs/**",
-      "node_modules/**",
-      ".git/**"
-    ]
+    "ignore": [".opencode/logs/**", "node_modules/**", ".git/**"]
   }
 }

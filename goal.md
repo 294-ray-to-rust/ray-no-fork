@@ -1,7 +1,7 @@
 # Project Goal
 
 ## Objective
-Rewrite the raylet in ray (the repo is in the work directory) from C++ to Rust, incrementally using FFI until the whole raylet can be finally converted to Rust. Make sure to test the new rust code.
+Rewrite the raylet in ray from C++ to Rust, incrementally using FFI until the whole raylet can be finally converted to Rust. Make sure to test the new rust code.
 
 ## Key Requirements
 - Raylet is written in Rust

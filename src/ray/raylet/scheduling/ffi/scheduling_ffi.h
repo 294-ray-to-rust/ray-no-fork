@@ -95,6 +95,13 @@ struct RayletSchedulingDecision {
   uint8_t is_spillback;
 };
 
+struct RayletLocalResourceManagerHandle;
+
+enum class RayletWorkFootprint : uint8_t {
+  kNodeWorkers = 1,
+  kPullingTaskArguments = 2,
+};
+
 inline RayletStr RayletStrFromRaw(const char *data, size_t len) {
   return RayletStr{data, len};
 }
@@ -121,6 +128,44 @@ inline RayletStrArray RayletStrArrayFromRaw(const RayletStr *entries, size_t len
 extern "C" {
 uint8_t raylet_rs_scheduler_roundtrip(const RayletSchedulingRequest *request,
                                       RayletSchedulingDecision *decision_out);
+
+RayletLocalResourceManagerHandle *raylet_rs_local_resource_manager_create(
+    const RayletNodeResources *node_resources);
+
+void raylet_rs_local_resource_manager_destroy(RayletLocalResourceManagerHandle *handle);
+
+uint8_t raylet_rs_local_resource_manager_allocate(
+    RayletLocalResourceManagerHandle *handle, const RayletResourceRequest *request);
+
+uint8_t raylet_rs_local_resource_manager_release(RayletLocalResourceManagerHandle *handle,
+                                                 const RayletResourceArray *resources);
+
+uint8_t raylet_rs_local_resource_manager_get_available(
+    const RayletLocalResourceManagerHandle *handle,
+    RayletStr resource_name,
+    double *available_out);
+
+uint8_t raylet_rs_local_resource_manager_add_resource_instances(
+    RayletLocalResourceManagerHandle *handle, RayletStr resource_name, double amount);
+
+uint8_t raylet_rs_local_resource_manager_subtract_resource_instances(
+    RayletLocalResourceManagerHandle *handle,
+    RayletStr resource_name,
+    double amount,
+    uint8_t allow_going_negative,
+    double *underflow_out);
+
+uint8_t raylet_rs_local_resource_manager_mark_footprint_busy(
+    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
+
+uint8_t raylet_rs_local_resource_manager_maybe_mark_footprint_busy(
+    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
+
+uint8_t raylet_rs_local_resource_manager_mark_footprint_idle(
+    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
+
+uint8_t raylet_rs_local_resource_manager_is_node_idle(
+    const RayletLocalResourceManagerHandle *handle);
 }
 
 }  // namespace ray::raylet::ffi

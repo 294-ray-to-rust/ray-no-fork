@@ -1,6 +1,11 @@
 load("//bazel:ray.bzl", "ray_cc_library")
 
 ray_cc_library(
+    name = "rust_scheduler_ffi",
+    hdrs = ["rust_scheduler_ffi.h"],
+)
+
+ray_cc_library(
     name = "scheduler",
     linkopts = select({
         "@platforms//os:windows": [

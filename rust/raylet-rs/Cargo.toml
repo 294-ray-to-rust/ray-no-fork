@@ -13,3 +13,9 @@ crate-type = ["rlib", "cdylib"]
 [[bin]]
 name = "raylet-rs"
 path = "src/main.rs"
+
+[dependencies]
+cxx = "1.0"
+
+[build-dependencies]
+cxx-build = "1.0"

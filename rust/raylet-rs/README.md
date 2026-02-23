@@ -11,7 +11,9 @@ cargo build -p raylet-rs
 ```
 
 This produces both the binary (`raylet-rs`) and a `cdylib` that can be
-linked from C++ via the exposed `raylet_entrypoint` shim.
+linked from C++ via the exposed `raylet_entrypoint` shim. During the
+build the `cxx` bridge regenerates `src/ray/raylet/scheduling/
+rust_scheduler_ffi.h`, which is the header C++ callers should include.
 
 ## Testing
 
@@ -19,5 +21,7 @@ linked from C++ via the exposed `raylet_entrypoint` shim.
 cargo test -p raylet-rs
 ```
 
-The current tests are smoke-level to ensure the entry points stay
-callable. Expand them as subsystems migrate to Rust.
+In addition to the Rust unit tests this command compiles and executes a
+small C++ smoke binary (`tests/cpp_scheduler_smoke.rs`) to verify that
+`libraylet_rs` links cleanly via the generated header. Ensure a `c++`
+compiler is available on your `PATH` when running the tests.

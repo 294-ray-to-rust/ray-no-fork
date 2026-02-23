@@ -3,6 +3,17 @@
 //! link against a stable FFI entry point while the implementation
 //! is developed.
 
+pub mod scheduler;
+
+pub use scheduler::{
+    raylet_scheduler_allocate,
+    raylet_scheduler_create,
+    raylet_scheduler_destroy,
+    raylet_scheduler_release,
+    raylet_scheduler_update_cluster_view,
+    RayletSchedulerHandle,
+};
+
 use std::os::raw::c_int;
 
 /// Minimal main entry point for the Rust raylet implementation.

@@ -74,6 +74,15 @@ Each phase is scoped so it can land within a single SWE iteration while leaving 
 - Use the `cxx` crate so Rust can own the scheduler types yet expose a stable C++ header living under `src/ray/raylet/scheduling/rust_scheduler_ffi.h`.
 - Mirror existing C++ scheduler unit tests in Rust (`raylet_rs/tests/scheduler_tests.rs`) and keep the legacy tests compiling to detect regressions while the new crate lands.
 
+The initial scaffolding for this ABI now lives in `rust/raylet-rs/src/scheduler.rs`.
+Future structs (e.g., `RayletSchedulerConfig`, `SchedulerResourceUpdate`) should be
+added to that module so the generated header stays the single include for C++
+callers. Rust-side ownership is validated through the `RayletSchedulerHandle`
+wrapper, and the exported header under `src/ray/raylet/scheduling` is what Bazel
+targets should include moving forward. Any expansion of the ABI should extend
+that header and keep the smoke test in `rust/raylet-rs/tests/cpp_scheduler_smoke.rs`
+passing so we know C++ continues to link the Rust cdylib.
+
 ## Next Steps
 - Create an issue per phase starting with the scheduler shim, referencing this document.
 - Align with build owners to introduce a `rust/` workspace section (Cargo + Bazel target) for the new crate, ensuring CI builds `raylet_rs` shared library alongside existing binaries.

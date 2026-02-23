@@ -1,7 +1,7 @@
 ---
 description: "Software engineer: picks GitHub issues, implements solutions, reports progress."
 mode: primary
-model: openai/gpt-5.1-codex
+model: openai/gpt-5.2-codex
 temperature: 0.0
 steps: 50
 tools:

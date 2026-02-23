@@ -1,7 +1,7 @@
 ---
 description: "Code reviewer: reviews PRs, approves and merges good work, requests changes on issues."
 mode: primary
-model: openai/gpt-5.1-codex
+model: openai/gpt-5.2-codex
 temperature: 0.1
 steps: 40
 tools:

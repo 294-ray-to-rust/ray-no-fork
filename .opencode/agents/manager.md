@@ -1,7 +1,7 @@
 ---
 description: "Project manager: reads goals, reviews GitHub issues, creates work items, updates memory."
 mode: primary
-model: openai/gpt-5.1-codex
+model: openai/gpt-5.2-codex
 temperature: 0.1
 steps: 30
 tools:

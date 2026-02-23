@@ -2,11 +2,11 @@
 
 ## Status
 - **Project status**: in_progress
-- **Last run**: 2026-02-23T20:10:00Z
-- **Run count**: 4
+- **Last run**: 2026-02-23T19:36:58Z
+- **Run count**: 6
 
 ## Summary
-Rust raylet crate exists and SWE is wiring the C++ entry plus scheduler components into the new FFI. LocalResourceManager and ABI/data-model work are back in the ready queue while scheduler FFI and the ClusterResourceScheduler remain the next milestones once those land.
+Scheduler ABI definition and Bazel alignment are the only ready paths. Scheduler FFI scaffolding is blocked until the Bazel toolchain mismatch is resolved.
 
 ## Completed Issues
 - #1: Set up Rust raylet crate
@@ -14,22 +14,24 @@ Rust raylet crate exists and SWE is wiring the C++ entry plus scheduler componen
 - #9: Add raylet-rs CI checks
 
 ## Active Issues
-- #5: Bridge C++ raylet main to Rust FFI [in-progress]
-- #6: Port LocalResourceManager logic to Rust [ready]
+- #5: Bridge C++ raylet main to Rust FFI [blocked]
+- #6: Port LocalResourceManager logic to Rust [blocked]
 - #7: Define ABI-safe raylet scheduling data model [ready]
-- #8: Bootstrap scheduler FFI scaffolding [in-progress]
+- #8: Bootstrap scheduler FFI scaffolding [blocked]
 - #10: Port ClusterResourceScheduler core to Rust [blocked]
+- #21: Align Bazel version for raylet Rust tests [ready]
 
 ## Decisions
-- Reset #6 and #7 to ready because they spanned multiple manager cycles without updates.
-- Left #5 and #8 marked in-progress to reflect the active SWE claims started this cycle.
-- Kept #10 blocked on #7 so the scheduler core does not start before the ABI is defined.
-- Recorded completion of #9 so future work can assume CI exists for the crate.
+- Reset #7 to ready after it remained in-progress across multiple cycles.
+- Removed the ready label from #8 and confirmed it is blocked on #21.
+- Kept #5, #6, and #10 blocked until #21 and #7 resolve their dependencies.
 
 ## Blockers
-- #10 requires the ABI structs from #7 before implementation can proceed.
+- #5 is blocked by the Bazel version mismatch (needs #21).
+- #6 and #10 require the ABI structs from #7 before implementation can proceed.
+- #8 requires Bazel toolchain alignment in #21 to run validation.
 
 ## Next Priorities
-1. Land #5 so the C++ raylet invokes the Rust crate under a feature flag.
-2. Pick up #6 and #7 to port LocalResourceManager and define the ABI/structs.
-3. After #7, continue with #8 and unblock #10 to move the scheduler loop to Rust.
+1. Finish #7 to define the ABI structs.
+2. Complete #21 to align Bazel tooling and unblock #5.
+3. Unblock #8 once #21 lands and resume scheduler FFI scaffolding.

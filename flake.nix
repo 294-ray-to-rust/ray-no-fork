@@ -1,9 +1,11 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Pinned nixpkgs that still has bazel_6
+    nixpkgs-bazel6.url = "github:NixOS/nixpkgs/nixos-24.11";
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, nixpkgs-bazel6, ... }:
     let
       forAllSystems = nixpkgs.lib.genAttrs [
         "aarch64-darwin"
@@ -16,6 +18,7 @@
       devShells = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+          pkgs-bazel6 = import nixpkgs-bazel6 { inherit system; };
           isLinux = pkgs.stdenv.isLinux;
 
           pythonEnv = pkgs.python312.withPackages (ps: [
@@ -53,6 +56,7 @@
               pkgs.clang
 
               # Bazel
+              pkgs-bazel6.bazel_6
               pkgs.bazel_7
 
               # Node.js (dashboard)

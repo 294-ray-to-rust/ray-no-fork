@@ -85,12 +85,15 @@ Check if the issue has a dependency listed in its body (look for "Dependencies" 
 
 ### Step 2: Claim the Issue
 
-Change the label and post a comment:
+Change the label, post a comment, and rename the branch to be descriptive:
 
 ```bash
 gh issue edit <NUMBER> --remove-label "ready" --add-label "in-progress"
 gh issue comment <NUMBER> --body "Claimed. Starting implementation."
+git branch -m <NUMBER>-<short-description>
 ```
+
+The branch name should include the issue number and a short kebab-case description of the work, e.g. `42-add-rust-ffi-bindings` or `15-fix-scheduler-crash`. Keep it under 50 characters.
 
 From this point forward, you are working on THIS issue and only this issue.
 
@@ -125,11 +128,11 @@ Run whatever validation is appropriate:
 
 Check your work against every acceptance criterion in the issue body.
 
-### Step 6: Report Results
+### Step 6: Commit, Push, and Create Draft PR
 
-**6a. If ALL acceptance criteria are met and tests pass:**
+**ALWAYS commit, push, and create a draft PR before finishing, regardless of outcome.**
 
-Commit the changes:
+First, commit all changes:
 
 ```bash
 git add -A
@@ -138,7 +141,26 @@ git commit -m "Implement #<NUMBER>: <short description>
 <one-line summary of what was done>"
 ```
 
-Report success:
+Then push the branch and create a draft PR linked to the issue:
+
+```bash
+git push --set-upstream origin HEAD
+gh pr create --draft --base main --title "Implement #<NUMBER>: <short description>" --body "Closes #<NUMBER>
+
+## Changes
+- <file1>: <what changed>
+- <file2>: <what changed>
+
+## Status
+<complete|partial|blocked>
+
+## Validation
+- <what tests/checks were run and their results>"
+```
+
+### Step 7: Report Results
+
+**7a. If ALL acceptance criteria are met and tests pass:**
 
 ```bash
 gh issue comment <NUMBER> --body "Implementation complete.
@@ -150,14 +172,12 @@ gh issue comment <NUMBER> --body "Implementation complete.
 **Validation:**
 - <what tests/checks were run and their results>
 
-All acceptance criteria met. Closing."
+All acceptance criteria met. Draft PR created. Closing."
 gh issue edit <NUMBER> --remove-label "in-progress" --add-label "completed"
 gh issue close <NUMBER>
 ```
 
-**6b. If you CANNOT complete the issue (blocked):**
-
-Do NOT commit partial work. Report the blocker:
+**7b. If you CANNOT complete the issue (blocked):**
 
 ```bash
 gh issue comment <NUMBER> --body "BLOCKED: <clear description of what is preventing completion>
@@ -168,26 +188,19 @@ gh issue comment <NUMBER> --body "BLOCKED: <clear description of what is prevent
 **What is needed to unblock:**
 - <specific thing that needs to happen>
 
-**Partial progress:**
-- <any insights gained>"
+Draft PR with partial progress has been created."
 gh issue edit <NUMBER> --remove-label "in-progress" --add-label "blocked"
 ```
 
-The orchestrator will clean up the worktree automatically. Do not discard changes manually.
-
-**6c. If acceptance criteria are PARTIALLY met:**
-
-Commit the meaningful work you completed:
+**7c. If acceptance criteria are PARTIALLY met:**
 
 ```bash
-git add -A
-git commit -m "Partial progress on #<NUMBER>: <what was done>"
 gh issue comment <NUMBER> --body "Partial progress. Completed:
 - [x] <criterion 1> - DONE
 - [x] <criterion 2> - DONE
 - [ ] <criterion 3> - NOT DONE: <reason>
 
-Marking as blocked for the remaining criteria."
+Draft PR with partial progress has been created."
 gh issue edit <NUMBER> --remove-label "in-progress" --add-label "blocked"
 ```
 
@@ -196,10 +209,11 @@ gh issue edit <NUMBER> --remove-label "in-progress" --add-label "blocked"
 1. Work on EXACTLY ONE issue per invocation. Never pick up a second issue.
 2. ALWAYS claim the issue (change label to `in-progress`) before starting work.
 3. NEVER modify `goal.md`, `memory.md`, `run.sh`, `run.py`, `opencode.json`, `AGENTS.md`, or agent/command files.
-4. NEVER force push. Only use normal `git commit` and `git add`.
-5. NEVER use `git push`. The orchestrator or human handles pushing.
+4. NEVER force push. Only use normal `git commit`, `git add`, and `git push`.
+5. ALWAYS push your branch and create a draft PR before finishing.
 6. Reference the issue number in all commit messages using `#<NUMBER>` syntax.
 7. If there are no `ready` issues, exit immediately. Do not wait or poll.
 8. If you get stuck after reasonable effort, mark as `blocked` rather than spinning.
 9. Keep commit messages concise: one subject line, one body line.
-10. Do not install new dependencies unless explicitly requested in the issue body.
+10. ALWAYS include `Closes #<NUMBER>` in the draft PR body to link it to the issue.
+11. Do not install new dependencies unless explicitly requested in the issue body.

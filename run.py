@@ -172,6 +172,17 @@ def remove_worktree(project_dir: Path, worktree_path: Path) -> None:
     subprocess.run(["git", "worktree", "prune"], cwd=project_dir, capture_output=True, text=True)
 
 
+def get_current_branch(worktree_path: Path) -> str | None:
+    """Get the current branch name in a worktree."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=worktree_path, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
 def has_commits_ahead(worktree_path: Path, base_branch: str) -> bool:
     """Check if the worktree branch has commits ahead of base_branch."""
     result = subprocess.run(["git", "rev-list", "--count", f"{base_branch}..HEAD"], cwd=worktree_path, capture_output=True, text=True)
@@ -280,16 +291,18 @@ def is_issue_closed(project_dir: Path, issue_number: int) -> bool:
     return result.returncode == 0 and result.stdout.strip() == "CLOSED"
 
 
-def reset_issue_to_ready(project_dir: Path, issue_number: int) -> None:
+def reset_issue_to_ready(project_dir: Path, issue_number: int, pr_url: str | None = None) -> None:
     """Reset an in-progress issue back to ready (SWE didn't finish)."""
     subprocess.run(
         ["gh", "issue", "edit", str(issue_number),
          "--remove-label", "in-progress", "--add-label", "ready"],
         cwd=project_dir, capture_output=True, text=True,
     )
+    comment = "SWE agent did not complete this issue. Resetting to ready."
+    if pr_url:
+        comment += f" A draft PR with partial progress is available: {pr_url}"
     subprocess.run(
-        ["gh", "issue", "comment", str(issue_number),
-         "--body", "SWE agent did not complete this issue. Resetting to ready. A draft PR with partial progress has been created."],
+        ["gh", "issue", "comment", str(issue_number), "--body", comment],
         cwd=project_dir, capture_output=True, text=True,
     )
     log.info("Reset issue #%d to ready.", issue_number)
@@ -330,12 +343,13 @@ You are the SWE Agent. Execute your full protocol now:
 3. If no ready issues, print 'No ready issues available. Exiting.' and stop
 4. Prioritize issues with an existing draft PR (continue previous work), then lowest-numbered
 5. If continuing a draft PR, read its diff to understand what was already done
-6. Claim it (change label to in-progress, add a comment)
+6. Claim it (change label to in-progress, rename branch to <NUMBER>-<short-description>)
 7. Read goal.md to see overarching goal
 8. Understand the task from the issue body and codebase exploration
 9. Implement the solution
 10. Validate (run tests if they exist)
-11. Report results: commit and close if done, or mark blocked with explanation"""
+11. ALWAYS: git add -A, git commit, git push, and create a draft PR with 'Closes #N' in the body
+12. Report results: close the issue if done, or mark blocked with explanation"""
 
 
 def run_agent(
@@ -648,19 +662,31 @@ def main() -> None:
                         cwd=worktree_path, capture_output=True, text=True,
                     )
 
+                # Detect the actual branch name (SWE may have renamed it)
+                actual_branch = get_current_branch(worktree_path) or branch_name
+                if actual_branch != branch_name:
+                    log.info("SWE renamed branch from '%s' to '%s'.", branch_name, actual_branch)
+                    branch_name = actual_branch
+
                 # Check if the branch has any commits
                 has_work = has_commits_ahead(worktree_path, args.base_branch)
+
+                # Push from worktree before it's removed (branch may not
+                # survive worktree cleanup if it was renamed)
+                pushed = False
+                if has_work:
+                    pushed = push_branch(worktree_path, branch_name)
 
             finally:
                 # Always clean up the worktree (branch stays if it has commits)
                 remove_worktree(project_dir, worktree_path)
 
-            # Push, create PR, and run reviewer immediately after each SWE run
+            # Create PR and run reviewer after worktree cleanup
             if has_work:
                 log.info("Branch '%s' has new commits.", branch_name)
                 created_branches.append(branch_name)
 
-                if push_branch(project_dir, branch_name):
+                if pushed:
                     issue_num = extract_issue_number(project_dir, branch_name, args.base_branch)
                     issue_complete = issue_num is not None and is_issue_closed(project_dir, issue_num)
 
@@ -675,11 +701,26 @@ def main() -> None:
                     else:
                         # SWE didn't finish — draft PR + reset issue to ready
                         log.info("Issue not closed. Creating draft PR for partial work.")
-                        create_pull_request(project_dir, branch_name, args.base_branch, issue_num, draft=True)
+                        pr_url = create_pull_request(project_dir, branch_name, args.base_branch, issue_num, draft=True)
                         if issue_num is not None:
-                            reset_issue_to_ready(project_dir, issue_num)
+                            reset_issue_to_ready(project_dir, issue_num, pr_url)
             else:
-                log.info("No commits on '%s'. Cleaning up.", branch_name)
+                log.info("No commits on '%s'.", branch_name)
+                # Even with no commits, the SWE may have claimed an issue — reset it
+                issue_num = extract_issue_number(project_dir, branch_name, args.base_branch)
+                if issue_num is None:
+                    # No commits to parse — check in-progress issues directly
+                    result = subprocess.run(
+                        ["gh", "issue", "list", "--label", "in-progress", "--state", "open",
+                         "--json", "number", "--jq", ".[].number"],
+                        cwd=project_dir, capture_output=True, text=True,
+                    )
+                    # If there's exactly one in-progress issue, it's likely the one the SWE claimed
+                    nums = [int(n) for n in result.stdout.strip().splitlines() if n.strip()]
+                    if len(nums) == 1:
+                        issue_num = nums[0]
+                if issue_num is not None and not is_issue_closed(project_dir, issue_num):
+                    reset_issue_to_ready(project_dir, issue_num)
 
             time.sleep(3)
 

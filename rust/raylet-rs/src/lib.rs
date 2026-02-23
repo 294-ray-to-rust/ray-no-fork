@@ -5,6 +5,8 @@
 
 use std::os::raw::c_int;
 
+pub mod scheduling_ffi;
+
 /// Minimal main entry point for the Rust raylet implementation.
 ///
 /// The function is intentionally simple for now so that later

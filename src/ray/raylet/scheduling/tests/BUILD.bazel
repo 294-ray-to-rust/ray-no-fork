@@ -101,3 +101,16 @@ ray_cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+ray_cc_test(
+    name = "scheduling_ffi_layout_test",
+    size = "small",
+    srcs = [
+        "scheduling_ffi_layout_test.cc",
+    ],
+    tags = ["team:core"],
+    deps = [
+        "//src/ray/raylet/scheduling:scheduling_ffi",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

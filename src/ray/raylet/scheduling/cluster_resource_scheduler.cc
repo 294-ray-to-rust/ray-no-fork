@@ -18,9 +18,166 @@
 #include <string>
 #include <vector>
 
+#include "absl/time/time.h"
+#include "ray/raylet/scheduling/ffi/scheduling_ffi.h"
+#include "ray/util/env.h"
+
 namespace ray {
 
 using namespace ::ray::raylet_scheduling_policy;  // NOLINT
+
+namespace {
+
+constexpr char kRayletUseRustEnvVar[] = "RAYLET_USE_RUST";
+
+ffi::RayletLabelSelectorOp ToFfiLabelSelectorOperator(LabelSelectorOperator op) {
+  switch (op) {
+  case LabelSelectorOperator::LABEL_IN:
+    return ffi::RayletLabelSelectorOp::kIn;
+  case LabelSelectorOperator::LABEL_NOT_IN:
+    return ffi::RayletLabelSelectorOp::kNotIn;
+  case LabelSelectorOperator::LABEL_OPERATOR_UNSPECIFIED:
+    return ffi::RayletLabelSelectorOp::kUnspecified;
+  }
+  return ffi::RayletLabelSelectorOp::kUnspecified;
+}
+
+struct ResourceArrayStorage {
+  std::vector<std::string> names;
+  std::vector<ffi::RayletResourceEntry> entries;
+
+  ffi::RayletResourceArray Build(
+      const absl::flat_hash_map<std::string, double> &resources) {
+    names.clear();
+    entries.clear();
+    names.reserve(resources.size());
+    entries.reserve(resources.size());
+    for (const auto &[name, value] : resources) {
+      names.push_back(name);
+      const auto &stable_name = names.back();
+      entries.push_back(
+          ffi::RayletResourceEntry{{stable_name.data(), stable_name.size()}, value});
+    }
+    return ffi::RayletResourceArray{entries.data(), entries.size()};
+  }
+};
+
+struct LabelArrayStorage {
+  std::vector<std::string> keys;
+  std::vector<std::string> values;
+  std::vector<ffi::RayletLabelEntry> entries;
+
+  ffi::RayletLabelArray Build(
+      const absl::flat_hash_map<std::string, std::string> &labels) {
+    keys.clear();
+    values.clear();
+    entries.clear();
+    keys.reserve(labels.size());
+    values.reserve(labels.size());
+    entries.reserve(labels.size());
+    for (const auto &[key, value] : labels) {
+      keys.push_back(key);
+      values.push_back(value);
+      const auto &stable_key = keys.back();
+      const auto &stable_value = values.back();
+      entries.push_back(
+          ffi::RayletLabelEntry{{stable_key.data(), stable_key.size()},
+                                {stable_value.data(), stable_value.size()}});
+    }
+    return ffi::RayletLabelArray{entries.data(), entries.size()};
+  }
+};
+
+struct LabelSelectorStorage {
+  std::vector<std::string> keys;
+  std::vector<std::string> values;
+  std::vector<std::vector<ffi::RayletStr>> values_per_constraint;
+  std::vector<ffi::RayletLabelConstraint> constraints;
+
+  ffi::RayletLabelSelector Build(const LabelSelector &selector) {
+    keys.clear();
+    values.clear();
+    values_per_constraint.clear();
+    constraints.clear();
+
+    const auto &label_constraints = selector.GetConstraints();
+    keys.reserve(label_constraints.size());
+    values_per_constraint.reserve(label_constraints.size());
+    constraints.reserve(label_constraints.size());
+
+    for (const auto &constraint : label_constraints) {
+      keys.push_back(constraint.GetLabelKey());
+      const auto &stable_key = keys.back();
+      values_per_constraint.emplace_back();
+      auto &constraint_values = values_per_constraint.back();
+      constraint_values.reserve(constraint.GetLabelValues().size());
+      for (const auto &value : constraint.GetLabelValues()) {
+        values.push_back(value);
+        const auto &stable_value = values.back();
+        constraint_values.push_back({stable_value.data(), stable_value.size()});
+      }
+      constraints.push_back(ffi::RayletLabelConstraint{
+          {stable_key.data(), stable_key.size()},
+          ToFfiLabelSelectorOperator(constraint.GetOperator()),
+          {constraint_values.data(), constraint_values.size()}});
+    }
+
+    return ffi::RayletLabelSelector{constraints.data(), constraints.size()};
+  }
+};
+
+struct NodeResourceViewStorage {
+  std::vector<ResourceArrayStorage> totals;
+  std::vector<ResourceArrayStorage> available;
+  std::vector<ResourceArrayStorage> load;
+  std::vector<ResourceArrayStorage> normal_task;
+  std::vector<LabelArrayStorage> labels;
+  std::vector<ffi::RayletNodeResourceView> node_views;
+
+  ffi::RayletNodeResourceViewArray Build(
+      const absl::flat_hash_map<scheduling::NodeID, Node> &resource_view) {
+    totals.clear();
+    available.clear();
+    load.clear();
+    normal_task.clear();
+    labels.clear();
+    node_views.clear();
+
+    totals.resize(resource_view.size());
+    available.resize(resource_view.size());
+    load.resize(resource_view.size());
+    normal_task.resize(resource_view.size());
+    labels.resize(resource_view.size());
+    node_views.reserve(resource_view.size());
+
+    size_t i = 0;
+    for (const auto &[node_id, node] : resource_view) {
+      const auto &local_view = node.GetLocalView();
+      node_views.push_back(ffi::RayletNodeResourceView{
+          node_id.ToInt(),
+          ffi::RayletNodeResources{
+              totals[i].Build(local_view.total.GetResourceMap()),
+              available[i].Build(local_view.available.GetResourceMap()),
+              load[i].Build(local_view.load.GetResourceMap()),
+              normal_task[i].Build(local_view.normal_task_resources.GetResourceMap()),
+              labels[i].Build(local_view.labels),
+              local_view.idle_resource_duration_ms,
+              static_cast<uint8_t>(local_view.is_draining),
+              local_view.draining_deadline_timestamp_ms,
+              local_view.last_resource_update_time
+                  ? absl::ToUnixMillis(*local_view.last_resource_update_time)
+                  : -1,
+              local_view.latest_resources_normal_task_timestamp,
+              static_cast<uint8_t>(local_view.object_pulls_queued),
+          }});
+      i++;
+    }
+
+    return ffi::RayletNodeResourceViewArray{node_views.data(), node_views.size()};
+  }
+};
+
+}  // namespace
 
 ClusterResourceScheduler::ClusterResourceScheduler(
     instrumented_io_context &io_service,
@@ -61,6 +218,13 @@ ClusterResourceScheduler::ClusterResourceScheduler(
        resource_usage_gauge);
 }
 
+ClusterResourceScheduler::~ClusterResourceScheduler() {
+  if (rust_cluster_resource_scheduler_ != nullptr) {
+    ffi::raylet_rs_cluster_resource_scheduler_free(rust_cluster_resource_scheduler_);
+    rust_cluster_resource_scheduler_ = nullptr;
+  }
+}
+
 void ClusterResourceScheduler::Init(
     instrumented_io_context &io_service,
     const NodeResources &local_node_resources,
@@ -92,6 +256,16 @@ void ClusterResourceScheduler::Init(
           *cluster_resource_manager_,
           /*is_node_available_fn*/
           [this](auto node_id) { return this->NodeAvailable(node_id); });
+  use_rust_cluster_resource_scheduler_ = IsEnvTrue(kRayletUseRustEnvVar);
+  if (use_rust_cluster_resource_scheduler_) {
+    rust_cluster_resource_scheduler_ = ffi::raylet_rs_cluster_resource_scheduler_new();
+    if (rust_cluster_resource_scheduler_ == nullptr) {
+      RAY_LOG(WARNING)
+          << "Failed to initialize Rust cluster scheduler handle; falling back "
+          << "to C++ scheduler.";
+      use_rust_cluster_resource_scheduler_ = false;
+    }
+  }
 }
 
 bool ClusterResourceScheduler::NodeAvailable(scheduling::NodeID node_id) const {
@@ -235,6 +409,44 @@ scheduling::NodeID ClusterResourceScheduler::GetBestSchedulableNode(
     const std::string &preferred_node_id,
     int64_t *total_violations,
     bool *is_infeasible) {
+  if (use_rust_cluster_resource_scheduler_ &&
+      rust_cluster_resource_scheduler_ != nullptr && !force_spillback &&
+      scheduling_strategy.scheduling_strategy_case() ==
+          rpc::SchedulingStrategy::SchedulingStrategyCase::SCHEDULING_STRATEGY_NOT_SET) {
+    NodeResourceViewStorage node_storage;
+    auto node_array = node_storage.Build(cluster_resource_manager_->GetResourceView());
+    if (ffi::raylet_rs_cluster_resource_scheduler_update(rust_cluster_resource_scheduler_,
+                                                         &node_array) == 1) {
+      ResourceArrayStorage request_resources_storage;
+      auto request_resources = request_resources_storage.Build(task_resources);
+      LabelSelectorStorage selector_storage;
+      auto selector = selector_storage.Build(label_selector);
+      ffi::RayletSchedulingRequest request{
+          /*request_id=*/0,
+          preferred_node_id.empty() ? -1 : NodeID::FromBinary(preferred_node_id).ToInt(),
+          ffi::RayletResourceRequest{request_resources,
+                                     static_cast<uint8_t>(requires_object_store_memory),
+                                     selector},
+      };
+      ffi::RayletSchedulingDecision decision{0, -1, 0, 0};
+      if (ffi::raylet_rs_cluster_resource_scheduler_allocate(
+              rust_cluster_resource_scheduler_, &request, &decision) == 1) {
+        if (decision.is_spillback) {
+          *is_infeasible = false;
+          *total_violations = 0;
+          return scheduling::NodeID(decision.selected_node_id);
+        }
+        if (decision.is_feasible) {
+          *is_infeasible = false;
+          *total_violations = 0;
+          return scheduling::NodeID(decision.selected_node_id);
+        }
+        *is_infeasible = true;
+        return scheduling::NodeID::Nil();
+      }
+    }
+  }
+
   ResourceRequest resource_request =
       ResourceMapToResourceRequest(task_resources, requires_object_store_memory);
   resource_request.SetLabelSelector(label_selector);

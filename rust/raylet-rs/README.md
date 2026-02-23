@@ -1,23 +1,18 @@
-# raylet-rs
+# raylet-rs scheduling status
 
-`raylet-rs` hosts the Rust rewrite of the Ray raylet. The crate is
-part of the top-level Cargo workspace so it can be built and tested in
-isolation while FFI hooks are wired into the existing C++ runtime.
+## ClusterResourceScheduler port
 
-## Building
+- The core node/resource tracking and request allocation loop now lives in Rust in
+  `src/cluster_resource_scheduler.rs`.
+- FFI wrappers for scheduler lifecycle, update, allocate, and release are exported from
+  `src/scheduling_ffi.rs` and declared in
+  `src/ray/raylet/scheduling/ffi/scheduling_ffi.h`.
+- `ClusterResourceScheduler` in C++ can delegate the default scheduling path to Rust when
+  `RAYLET_USE_RUST=1`.
 
-```
-cargo build -p raylet-rs
-```
+## Known deviations and TODOs
 
-This produces both the binary (`raylet-rs`) and a `cdylib` that can be
-linked from C++ via the exposed `raylet_entrypoint` shim.
-
-## Testing
-
-```
-cargo test -p raylet-rs
-```
-
-The current tests are smoke-level to ensure the entry points stay
-callable. Expand them as subsystems migrate to Rust.
+- The Rust delegation path currently only handles the default scheduling strategy branch;
+  spread, node-affinity, placement-group, and other policy-specific paths still use C++.
+- CMake wiring is not present in this workspace; Bazel linking is in place and matches the
+  current project build system usage.

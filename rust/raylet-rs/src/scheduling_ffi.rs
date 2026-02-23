@@ -3,6 +3,8 @@ use std::os::raw::c_char;
 use std::slice;
 use std::str;
 
+use crate::cluster_resource_scheduler::ClusterResourceScheduler;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FfiError {
     NullPointer(&'static str),
@@ -223,6 +225,10 @@ pub struct SchedulingDecision {
     pub is_spillback: bool,
 }
 
+pub struct FfiClusterResourceScheduler {
+    scheduler: ClusterResourceScheduler,
+}
+
 impl RayletLabelSelectorOp {
     fn to_rust(self) -> LabelSelectorOperator {
         match self {
@@ -344,6 +350,15 @@ impl RayletSchedulingRequest {
 }
 
 impl RayletSchedulingDecision {
+    pub fn from_rust(decision: &SchedulingDecision) -> Self {
+        Self {
+            request_id: decision.request_id,
+            selected_node_id: decision.selected_node_id,
+            is_feasible: decision.is_feasible as u8,
+            is_spillback: decision.is_spillback as u8,
+        }
+    }
+
     pub fn to_rust(&self) -> SchedulingDecision {
         SchedulingDecision {
             request_id: self.request_id,
@@ -352,6 +367,98 @@ impl RayletSchedulingDecision {
             is_spillback: self.is_spillback != 0,
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_cluster_resource_scheduler_new() -> *mut FfiClusterResourceScheduler {
+    let scheduler = FfiClusterResourceScheduler {
+        scheduler: ClusterResourceScheduler::new(),
+    };
+    Box::into_raw(Box::new(scheduler))
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_cluster_resource_scheduler_free(
+    scheduler: *mut FfiClusterResourceScheduler,
+) {
+    if scheduler.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(scheduler));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_cluster_resource_scheduler_update(
+    scheduler: *mut FfiClusterResourceScheduler,
+    nodes: *const RayletNodeResourceViewArray,
+) -> u8 {
+    if scheduler.is_null() || nodes.is_null() {
+        return 0;
+    }
+
+    let scheduler = unsafe { &mut *scheduler };
+    let nodes = unsafe { &*nodes };
+    let raw_nodes = match unsafe { slice_from_raw(nodes.entries, nodes.len, "RayletNodeResourceViewArray") } {
+        Ok(entries) => entries,
+        Err(_) => return 0,
+    };
+
+    let mut updates = Vec::with_capacity(raw_nodes.len());
+    for node in raw_nodes {
+        match unsafe { node.to_rust() } {
+            Ok(node_resource_view) => updates.push(node_resource_view),
+            Err(_) => return 0,
+        }
+    }
+
+    scheduler.scheduler.update_nodes(updates);
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_cluster_resource_scheduler_allocate(
+    scheduler: *mut FfiClusterResourceScheduler,
+    request: *const RayletSchedulingRequest,
+    decision_out: *mut RayletSchedulingDecision,
+) -> u8 {
+    if scheduler.is_null() || request.is_null() || decision_out.is_null() {
+        return 0;
+    }
+
+    let scheduler = unsafe { &mut *scheduler };
+    let request = unsafe { &*request };
+    let rust_request = match unsafe { request.to_rust() } {
+        Ok(value) => value,
+        Err(_) => return 0,
+    };
+
+    let decision = scheduler.scheduler.allocate(&rust_request);
+    unsafe {
+        *decision_out = RayletSchedulingDecision::from_rust(&decision);
+    }
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_cluster_resource_scheduler_release(
+    scheduler: *mut FfiClusterResourceScheduler,
+    node_id: i64,
+    resources: *const RayletResourceArray,
+) -> u8 {
+    if scheduler.is_null() || resources.is_null() {
+        return 0;
+    }
+
+    let scheduler = unsafe { &mut *scheduler };
+    let resources = unsafe { &*resources };
+    let resource_map = match unsafe { resources.to_map() } {
+        Ok(map) => map,
+        Err(_) => return 0,
+    };
+
+    scheduler.scheduler.release(node_id, &resource_map) as u8
 }
 
 #[no_mangle]
@@ -464,6 +571,99 @@ mod tests {
         assert_eq!(decision.selected_node_id, 7);
         assert_eq!(decision.is_feasible, 1);
         assert_eq!(decision.is_spillback, 0);
+    }
+
+    #[test]
+    fn ffi_cluster_scheduler_allocate_release_update() {
+        let scheduler = raylet_rs_cluster_resource_scheduler_new();
+        assert!(!scheduler.is_null());
+
+        let cpu = RayletStr {
+            data: b"CPU".as_ptr() as *const c_char,
+            len: 3,
+        };
+        let labels = RayletLabelArray {
+            entries: std::ptr::null(),
+            len: 0,
+        };
+        let total_entries = [RayletResourceEntry { name: cpu, value: 2.0 }];
+        let available_entries = [RayletResourceEntry { name: cpu, value: 2.0 }];
+        let empty_resources = RayletResourceArray {
+            entries: std::ptr::null(),
+            len: 0,
+        };
+        let nodes = [RayletNodeResourceView {
+            node_id: 99,
+            resources: RayletNodeResources {
+                total: RayletResourceArray {
+                    entries: total_entries.as_ptr(),
+                    len: total_entries.len(),
+                },
+                available: RayletResourceArray {
+                    entries: available_entries.as_ptr(),
+                    len: available_entries.len(),
+                },
+                load: empty_resources,
+                normal_task_resources: empty_resources,
+                labels,
+                idle_resource_duration_ms: 0,
+                is_draining: 0,
+                draining_deadline_timestamp_ms: 0,
+                last_resource_update_ms: 0,
+                latest_resources_normal_task_timestamp: 0,
+                object_pulls_queued: 0,
+            },
+        }];
+        let node_array = RayletNodeResourceViewArray {
+            entries: nodes.as_ptr(),
+            len: nodes.len(),
+        };
+        assert_eq!(raylet_rs_cluster_resource_scheduler_update(scheduler, &node_array), 1);
+
+        let request_resources = [RayletResourceEntry { name: cpu, value: 1.0 }];
+        let request = RayletSchedulingRequest {
+            request_id: 1,
+            preferred_node_id: -1,
+            resource_request: RayletResourceRequest {
+                resources: RayletResourceArray {
+                    entries: request_resources.as_ptr(),
+                    len: request_resources.len(),
+                },
+                requires_object_store_memory: 0,
+                label_selector: RayletLabelSelector {
+                    constraints: std::ptr::null(),
+                    len: 0,
+                },
+            },
+        };
+        let mut decision = RayletSchedulingDecision {
+            request_id: 0,
+            selected_node_id: -1,
+            is_feasible: 0,
+            is_spillback: 0,
+        };
+        assert_eq!(
+            raylet_rs_cluster_resource_scheduler_allocate(
+                scheduler,
+                &request as *const _,
+                &mut decision as *mut _,
+            ),
+            1
+        );
+        assert_eq!(decision.selected_node_id, 99);
+        assert_eq!(decision.is_feasible, 1);
+
+        let release_resources = [RayletResourceEntry { name: cpu, value: 1.0 }];
+        let release_array = RayletResourceArray {
+            entries: release_resources.as_ptr(),
+            len: release_resources.len(),
+        };
+        assert_eq!(
+            raylet_rs_cluster_resource_scheduler_release(scheduler, 99, &release_array),
+            1
+        );
+
+        raylet_rs_cluster_resource_scheduler_free(scheduler);
     }
 
     #[test]

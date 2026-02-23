@@ -35,6 +35,9 @@
 #include "src/ray/protobuf/gcs.pb.h"
 
 namespace ray {
+namespace raylet::ffi {
+struct RayletClusterResourceScheduler;
+}
 
 using raylet_scheduling_policy::SchedulingOptions;
 using raylet_scheduling_policy::SchedulingResult;
@@ -69,6 +72,8 @@ class ClusterResourceScheduler {
       std::function<void(const rpc::NodeDeathInfo &)> shutdown_raylet_gracefully =
           nullptr,
       const absl::flat_hash_map<std::string, std::string> &local_node_labels = {});
+
+  ~ClusterResourceScheduler();
 
   /// Schedule the specified resources to the cluster nodes.
   ///
@@ -227,6 +232,8 @@ class ClusterResourceScheduler {
       bundle_scheduling_policy_;
   /// Whether there is a raylet on the local node.
   bool is_local_node_with_raylet_ = true;
+  bool use_rust_cluster_resource_scheduler_ = false;
+  raylet::ffi::RayletClusterResourceScheduler *rust_cluster_resource_scheduler_ = nullptr;
 
   friend class ClusterResourceSchedulerTest;
   FRIEND_TEST(ClusterResourceSchedulerTest, PopulatePredefinedResources);

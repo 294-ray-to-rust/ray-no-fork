@@ -95,6 +95,8 @@ struct RayletSchedulingDecision {
   uint8_t is_spillback;
 };
 
+struct RayletClusterResourceScheduler;
+
 inline RayletStr RayletStrFromRaw(const char *data, size_t len) {
   return RayletStr{data, len};
 }
@@ -119,6 +121,18 @@ inline RayletStrArray RayletStrArrayFromRaw(const RayletStr *entries, size_t len
 }
 
 extern "C" {
+RayletClusterResourceScheduler *raylet_rs_cluster_resource_scheduler_new();
+void raylet_rs_cluster_resource_scheduler_free(RayletClusterResourceScheduler *scheduler);
+uint8_t raylet_rs_cluster_resource_scheduler_update(
+    RayletClusterResourceScheduler *scheduler, const RayletNodeResourceViewArray *nodes);
+uint8_t raylet_rs_cluster_resource_scheduler_allocate(
+    RayletClusterResourceScheduler *scheduler,
+    const RayletSchedulingRequest *request,
+    RayletSchedulingDecision *decision_out);
+uint8_t raylet_rs_cluster_resource_scheduler_release(
+    RayletClusterResourceScheduler *scheduler,
+    int64_t node_id,
+    const RayletResourceArray *resources);
 uint8_t raylet_rs_scheduler_roundtrip(const RayletSchedulingRequest *request,
                                       RayletSchedulingDecision *decision_out);
 }

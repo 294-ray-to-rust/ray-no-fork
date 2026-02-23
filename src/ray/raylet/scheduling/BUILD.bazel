@@ -73,11 +73,15 @@ ray_cc_library(
     deps = [
         ":cluster_resource_manager",
         ":composite_scheduling_policy",
+        ":scheduling_ffi",
+        "//rust/raylet-rs:raylet_rs_cdylib",
         ":scheduler_internal",
         "//src/ray/observability:metric_interface",
         "//src/ray/protobuf:gcs_cc_proto",
+        "//src/ray/util:env",
         "//src/ray/util:logging",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_prod",
     ],
 )

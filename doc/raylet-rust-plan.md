@@ -96,6 +96,11 @@ The shared ABI structs live in `src/ray/raylet/scheduling/ffi/scheduling_ffi.h` 
 - Use the `cxx` crate so Rust can own the scheduler types yet expose a stable C++ header living under `src/ray/raylet/scheduling/rust_scheduler_ffi.h`.
 - Mirror existing C++ scheduler unit tests in Rust (`raylet_rs/tests/scheduler_tests.rs`) and keep the legacy tests compiling to detect regressions while the new crate lands.
 
+### Scheduler FFI scaffolding location
+- Rust bridge types/functions live in `rust/raylet-rs/src/scheduler_ffi.rs`; add new ABI structs and extern functions there.
+- The generated header is `src/ray/raylet/scheduling/rust_scheduler_ffi.h` and is exported to C++ via `//rust/raylet-rs:raylet_rs_scheduler_ffi`.
+- C++ validation/smoke tests should live under `src/ray/raylet/scheduling/tests`.
+
 ## Next Steps
 - Create an issue per phase starting with the scheduler shim, referencing this document.
 - Align with build owners to introduce a `rust/` workspace section (Cargo + Bazel target) for the new crate, ensuring CI builds `raylet_rs` shared library alongside existing binaries.

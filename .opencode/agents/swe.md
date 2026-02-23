@@ -85,12 +85,15 @@ Check if the issue has a dependency listed in its body (look for "Dependencies" 
 
 ### Step 2: Claim the Issue
 
-Change the label and post a comment:
+Change the label, post a comment, and rename the branch to be descriptive:
 
 ```bash
 gh issue edit <NUMBER> --remove-label "ready" --add-label "in-progress"
 gh issue comment <NUMBER> --body "Claimed. Starting implementation."
+git branch -m <NUMBER>-<short-description>
 ```
+
+The branch name should include the issue number and a short kebab-case description of the work, e.g. `42-add-rust-ffi-bindings` or `15-fix-scheduler-crash`. Keep it under 50 characters.
 
 From this point forward, you are working on THIS issue and only this issue.
 

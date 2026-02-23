@@ -267,6 +267,19 @@ ray_cc_library(
 )
 
 ray_cc_library(
+    name = "rust_raylet_launcher",
+    srcs = ["rust_raylet_launcher.cc"],
+    hdrs = ["rust_raylet_launcher.h"],
+    visibility = [":__subpackages__"],
+    deps = [
+        "//rust/raylet-rs:raylet_rs_cdylib",
+        "//src/ray/util:env",
+        "//src/ray/util:logging",
+        "@com_google_absl//absl/types:optional",
+    ],
+)
+
+ray_cc_library(
     name = "raylet_lib",
     srcs = [
         "node_manager.cc",
@@ -342,6 +355,7 @@ ray_cc_binary(
         ":local_object_manager_interface",
         ":metrics",
         ":raylet_lib",
+        ":rust_raylet_launcher",
         "//src/ray/common:asio",
         "//src/ray/common:lease",
         "//src/ray/common:metrics",

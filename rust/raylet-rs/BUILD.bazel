@@ -19,7 +19,10 @@ filegroup(
 
 genrule(
     name = "raylet_rs_cdylib_linux",
-    srcs = [":raylet_rs_sources"],
+    srcs = [
+        ":raylet_rs_sources",
+        "Cargo.toml",
+    ],
     outs = ["libraylet_rs.so"],
     cmd = """
         set -euo pipefail
@@ -32,7 +35,10 @@ genrule(
 
 genrule(
     name = "raylet_rs_cdylib_darwin",
-    srcs = [":raylet_rs_sources"],
+    srcs = [
+        ":raylet_rs_sources",
+        "Cargo.toml",
+    ],
     outs = ["libraylet_rs.dylib"],
     cmd = """
         set -euo pipefail
@@ -44,37 +50,19 @@ genrule(
 )
 
 genrule(
-    name = "raylet_rs_scheduler_header_linux",
-    srcs = [":raylet_rs_sources"],
-    outs = ["src/ray/raylet/scheduling/rust_scheduler_ffi.h"],
-    cmd = """
-        set -euo pipefail
-        mkdir -p $$(dirname $@)
-        RAYLET_RS_HEADER_OUT=$@ \
-          cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
-          --target-dir $(@D)/cargo-target
-    """,
-)
-
-genrule(
-    name = "raylet_rs_scheduler_header_darwin",
-    srcs = [":raylet_rs_sources"],
-    outs = ["src/ray/raylet/scheduling/rust_scheduler_ffi.h"],
-    cmd = """
-        set -euo pipefail
-        mkdir -p $$(dirname $@)
-        RAYLET_RS_HEADER_OUT=$@ \
-          cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
-          --target-dir $(@D)/cargo-target
-    """,
-)
-
-filegroup(
     name = "raylet_rs_scheduler_header",
-    srcs = select({
-        "@platforms//os:osx": [":raylet_rs_scheduler_header_darwin"],
-        "//conditions:default": [":raylet_rs_scheduler_header_linux"],
-    }),
+    srcs = [
+        ":raylet_rs_sources",
+        "Cargo.toml",
+    ],
+    outs = ["src/ray/raylet/scheduling/rust_scheduler_ffi.h"],
+    cmd = """
+        set -euo pipefail
+        mkdir -p $$(dirname $@)
+        RAYLET_RS_HEADER_OUT=$@ \
+          cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
+          --target-dir $(@D)/cargo-target
+    """,
 )
 
 cc_import(

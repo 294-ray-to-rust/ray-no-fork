@@ -11,12 +11,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
-    let header_src = out_dir
-        .join("cxxbridge")
-        .join("include")
-        .join("raylet_rs")
-        .join("src")
-        .join("scheduler_ffi.rs.h");
+    let header_src = generated_header_path(&out_dir);
 
     let header_out = match env::var("RAYLET_RS_HEADER_OUT") {
         Ok(value) if value.is_empty() || value == "skip" => return,
@@ -44,4 +39,19 @@ fn default_header_path() -> PathBuf {
         .join("raylet")
         .join("scheduling")
         .join("rust_scheduler_ffi.h")
+}
+
+fn generated_header_path(out_dir: &Path) -> PathBuf {
+    let include_dir = out_dir.join("cxxbridge").join("include");
+    let underscore = include_dir
+        .join("raylet_rs")
+        .join("src")
+        .join("scheduler_ffi.rs.h");
+    if underscore.exists() {
+        return underscore;
+    }
+    include_dir
+        .join("raylet-rs")
+        .join("src")
+        .join("scheduler_ffi.rs.h")
 }

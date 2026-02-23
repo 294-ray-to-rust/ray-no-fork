@@ -63,6 +63,28 @@ Each phase is scoped so it can land within a single SWE iteration while leaving 
 - `SchedulingDecision`: contains allocation success flag, selected node, resource instances (`FixedPoint` arrays converted to doubles), and metadata whether to trigger worker start locally.
 - `SchedulerResourceUpdate`: batched updates from GCS containing node id, available/total resources, draining status; matches `rpc::ResourceUsageBatchData` fields but serialized into a simple array for zero-copy FFI.
 
+### ABI-safe scheduling data model
+
+The shared ABI structs live in `src/ray/raylet/scheduling/ffi/scheduling_ffi.h` and
+`rust/raylet-rs/src/scheduling_ffi.rs`.
+
+- `RayletStr` + `RayletStrArray` hold UTF-8 string slices for resource names and label keys.
+- `RayletResourceEntry` + `RayletResourceArray` encode resource vectors as name/value pairs.
+- `RayletLabelConstraint`/`RayletLabelSelector` capture label selector requirements for
+  scheduling requests.
+- `RayletNodeResources` captures total/available/load resources plus draining metadata.
+- `RayletNodeResourceViewArray` batches per-node resource snapshots for updates.
+- `RayletSchedulingRequest` carries a resource request and preferred node hint.
+- `RayletSchedulingDecision` returns the selected node and feasibility flags.
+
+### ABI evolution guidelines
+
+- Treat all structs as `#[repr(C)]`/POD and only append fields at the end.
+- Use new structs or versioned variants instead of reordering or repurposing fields.
+- Keep enums `repr(u8)` and avoid widening without a new type.
+- Preserve pointer+length ownership contracts; Rust never frees memory it didn't allocate.
+- Add layout tests on both sides when fields change.
+
 ### Data Flow
 1. C++ `NodeManager` builds a `RayletSchedulerConfig` at startup and calls `raylet_rs_scheduler_create`, keeping the opaque handle.
 2. On every GCS resource view update, `NodeManager::HandleResourceUsageBatch` converts `rpc::ResourceUsageBatchData` to `SchedulerResourceUpdate` and calls `raylet_rs_scheduler_update_cluster_view`.

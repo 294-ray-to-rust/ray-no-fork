@@ -26,6 +26,7 @@ genrule(
     outs = ["libraylet_rs.so"],
     cmd = """
         set -euo pipefail
+        export PATH="$${HOME:-}/.cargo/bin:$${HOME:-}/.nix-profile/bin:$${PATH}"
         RAYLET_RS_HEADER_OUT=skip \
           cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
           --target-dir $(@D)/cargo-target
@@ -42,6 +43,7 @@ genrule(
     outs = ["libraylet_rs.dylib"],
     cmd = """
         set -euo pipefail
+        export PATH="$${HOME:-}/.cargo/bin:$${HOME:-}/.nix-profile/bin:$${PATH}"
         RAYLET_RS_HEADER_OUT=skip \
           cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
           --target-dir $(@D)/cargo-target
@@ -58,6 +60,7 @@ genrule(
     outs = ["src/ray/raylet/scheduling/rust_scheduler_ffi.h"],
     cmd = """
         set -euo pipefail
+        export PATH="$${HOME:-}/.cargo/bin:$${HOME:-}/.nix-profile/bin:$${PATH}"
         mkdir -p $$(dirname $@)
         RAYLET_RS_HEADER_OUT=$@ \
           cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \

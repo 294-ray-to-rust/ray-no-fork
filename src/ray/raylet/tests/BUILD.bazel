@@ -23,6 +23,18 @@ ray_cc_test(
 )
 
 ray_cc_test(
+    name = "rust_raylet_launcher_test",
+    size = "small",
+    srcs = ["rust_raylet_launcher_test.cc"],
+    tags = ["team:core"],
+    deps = [
+        "//src/ray/raylet:rust_raylet_launcher",
+        "//src/ray/util:env",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+ray_cc_test(
     name = "worker_pool_test",
     size = "small",
     srcs = ["worker_pool_test.cc"],

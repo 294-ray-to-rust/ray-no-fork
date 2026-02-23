@@ -1,0 +1,46 @@
+load("@rules_cc//cc:defs.bzl", "cc_import")
+
+package(default_visibility = ["//visibility:public"])
+
+RAYLET_RS_SRCS = glob(["src/**/*.rs"])
+
+filegroup(
+    name = "raylet_rs_sources",
+    srcs = RAYLET_RS_SRCS + [
+        "Cargo.toml",
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+    ],
+)
+
+genrule(
+    name = "raylet_rs_cdylib_linux",
+    srcs = [":raylet_rs_sources"],
+    outs = ["libraylet_rs.so"],
+    cmd = """
+        set -euo pipefail
+        cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
+          --target-dir $(@D)/cargo-target
+        cp $(@D)/cargo-target/release/libraylet_rs.so $@
+    """,
+)
+
+genrule(
+    name = "raylet_rs_cdylib_darwin",
+    srcs = [":raylet_rs_sources"],
+    outs = ["libraylet_rs.dylib"],
+    cmd = """
+        set -euo pipefail
+        cargo build --manifest-path $(location Cargo.toml) --lib --release --locked \
+          --target-dir $(@D)/cargo-target
+        cp $(@D)/cargo-target/release/libraylet_rs.dylib $@
+    """,
+)
+
+cc_import(
+    name = "raylet_rs_cdylib",
+    shared_library = select({
+        "@platforms//os:osx": ":raylet_rs_cdylib_darwin",
+        "//conditions:default": ":raylet_rs_cdylib_linux",
+    }),
+)

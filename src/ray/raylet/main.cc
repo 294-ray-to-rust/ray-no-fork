@@ -46,6 +46,7 @@
 #include "ray/raylet/local_object_manager_interface.h"
 #include "ray/raylet/metrics.h"
 #include "ray/raylet/node_manager.h"
+#include "ray/raylet/rust_raylet_launcher.h"
 #include "ray/raylet_ipc_client/client_connection.h"
 #include "ray/raylet_rpc_client/raylet_client.h"
 #include "ray/stats/stats.h"
@@ -220,6 +221,11 @@ int main(int argc, char *argv[]) {
 
   ray::RayLog::InstallFailureSignalHandler(argv[0]);
   ray::RayLog::InstallTerminateHandler();
+
+  const auto rust_status = ray::raylet::RunRustRayletIfEnabled();
+  if (rust_status.has_value()) {
+    return *rust_status;
+  }
 
 #ifdef __linux__
   // Reset LD_PRELOAD if it's loaded with ray jemalloc

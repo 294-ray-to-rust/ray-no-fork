@@ -15,7 +15,10 @@ filegroup(
 
 genrule(
     name = "raylet_rs_cdylib_linux",
-    srcs = [":raylet_rs_sources"],
+    srcs = [
+        ":raylet_rs_sources",
+        "Cargo.toml",
+    ],
     outs = ["libraylet_rs.so"],
     cmd = """
         set -euo pipefail
@@ -27,7 +30,10 @@ genrule(
 
 genrule(
     name = "raylet_rs_cdylib_darwin",
-    srcs = [":raylet_rs_sources"],
+    srcs = [
+        ":raylet_rs_sources",
+        "Cargo.toml",
+    ],
     outs = ["libraylet_rs.dylib"],
     cmd = """
         set -euo pipefail

@@ -1,0 +1,77 @@
+load("@rules_cc//cc:defs.bzl", "cc_import")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "crate_sources",
+    srcs = glob([
+        "**/*.rs",
+        "**/*.toml",
+    ], exclude = ["target/**"]) + [
+        "//:Cargo.toml",
+        "//:Cargo.lock",
+    ],
+)
+
+genrule(
+    name = "raylet_rs_cdylib_linux",
+    srcs = [":crate_sources"],
+    outs = ["libraylet_rs.so"],
+    cmd = """
+set -euo pipefail
+
+cd "$$BUILD_WORKSPACE_DIRECTORY"
+
+out_dir="$$(dirname "$@")"
+target_dir="$$out_dir/cargo_target"
+rm -rf "$$target_dir"
+mkdir -p "$$target_dir"
+
+CARGO_TARGET_DIR="$$target_dir" cargo build -p raylet-rs --release --locked
+
+cp "$$target_dir/release/libraylet_rs.so" "$@"
+""",
+    local = 1,
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+genrule(
+    name = "raylet_rs_cdylib_macos",
+    srcs = [":crate_sources"],
+    outs = ["libraylet_rs.dylib"],
+    cmd = """
+set -euo pipefail
+
+cd "$$BUILD_WORKSPACE_DIRECTORY"
+
+out_dir="$$(dirname "$@")"
+target_dir="$$out_dir/cargo_target"
+rm -rf "$$target_dir"
+mkdir -p "$$target_dir"
+
+CARGO_TARGET_DIR="$$target_dir" cargo build -p raylet-rs --release --locked
+
+cp "$$target_dir/release/libraylet_rs.dylib" "$@"
+""",
+    local = 1,
+    target_compatible_with = ["@platforms//os:osx"],
+)
+
+alias(
+    name = "raylet_rs_cdylib",
+    actual = select({
+        "//bazel:is_linux": ":raylet_rs_cdylib_linux",
+        "//bazel:is_macos": ":raylet_rs_cdylib_macos",
+        "//conditions:default": ":raylet_rs_cdylib_linux",
+    }),
+)
+
+cc_import(
+    name = "raylet_rs_ffi",
+    shared_library = ":raylet_rs_cdylib",
+)
+
+filegroup(
+    name = "raylet_rs_runtime_lib",
+    srcs = [":raylet_rs_cdylib"],
+)

@@ -1,0 +1,15 @@
+[package]
+name = "raylet-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["ray-project contributors"]
+publish = false
+
+[lib]
+name = "raylet_rs"
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "raylet-rs"
+path = "src/main.rs"

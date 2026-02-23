@@ -2,6 +2,7 @@
 *test-output.xml
 /bazel-*
 /python/ray/core
+/target/
 /python/ray/thirdparty_files/
 /python/ray/_private/runtime_env/agent/thirdparty_files/
 /python/ray/pyarrow_files/

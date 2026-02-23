@@ -101,3 +101,14 @@ ray_cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+ray_cc_test(
+    name = "rust_scheduler_ffi_test",
+    size = "small",
+    srcs = ["rust_scheduler_ffi_test.cc"],
+    tags = ["team:core"],
+    deps = [
+        "//rust/raylet-rs:raylet_rs_scheduler_ffi",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

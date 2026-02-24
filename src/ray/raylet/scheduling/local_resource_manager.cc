@@ -147,7 +147,23 @@ void LocalResourceManager::DeleteLocalResource(scheduling::ResourceID resource_i
 
 bool LocalResourceManager::IsAvailableResourceEmpty(
     scheduling::ResourceID resource_id) const {
-  return local_resources_.available.Sum(resource_id) <= 0;
+  const bool cpp_empty = local_resources_.available.Sum(resource_id) <= 0;
+  const auto resource_name = resource_id.Binary();
+  double ffi_available = 0.0;
+  const bool ffi_has_resource =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_get_available(
+          ffi_local_resource_manager_, ToRayletStr(resource_name), &ffi_available) != 0;
+  if (!ffi_has_resource) {
+    RAY_CHECK(cpp_empty)
+        << "Rust LocalResourceManager missing resource tracked in C++ path: "
+        << resource_name;
+    return true;
+  }
+
+  const bool ffi_empty = ffi_available <= 0;
+  RAY_CHECK_EQ(ffi_empty, cpp_empty)
+      << "Rust and C++ LocalResourceManager availability diverged for " << resource_name;
+  return ffi_empty;
 }
 
 std::string LocalResourceManager::DebugString(void) const {
@@ -166,31 +182,32 @@ bool LocalResourceManager::AllocateTaskResourceInstances(
     const ResourceRequest &resource_request,
     std::shared_ptr<TaskResourceInstances> task_allocation) {
   RAY_CHECK(task_allocation != nullptr);
-  auto allocation =
-      local_resources_.available.TryAllocate(resource_request.GetResourceSet());
-  if (allocation) {
-    std::vector<std::string> resource_names;
-    std::vector<RayletResourceEntry> resource_entries;
-    auto request_resources = BuildResourceArray(
-        resource_request.ToResourceMap(), &resource_names, &resource_entries);
-    RayletResourceRequest ffi_request;
-    ffi_request.resources = request_resources;
-    ffi_request.requires_object_store_memory =
-        static_cast<uint8_t>(resource_request.RequiresObjectStoreMemory());
-    ffi_request.label_selector = RayletLabelSelector{nullptr, 0};
-    const bool ffi_ok = ray::raylet::ffi::raylet_rs_local_resource_manager_allocate(
-                            ffi_local_resource_manager_, &ffi_request) != 0;
-    RAY_CHECK(ffi_ok) << "Rust LocalResourceManager allocate failed for "
-                      << resource_request.DebugString();
-
-    *task_allocation = TaskResourceInstances(*allocation);
-    for (const auto &resource_id : resource_request.ResourceIds()) {
-      SetResourceNonIdle(resource_id);
-    }
-    return true;
-  } else {
+  std::vector<std::string> resource_names;
+  std::vector<RayletResourceEntry> resource_entries;
+  auto request_resources = BuildResourceArray(
+      resource_request.ToResourceMap(), &resource_names, &resource_entries);
+  RayletResourceRequest ffi_request;
+  ffi_request.resources = request_resources;
+  ffi_request.requires_object_store_memory =
+      static_cast<uint8_t>(resource_request.RequiresObjectStoreMemory());
+  ffi_request.label_selector = RayletLabelSelector{nullptr, 0};
+  const bool ffi_ok = ray::raylet::ffi::raylet_rs_local_resource_manager_allocate(
+                          ffi_local_resource_manager_, &ffi_request) != 0;
+  if (!ffi_ok) {
     return false;
   }
+
+  auto allocation =
+      local_resources_.available.TryAllocate(resource_request.GetResourceSet());
+  RAY_CHECK(allocation.has_value())
+      << "Rust and C++ LocalResourceManager allocation diverged for "
+      << resource_request.DebugString();
+
+  *task_allocation = TaskResourceInstances(*allocation);
+  for (const auto &resource_id : resource_request.ResourceIds()) {
+    SetResourceNonIdle(resource_id);
+  }
+  return true;
 }
 
 void LocalResourceManager::FreeTaskResourceInstances(

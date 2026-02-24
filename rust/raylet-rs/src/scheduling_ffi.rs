@@ -23,6 +23,8 @@ impl std::error::Error for FfiError {}
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct RayletStr {
+    // C++ owns backing memory for all incoming RayletStr values.
+    // Rust treats this as a read-only slice and never frees it.
     pub data: *const c_char,
     pub len: usize,
 }
@@ -53,6 +55,123 @@ impl RayletStr {
 pub struct RayletStrArray {
     pub entries: *const RayletStr,
     pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletByteArray {
+    // C++ owns backing memory for all incoming RayletByteArray values.
+    // Rust treats this as a read-only slice and never frees it.
+    pub data: *const u8,
+    pub len: usize,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerType {
+    Worker = 0,
+    Driver = 1,
+    SpillWorker = 2,
+    RestoreWorker = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletLanguage {
+    Python = 0,
+    Java = 1,
+    Cpp = 2,
+    Rust = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerReleaseReason {
+    TaskFinished = 0,
+    TaskCanceled = 1,
+    Preempted = 2,
+    Disconnected = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerExitType {
+    Intended = 0,
+    SystemError = 1,
+    UserError = 2,
+    NodeShutdown = 3,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerIdentity {
+    pub worker_id: RayletByteArray,
+    pub job_id: RayletByteArray,
+    pub actor_id: RayletByteArray,
+    pub node_id: RayletByteArray,
+    pub worker_type: RayletWorkerType,
+    pub language: RayletLanguage,
+    pub _reserved0: [u8; 6],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerState {
+    pub identity: RayletWorkerIdentity,
+    pub process_id: i32,
+    pub worker_port: i32,
+    pub startup_token: i64,
+    pub is_registered: u8,
+    pub is_idle: u8,
+    pub is_detached_actor: u8,
+    pub _reserved0: [u8; 5],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerRegisterRequest {
+    pub state: RayletWorkerState,
+    pub worker_address: RayletStr,
+    pub serialized_runtime_env: RayletByteArray,
+    pub debugger_port: i32,
+    pub _reserved0: [u8; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerLeaseRequest {
+    pub lease_id: i64,
+    pub worker_id: RayletByteArray,
+    pub scheduling_class: i64,
+    pub required_resources: RayletResourceArray,
+    pub placement_resources: RayletResourceArray,
+    pub is_actor_creation_task: u8,
+    pub grant_or_reject: u8,
+    pub _reserved0: [u8; 6],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerReleaseRequest {
+    pub lease_id: i64,
+    pub worker_id: RayletByteArray,
+    pub release_reason: RayletWorkerReleaseReason,
+    pub return_worker_to_idle: u8,
+    pub worker_exiting: u8,
+    pub _reserved0: [u8; 5],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerExitEvent {
+    pub worker_id: RayletByteArray,
+    pub worker_type: RayletWorkerType,
+    pub exit_type: RayletWorkerExitType,
+    pub has_creation_task_exception: u8,
+    pub _reserved0: [u8; 5],
+    pub exit_detail: RayletStr,
+    pub exit_code: i32,
+    pub _reserved1: [u8; 4],
 }
 
 #[repr(C)]
@@ -470,8 +589,15 @@ mod tests {
     fn ffi_layout_matches_cpp_expectations() {
         assert_eq!(size_of::<RayletStr>(), 16);
         assert_eq!(size_of::<RayletStrArray>(), 16);
+        assert_eq!(size_of::<RayletByteArray>(), 16);
         assert_eq!(size_of::<RayletResourceEntry>(), 24);
         assert_eq!(size_of::<RayletLabelEntry>(), 32);
+        assert_eq!(size_of::<RayletWorkerIdentity>(), 72);
+        assert_eq!(size_of::<RayletWorkerState>(), 96);
+        assert_eq!(size_of::<RayletWorkerRegisterRequest>(), 136);
+        assert_eq!(size_of::<RayletWorkerLeaseRequest>(), 72);
+        assert_eq!(size_of::<RayletWorkerReleaseRequest>(), 32);
+        assert_eq!(size_of::<RayletWorkerExitEvent>(), 48);
         assert_eq!(size_of::<RayletResourceRequest>(), 40);
         assert_eq!(size_of::<RayletSchedulingRequest>(), 56);
         assert_eq!(size_of::<RayletSchedulingDecision>(), 24);

@@ -47,6 +47,12 @@ ray_cc_library(
 )
 
 ray_cc_library(
+    name = "rust_cluster_scheduler_ffi",
+    hdrs = ["ffi/scheduling_ffi.h"],
+    deps = ["//rust/raylet-rs:raylet_rs_cdylib"],
+)
+
+ray_cc_library(
     name = "cluster_resource_manager",
     srcs = ["cluster_resource_manager.cc"],
     hdrs = ["cluster_resource_manager.h"],

@@ -6,6 +6,7 @@
 use std::os::raw::c_int;
 
 pub mod scheduling_ffi;
+mod cluster_resource_scheduler;
 mod scheduler_ffi;
 
 /// Minimal main entry point for the Rust raylet implementation.

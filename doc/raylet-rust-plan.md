@@ -101,6 +101,18 @@ The shared ABI structs live in `src/ray/raylet/scheduling/ffi/scheduling_ffi.h` 
 - The generated header is `src/ray/raylet/scheduling/rust_scheduler_ffi.h` and is exported to C++ via `//rust/raylet-rs:raylet_rs_scheduler_ffi`.
 - C++ validation/smoke tests should live under `src/ray/raylet/scheduling/tests`.
 
+### Cluster scheduler core parity status
+
+- `rust/raylet-rs/src/cluster_resource_scheduler.rs` now owns a Rust scheduler state model for
+  cluster view updates, request allocation, release bookkeeping, label selectors, and
+  fairness-oriented node rotation.
+- `rust/raylet-rs/src/scheduling_ffi.rs` now exposes ABI-stable
+  `raylet_rs_scheduler_create/destroy/update_cluster_view/allocate/release` entry points that
+  consume the shared structs from `src/ray/raylet/scheduling/ffi/scheduling_ffi.h`.
+- TODO: wire `NodeManager` scheduling calls to this Rust scheduler implementation under the
+  existing `RAYLET_USE_RUST` runtime flag from issue #5 once end-to-end lease-path integration is
+  picked up.
+
 ## Post-scheduler prioritized migration slices
 
 The scheduler path establishes the FFI + ABI pattern. The next slices are ordered to

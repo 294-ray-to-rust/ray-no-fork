@@ -5,6 +5,8 @@
 
 namespace ray::raylet::ffi {
 
+struct RayletSchedulerHandle;
+
 struct RayletStr {
   const char *data;
   size_t len;
@@ -119,6 +121,15 @@ inline RayletStrArray RayletStrArrayFromRaw(const RayletStr *entries, size_t len
 }
 
 extern "C" {
+RayletSchedulerHandle *raylet_rs_scheduler_create();
+void raylet_rs_scheduler_destroy(RayletSchedulerHandle *handle);
+uint8_t raylet_rs_scheduler_update_cluster_view(
+    RayletSchedulerHandle *handle, const RayletNodeResourceViewArray *cluster_view);
+uint8_t raylet_rs_scheduler_allocate(RayletSchedulerHandle *handle,
+                                     const RayletSchedulingRequest *request,
+                                     RayletSchedulingDecision *decision_out);
+uint8_t raylet_rs_scheduler_release(RayletSchedulerHandle *handle,
+                                    const RayletSchedulingRequest *request);
 uint8_t raylet_rs_scheduler_roundtrip(const RayletSchedulingRequest *request,
                                       RayletSchedulingDecision *decision_out);
 }

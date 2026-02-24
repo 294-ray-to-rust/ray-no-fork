@@ -3,6 +3,10 @@ use std::os::raw::c_char;
 use std::slice;
 use std::str;
 
+use crate::cluster_resource_scheduler::ClusterResourceScheduler;
+
+const SCHEDULER_HANDLE_MAGIC: u64 = 0x5241_594c_4554_5343;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FfiError {
     NullPointer(&'static str),
@@ -159,6 +163,12 @@ pub struct RayletSchedulingDecision {
     pub selected_node_id: i64,
     pub is_feasible: u8,
     pub is_spillback: u8,
+}
+
+#[repr(C)]
+pub struct RayletSchedulerHandle {
+    magic: u64,
+    scheduler: ClusterResourceScheduler,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -333,6 +343,16 @@ impl RayletNodeResourceView {
     }
 }
 
+impl RayletNodeResourceViewArray {
+    pub unsafe fn to_rust(&self) -> Result<Vec<NodeResourceView>, FfiError> {
+        let entries = slice_from_raw(self.entries, self.len, "RayletNodeResourceViewArray")?;
+        entries
+            .iter()
+            .map(|entry| entry.to_rust())
+            .collect::<Result<Vec<_>, _>>()
+    }
+}
+
 impl RayletSchedulingRequest {
     pub unsafe fn to_rust(&self) -> Result<SchedulingRequest, FfiError> {
         Ok(SchedulingRequest {
@@ -352,6 +372,103 @@ impl RayletSchedulingDecision {
             is_spillback: self.is_spillback != 0,
         }
     }
+
+    pub fn from_rust(decision: SchedulingDecision) -> Self {
+        Self {
+            request_id: decision.request_id,
+            selected_node_id: decision.selected_node_id,
+            is_feasible: u8::from(decision.is_feasible),
+            is_spillback: u8::from(decision.is_spillback),
+        }
+    }
+}
+
+fn validate_handle(handle: *mut RayletSchedulerHandle) -> Option<&'static mut RayletSchedulerHandle> {
+    if handle.is_null() {
+        return None;
+    }
+    let handle = unsafe { &mut *handle };
+    if handle.magic != SCHEDULER_HANDLE_MAGIC {
+        return None;
+    }
+    Some(handle)
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_scheduler_create() -> *mut RayletSchedulerHandle {
+    let handle = RayletSchedulerHandle {
+        magic: SCHEDULER_HANDLE_MAGIC,
+        scheduler: ClusterResourceScheduler::default(),
+    };
+    Box::into_raw(Box::new(handle))
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_scheduler_destroy(handle: *mut RayletSchedulerHandle) {
+    if handle.is_null() {
+        return;
+    }
+    let _ = unsafe { Box::from_raw(handle) };
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_scheduler_update_cluster_view(
+    handle: *mut RayletSchedulerHandle,
+    cluster_view: *const RayletNodeResourceViewArray,
+) -> u8 {
+    let Some(handle) = validate_handle(handle) else {
+        return 0;
+    };
+    if cluster_view.is_null() {
+        return 0;
+    }
+    let cluster_view = unsafe { &*cluster_view };
+    let Ok(cluster_view) = (unsafe { cluster_view.to_rust() }) else {
+        return 0;
+    };
+    handle.scheduler.update_cluster_view(&cluster_view);
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_scheduler_allocate(
+    handle: *mut RayletSchedulerHandle,
+    request: *const RayletSchedulingRequest,
+    decision_out: *mut RayletSchedulingDecision,
+) -> u8 {
+    let Some(handle) = validate_handle(handle) else {
+        return 0;
+    };
+    if request.is_null() || decision_out.is_null() {
+        return 0;
+    }
+
+    let request = unsafe { &*request };
+    let Ok(request) = (unsafe { request.to_rust() }) else {
+        return 0;
+    };
+    let decision = RayletSchedulingDecision::from_rust(handle.scheduler.allocate(&request));
+    unsafe {
+        *decision_out = decision;
+    }
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn raylet_rs_scheduler_release(
+    handle: *mut RayletSchedulerHandle,
+    request: *const RayletSchedulingRequest,
+) -> u8 {
+    let Some(handle) = validate_handle(handle) else {
+        return 0;
+    };
+    if request.is_null() {
+        return 0;
+    }
+
+    let request = unsafe { &*request };
+    handle.scheduler.release(request.request_id);
+    1
 }
 
 #[no_mangle]
@@ -464,6 +581,96 @@ mod tests {
         assert_eq!(decision.selected_node_id, 7);
         assert_eq!(decision.is_feasible, 1);
         assert_eq!(decision.is_spillback, 0);
+    }
+
+    #[test]
+    fn scheduler_ffi_allocate_and_release_roundtrip() {
+        let handle = raylet_rs_scheduler_create();
+        assert!(!handle.is_null());
+
+        let cpu_name = RayletStr {
+            data: b"CPU".as_ptr() as *const c_char,
+            len: 3,
+        };
+        let resource_entries = [RayletResourceEntry {
+            name: cpu_name,
+            value: 4.0,
+        }];
+        let resources = RayletResourceArray {
+            entries: resource_entries.as_ptr(),
+            len: resource_entries.len(),
+        };
+        let node_resources = RayletNodeResources {
+            total: resources,
+            available: resources,
+            load: RayletResourceArray {
+                entries: std::ptr::null(),
+                len: 0,
+            },
+            normal_task_resources: RayletResourceArray {
+                entries: std::ptr::null(),
+                len: 0,
+            },
+            labels: RayletLabelArray {
+                entries: std::ptr::null(),
+                len: 0,
+            },
+            idle_resource_duration_ms: 0,
+            is_draining: 0,
+            draining_deadline_timestamp_ms: 0,
+            last_resource_update_ms: 0,
+            latest_resources_normal_task_timestamp: 0,
+            object_pulls_queued: 0,
+        };
+        let node = RayletNodeResourceView {
+            node_id: 99,
+            resources: node_resources,
+        };
+        let node_array = RayletNodeResourceViewArray {
+            entries: &node as *const RayletNodeResourceView,
+            len: 1,
+        };
+        assert_eq!(
+            raylet_rs_scheduler_update_cluster_view(handle, &node_array as *const _),
+            1
+        );
+
+        let req_entries = [RayletResourceEntry {
+            name: cpu_name,
+            value: 1.0,
+        }];
+        let request = RayletSchedulingRequest {
+            request_id: 55,
+            preferred_node_id: 99,
+            resource_request: RayletResourceRequest {
+                resources: RayletResourceArray {
+                    entries: req_entries.as_ptr(),
+                    len: req_entries.len(),
+                },
+                requires_object_store_memory: 0,
+                label_selector: RayletLabelSelector {
+                    constraints: std::ptr::null(),
+                    len: 0,
+                },
+            },
+        };
+        let mut decision = RayletSchedulingDecision {
+            request_id: 0,
+            selected_node_id: 0,
+            is_feasible: 0,
+            is_spillback: 0,
+        };
+
+        assert_eq!(
+            raylet_rs_scheduler_allocate(handle, &request as *const _, &mut decision as *mut _),
+            1
+        );
+        assert_eq!(decision.request_id, 55);
+        assert_eq!(decision.selected_node_id, 99);
+        assert_eq!(decision.is_feasible, 1);
+
+        assert_eq!(raylet_rs_scheduler_release(handle, &request as *const _), 1);
+        raylet_rs_scheduler_destroy(handle);
     }
 
     #[test]

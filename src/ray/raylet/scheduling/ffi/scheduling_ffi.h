@@ -5,16 +5,9 @@
 
 namespace ray::raylet::ffi {
 
-// Placement-group reservation ABI version.
-//
-// Versioning and ownership rules for placement-group ABI structs:
-// - `abi_version` must be set to `kRayletPgAbiVersion` by the caller.
-// - Pointer fields are borrowed only for the duration of an FFI call.
-// - Callees must not retain pointers after returning to the caller.
-// - New fields are append-only and require a version bump when semantics change.
-inline constexpr uint32_t kRayletPgAbiVersion = 1;
-
 struct RayletStr {
+  // Pointer+length UTF-8 view owned by the caller.
+  // Rust reads the slice and never takes ownership.
   const char *data;
   size_t len;
 };
@@ -22,6 +15,41 @@ struct RayletStr {
 struct RayletStrArray {
   const RayletStr *entries;
   size_t len;
+};
+
+struct RayletByteArray {
+  // Pointer+length byte view owned by the caller.
+  // Rust reads the slice and never takes ownership.
+  const uint8_t *data;
+  size_t len;
+};
+
+enum class RayletWorkerType : uint8_t {
+  kWorker = 0,
+  kDriver = 1,
+  kSpillWorker = 2,
+  kRestoreWorker = 3,
+};
+
+enum class RayletLanguage : uint8_t {
+  kPython = 0,
+  kJava = 1,
+  kCpp = 2,
+  kRust = 3,
+};
+
+enum class RayletWorkerReleaseReason : uint8_t {
+  kTaskFinished = 0,
+  kTaskCanceled = 1,
+  kPreempted = 2,
+  kDisconnected = 3,
+};
+
+enum class RayletWorkerExitType : uint8_t {
+  kIntended = 0,
+  kSystemError = 1,
+  kUserError = 2,
+  kNodeShutdown = 3,
 };
 
 struct RayletResourceEntry {
@@ -32,6 +60,66 @@ struct RayletResourceEntry {
 struct RayletResourceArray {
   const RayletResourceEntry *entries;
   size_t len;
+};
+
+struct RayletWorkerIdentity {
+  RayletByteArray worker_id;
+  RayletByteArray job_id;
+  RayletByteArray actor_id;
+  RayletByteArray node_id;
+  RayletWorkerType worker_type;
+  RayletLanguage language;
+  uint8_t reserved0[6];
+};
+
+struct RayletWorkerState {
+  RayletWorkerIdentity identity;
+  int32_t process_id;
+  int32_t worker_port;
+  int64_t startup_token;
+  uint8_t is_registered;
+  uint8_t is_idle;
+  uint8_t is_detached_actor;
+  uint8_t reserved0[5];
+};
+
+struct RayletWorkerRegisterRequest {
+  RayletWorkerState state;
+  RayletStr worker_address;
+  RayletByteArray serialized_runtime_env;
+  int32_t debugger_port;
+  uint8_t reserved0[4];
+};
+
+struct RayletWorkerLeaseRequest {
+  int64_t lease_id;
+  RayletByteArray worker_id;
+  int64_t scheduling_class;
+  RayletResourceArray required_resources;
+  RayletResourceArray placement_resources;
+  uint8_t is_actor_creation_task;
+  uint8_t grant_or_reject;
+  uint8_t reserved0[6];
+};
+
+struct RayletWorkerReleaseRequest {
+  int64_t lease_id;
+  RayletByteArray worker_id;
+  RayletWorkerReleaseReason release_reason;
+  uint8_t return_worker_to_idle;
+  uint8_t worker_exiting;
+  uint8_t reserved0[5];
+};
+
+struct RayletWorkerExitEvent {
+  RayletByteArray worker_id;
+  RayletWorkerType worker_type;
+  RayletWorkerExitType exit_type;
+  uint8_t has_creation_task_exception;
+  uint8_t reserved0[5];
+  RayletStr exit_detail;
+  int32_t exit_code;
+  uint8_t reserved1[4];
 };
 
 struct RayletLabelEntry {
@@ -104,58 +192,6 @@ struct RayletSchedulingDecision {
   uint8_t is_spillback;
 };
 
-enum class RayletPgCommitReleaseOp : uint8_t {
-  kCommit = 1,
-  kRelease = 2,
-};
-
-enum class RayletPgResultCode : uint8_t {
-  kOk = 0,
-  kInfeasible = 1,
-  kResourcesBusy = 2,
-  kInvalid = 3,
-};
-
-struct RayletPgBundleSpec {
-  // `required_resources` points to caller-owned memory and is borrow-only.
-  uint32_t abi_version;
-  uint32_t reserved;
-  int64_t placement_group_id_high;
-  int64_t placement_group_id_low;
-  int64_t bundle_index;
-  RayletResourceArray required_resources;
-};
-
-struct RayletPgBundleAllocation {
-  // `allocated_resources` points to caller-owned memory and is borrow-only.
-  uint32_t abi_version;
-  uint32_t reserved;
-  int64_t placement_group_id_high;
-  int64_t placement_group_id_low;
-  int64_t bundle_index;
-  int64_t allocation_epoch;
-  RayletResourceArray allocated_resources;
-};
-
-struct RayletPgCommitReleaseResult {
-  uint32_t abi_version;
-  uint32_t reserved;
-  int64_t placement_group_id_high;
-  int64_t placement_group_id_low;
-  int64_t bundle_index;
-  RayletPgCommitReleaseOp operation;
-  RayletPgResultCode result;
-  uint16_t reserved_flags;
-  uint32_t reserved_code;
-};
-
-struct RayletLocalResourceManagerHandle;
-
-enum class RayletWorkFootprint : uint8_t {
-  kNodeWorkers = 1,
-  kPullingTaskArguments = 2,
-};
-
 inline RayletStr RayletStrFromRaw(const char *data, size_t len) {
   return RayletStr{data, len};
 }
@@ -179,47 +215,13 @@ inline RayletStrArray RayletStrArrayFromRaw(const RayletStr *entries, size_t len
   return RayletStrArray{entries, len};
 }
 
+inline RayletByteArray RayletByteArrayFromRaw(const uint8_t *data, size_t len) {
+  return RayletByteArray{data, len};
+}
+
 extern "C" {
 uint8_t raylet_rs_scheduler_roundtrip(const RayletSchedulingRequest *request,
                                       RayletSchedulingDecision *decision_out);
-
-RayletLocalResourceManagerHandle *raylet_rs_local_resource_manager_create(
-    const RayletNodeResources *node_resources);
-
-void raylet_rs_local_resource_manager_destroy(RayletLocalResourceManagerHandle *handle);
-
-uint8_t raylet_rs_local_resource_manager_allocate(
-    RayletLocalResourceManagerHandle *handle, const RayletResourceRequest *request);
-
-uint8_t raylet_rs_local_resource_manager_release(RayletLocalResourceManagerHandle *handle,
-                                                 const RayletResourceArray *resources);
-
-uint8_t raylet_rs_local_resource_manager_get_available(
-    const RayletLocalResourceManagerHandle *handle,
-    RayletStr resource_name,
-    double *available_out);
-
-uint8_t raylet_rs_local_resource_manager_add_resource_instances(
-    RayletLocalResourceManagerHandle *handle, RayletStr resource_name, double amount);
-
-uint8_t raylet_rs_local_resource_manager_subtract_resource_instances(
-    RayletLocalResourceManagerHandle *handle,
-    RayletStr resource_name,
-    double amount,
-    uint8_t allow_going_negative,
-    double *underflow_out);
-
-uint8_t raylet_rs_local_resource_manager_mark_footprint_busy(
-    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
-
-uint8_t raylet_rs_local_resource_manager_maybe_mark_footprint_busy(
-    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
-
-uint8_t raylet_rs_local_resource_manager_mark_footprint_idle(
-    RayletLocalResourceManagerHandle *handle, RayletWorkFootprint footprint);
-
-uint8_t raylet_rs_local_resource_manager_is_node_idle(
-    const RayletLocalResourceManagerHandle *handle);
 }
 
 }  // namespace ray::raylet::ffi

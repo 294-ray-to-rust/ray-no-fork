@@ -101,6 +101,61 @@ The shared ABI structs live in `src/ray/raylet/scheduling/ffi/scheduling_ffi.h` 
 - The generated header is `src/ray/raylet/scheduling/rust_scheduler_ffi.h` and is exported to C++ via `//rust/raylet-rs:raylet_rs_scheduler_ffi`.
 - C++ validation/smoke tests should live under `src/ray/raylet/scheduling/tests`.
 
+## Post-scheduler prioritized migration slices
+
+The scheduler path establishes the FFI + ABI pattern. The next slices are ordered to
+remove the highest-leverage C++ control-plane state first while keeping rollout risk
+bounded to one SWE session at a time.
+
+### Priority 1: Worker lifecycle and lease dispatch core
+
+**Why now:** scheduler decisions become more useful once worker availability and lease
+dispatch also live in Rust-owned state.
+
+| Item | Value |
+| --- | --- |
+| C++ source of truth | `src/ray/raylet/worker_pool.{cc,h}`, `src/ray/raylet/worker.{cc,h}`, `src/ray/raylet/worker_killing_policy_*`, call sites in `src/ray/raylet/node_manager.cc` |
+| Rust destination modules | `rust/raylet-rs/src/worker_pool.rs`, `rust/raylet-rs/src/worker.rs`, `rust/raylet-rs/src/worker_killing_policy.rs` |
+| Minimal FFI boundary | C++ keeps process spawning/runtime-env RPC while Rust owns worker state machine via `raylet_rs_worker_pool_create/destroy`, `register_worker`, `request_worker_lease`, `release_worker`, `on_worker_exit` |
+
+Session-scoped checklist:
+- [ ] Add ABI-safe worker identity/state structs in `rust/raylet-rs/src/scheduling_ffi.rs` and matching C header.
+- [ ] Implement Rust `WorkerPool` state transitions for register/lease/release, with C++ callbacks for spawn.
+- [ ] Wire one `NodeManager` lease path (`HandleRequestWorkerLease`) through the Rust worker pool behind a feature flag.
+
+### Priority 2: Placement group and lease dependency managers
+
+**Why now:** this is the tightest remaining dependency on scheduler internals and
+unblocks full parity for constrained scheduling.
+
+| Item | Value |
+| --- | --- |
+| C++ source of truth | `src/ray/raylet/placement_group_resource_manager.{cc,h}`, `src/ray/raylet/lease_dependency_manager.{cc,h}`, `src/ray/raylet/scheduling/*` |
+| Rust destination modules | `rust/raylet-rs/src/placement_group_resource_manager.rs`, `rust/raylet-rs/src/lease_dependency_manager.rs` |
+| Minimal FFI boundary | C++ calls Rust for bundle reservation/commit + dependency readiness via `raylet_rs_pg_prepare`, `raylet_rs_pg_commit`, `raylet_rs_pg_release`, `raylet_rs_lease_deps_mark_ready` |
+
+Session-scoped checklist:
+- [ ] Model bundle reservation lifecycle structs in shared ABI (`bundle_spec`, `bundle_allocation`, commit result).
+- [ ] Port reservation bookkeeping and anti-affinity checks for a single placement group scheduling cycle.
+- [ ] Route existing C++ placement-group scheduling entrypoint to Rust and keep fallback path for mismatch debugging.
+
+### Priority 3: Local object and wait management loop
+
+**Why now:** moving object pin/spill/wait bookkeeping into Rust removes another large
+`NodeManager` state cluster without requiring immediate plasma/object-manager rewrites.
+
+| Item | Value |
+| --- | --- |
+| C++ source of truth | `src/ray/raylet/local_object_manager.{cc,h}`, `src/ray/raylet/local_object_manager_interface.h`, `src/ray/raylet/wait_manager.{cc,h}`, `src/ray/raylet/throttler.h` |
+| Rust destination modules | `rust/raylet-rs/src/local_object_manager.rs`, `rust/raylet-rs/src/wait_manager.rs`, `rust/raylet-rs/src/throttler.rs` |
+| Minimal FFI boundary | C++ object manager/plasma callbacks remain native; Rust owns request tracking via `raylet_rs_object_pin`, `raylet_rs_object_spill_request`, `raylet_rs_wait_register`, `raylet_rs_wait_cancel` |
+
+Session-scoped checklist:
+- [ ] Add ABI structs for object IDs, wait tokens, and spill commands with explicit ownership contracts.
+- [ ] Port `WaitManager` request registration/completion logic and connect to existing callbacks.
+- [ ] Move `LocalObjectManager` pin/spill state transitions to Rust while delegating actual IO worker execution to C++.
+
 ## Next Steps
-- Create an issue per phase starting with the scheduler shim, referencing this document.
-- Align with build owners to introduce a `rust/` workspace section (Cargo + Bazel target) for the new crate, ensuring CI builds `raylet_rs` shared library alongside existing binaries.
+- Land scheduler review fixes first, then execute Priority 1/2/3 in order so each slice can rely on already-migrated Rust state.
+- Keep each checklist item to one SWE session and convert completed checklist entries into linked implementation issues.
+- Align with build owners to ensure CI continues building `raylet_rs` shared library alongside existing raylet binaries as each slice is introduced.

@@ -1,19 +1,7 @@
 use std::collections::HashMap;
 use std::os::raw::c_char;
-use std::ptr;
 use std::slice;
 use std::str;
-
-use crate::scheduling::local_resource_manager::{LocalResourceManager, WorkFootprint};
-
-/// Placement-group reservation ABI version.
-///
-/// Versioning and ownership rules for placement-group ABI structs:
-/// - `abi_version` is set by the caller to `RAYLET_PG_ABI_VERSION`.
-/// - Pointer fields are borrowed for the duration of a single FFI call.
-/// - Rust and C++ must not store borrowed pointers after the call returns.
-/// - Fields are append-only and semantic changes require a version bump.
-pub const RAYLET_PG_ABI_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FfiError {
@@ -35,6 +23,8 @@ impl std::error::Error for FfiError {}
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct RayletStr {
+    // C++ owns backing memory for all incoming RayletStr values.
+    // Rust treats this as a read-only slice and never frees it.
     pub data: *const c_char,
     pub len: usize,
 }
@@ -65,6 +55,123 @@ impl RayletStr {
 pub struct RayletStrArray {
     pub entries: *const RayletStr,
     pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletByteArray {
+    // C++ owns backing memory for all incoming RayletByteArray values.
+    // Rust treats this as a read-only slice and never frees it.
+    pub data: *const u8,
+    pub len: usize,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerType {
+    Worker = 0,
+    Driver = 1,
+    SpillWorker = 2,
+    RestoreWorker = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletLanguage {
+    Python = 0,
+    Java = 1,
+    Cpp = 2,
+    Rust = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerReleaseReason {
+    TaskFinished = 0,
+    TaskCanceled = 1,
+    Preempted = 2,
+    Disconnected = 3,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletWorkerExitType {
+    Intended = 0,
+    SystemError = 1,
+    UserError = 2,
+    NodeShutdown = 3,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerIdentity {
+    pub worker_id: RayletByteArray,
+    pub job_id: RayletByteArray,
+    pub actor_id: RayletByteArray,
+    pub node_id: RayletByteArray,
+    pub worker_type: RayletWorkerType,
+    pub language: RayletLanguage,
+    pub _reserved0: [u8; 6],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerState {
+    pub identity: RayletWorkerIdentity,
+    pub process_id: i32,
+    pub worker_port: i32,
+    pub startup_token: i64,
+    pub is_registered: u8,
+    pub is_idle: u8,
+    pub is_detached_actor: u8,
+    pub _reserved0: [u8; 5],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerRegisterRequest {
+    pub state: RayletWorkerState,
+    pub worker_address: RayletStr,
+    pub serialized_runtime_env: RayletByteArray,
+    pub debugger_port: i32,
+    pub _reserved0: [u8; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerLeaseRequest {
+    pub lease_id: i64,
+    pub worker_id: RayletByteArray,
+    pub scheduling_class: i64,
+    pub required_resources: RayletResourceArray,
+    pub placement_resources: RayletResourceArray,
+    pub is_actor_creation_task: u8,
+    pub grant_or_reject: u8,
+    pub _reserved0: [u8; 6],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerReleaseRequest {
+    pub lease_id: i64,
+    pub worker_id: RayletByteArray,
+    pub release_reason: RayletWorkerReleaseReason,
+    pub return_worker_to_idle: u8,
+    pub worker_exiting: u8,
+    pub _reserved0: [u8; 5],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletWorkerExitEvent {
+    pub worker_id: RayletByteArray,
+    pub worker_type: RayletWorkerType,
+    pub exit_type: RayletWorkerExitType,
+    pub has_creation_task_exception: u8,
+    pub _reserved0: [u8; 5],
+    pub exit_detail: RayletStr,
+    pub exit_code: i32,
+    pub _reserved1: [u8; 4],
 }
 
 #[repr(C)]
@@ -171,71 +278,6 @@ pub struct RayletSchedulingDecision {
     pub selected_node_id: i64,
     pub is_feasible: u8,
     pub is_spillback: u8,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RayletPgCommitReleaseOp {
-    Commit = 1,
-    Release = 2,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RayletPgResultCode {
-    Ok = 0,
-    Infeasible = 1,
-    ResourcesBusy = 2,
-    Invalid = 3,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct RayletPgBundleSpec {
-    pub abi_version: u32,
-    pub reserved: u32,
-    pub placement_group_id_high: i64,
-    pub placement_group_id_low: i64,
-    pub bundle_index: i64,
-    pub required_resources: RayletResourceArray,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct RayletPgBundleAllocation {
-    pub abi_version: u32,
-    pub reserved: u32,
-    pub placement_group_id_high: i64,
-    pub placement_group_id_low: i64,
-    pub bundle_index: i64,
-    pub allocation_epoch: i64,
-    pub allocated_resources: RayletResourceArray,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct RayletPgCommitReleaseResult {
-    pub abi_version: u32,
-    pub reserved: u32,
-    pub placement_group_id_high: i64,
-    pub placement_group_id_low: i64,
-    pub bundle_index: i64,
-    pub operation: RayletPgCommitReleaseOp,
-    pub result: RayletPgResultCode,
-    pub reserved_flags: u16,
-    pub reserved_code: u32,
-}
-
-#[repr(C)]
-pub struct RayletLocalResourceManagerHandle {
-    manager: LocalResourceManager,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RayletWorkFootprint {
-    NodeWorkers = 1,
-    PullingTaskArguments = 2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -431,15 +473,6 @@ impl RayletSchedulingDecision {
     }
 }
 
-impl RayletWorkFootprint {
-    fn to_rust(self) -> WorkFootprint {
-        match self {
-            Self::NodeWorkers => WorkFootprint::NodeWorkers,
-            Self::PullingTaskArguments => WorkFootprint::PullingTaskArguments,
-        }
-    }
-}
-
 #[no_mangle]
 pub extern "C" fn raylet_rs_scheduler_roundtrip(
     request: *const RayletSchedulingRequest,
@@ -461,251 +494,10 @@ pub extern "C" fn raylet_rs_scheduler_roundtrip(
     1
 }
 
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_create(
-    node_resources: *const RayletNodeResources,
-) -> *mut RayletLocalResourceManagerHandle {
-    if node_resources.is_null() {
-        return ptr::null_mut();
-    }
-
-    let node_resources = unsafe { &*node_resources };
-    let node_resources = match unsafe { node_resources.to_rust() } {
-        Ok(resources) => resources,
-        Err(_) => return ptr::null_mut(),
-    };
-
-    let handle = RayletLocalResourceManagerHandle {
-        manager: LocalResourceManager::new(node_resources),
-    };
-
-    Box::into_raw(Box::new(handle))
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_destroy(
-    handle: *mut RayletLocalResourceManagerHandle,
-) {
-    if handle.is_null() {
-        return;
-    }
-
-    unsafe {
-        drop(Box::from_raw(handle));
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_allocate(
-    handle: *mut RayletLocalResourceManagerHandle,
-    request: *const RayletResourceRequest,
-) -> u8 {
-    if handle.is_null() || request.is_null() {
-        return 0;
-    }
-
-    let handle = unsafe { &mut *handle };
-    let request = unsafe { &*request };
-    let request = match unsafe { request.to_rust() } {
-        Ok(request) => request,
-        Err(_) => return 0,
-    };
-
-    handle.manager.allocate(&request) as u8
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_release(
-    handle: *mut RayletLocalResourceManagerHandle,
-    resources: *const RayletResourceArray,
-) -> u8 {
-    if handle.is_null() || resources.is_null() {
-        return 0;
-    }
-
-    let handle = unsafe { &mut *handle };
-    let resources = unsafe { &*resources };
-    let resources = match unsafe { resources.to_map() } {
-        Ok(resources) => resources,
-        Err(_) => return 0,
-    };
-
-    handle.manager.release(&resources);
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_get_available(
-    handle: *const RayletLocalResourceManagerHandle,
-    resource_name: RayletStr,
-    available_out: *mut f64,
-) -> u8 {
-    if handle.is_null() || available_out.is_null() {
-        return 0;
-    }
-
-    let resource_name = match unsafe { resource_name.as_str() } {
-        Ok(name) => name,
-        Err(_) => return 0,
-    };
-
-    let handle = unsafe { &*handle };
-    let Some(available) = handle.manager.get_available(resource_name) else {
-        return 0;
-    };
-
-    unsafe {
-        *available_out = available;
-    }
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_add_resource_instances(
-    handle: *mut RayletLocalResourceManagerHandle,
-    resource_name: RayletStr,
-    amount: f64,
-) -> u8 {
-    if handle.is_null() {
-        return 0;
-    }
-
-    let resource_name = match unsafe { resource_name.as_str() } {
-        Ok(name) => name,
-        Err(_) => return 0,
-    };
-
-    let handle = unsafe { &mut *handle };
-    handle.manager.add_resource_instances(resource_name, amount);
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_subtract_resource_instances(
-    handle: *mut RayletLocalResourceManagerHandle,
-    resource_name: RayletStr,
-    amount: f64,
-    allow_going_negative: u8,
-    underflow_out: *mut f64,
-) -> u8 {
-    if handle.is_null() || underflow_out.is_null() {
-        return 0;
-    }
-
-    let resource_name = match unsafe { resource_name.as_str() } {
-        Ok(name) => name,
-        Err(_) => return 0,
-    };
-
-    let handle = unsafe { &mut *handle };
-    let underflow =
-        handle
-            .manager
-            .subtract_resource_instances(resource_name, amount, allow_going_negative != 0);
-    unsafe {
-        *underflow_out = underflow;
-    }
-
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_mark_footprint_busy(
-    handle: *mut RayletLocalResourceManagerHandle,
-    footprint: RayletWorkFootprint,
-) -> u8 {
-    if handle.is_null() {
-        return 0;
-    }
-    let handle = unsafe { &mut *handle };
-    handle.manager.mark_footprint_as_busy(footprint.to_rust());
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_maybe_mark_footprint_busy(
-    handle: *mut RayletLocalResourceManagerHandle,
-    footprint: RayletWorkFootprint,
-) -> u8 {
-    if handle.is_null() {
-        return 0;
-    }
-    let handle = unsafe { &mut *handle };
-    handle
-        .manager
-        .maybe_mark_footprint_as_busy(footprint.to_rust());
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_mark_footprint_idle(
-    handle: *mut RayletLocalResourceManagerHandle,
-    footprint: RayletWorkFootprint,
-) -> u8 {
-    if handle.is_null() {
-        return 0;
-    }
-    let handle = unsafe { &mut *handle };
-    handle.manager.mark_footprint_as_idle(footprint.to_rust());
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn raylet_rs_local_resource_manager_is_node_idle(
-    handle: *const RayletLocalResourceManagerHandle,
-) -> u8 {
-    if handle.is_null() {
-        return 0;
-    }
-    let handle = unsafe { &*handle };
-    handle.manager.is_local_node_idle() as u8
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::mem::size_of;
-
-    fn create_local_resource_manager_handle() -> (*mut RayletLocalResourceManagerHandle, RayletStr) {
-        let cpu = RayletStr {
-            data: b"CPU".as_ptr() as *const c_char,
-            len: 3,
-        };
-        let entries = [RayletResourceEntry {
-            name: cpu,
-            value: 2.0,
-        }];
-        let resources = RayletResourceArray {
-            entries: entries.as_ptr(),
-            len: entries.len(),
-        };
-        let node_resources = RayletNodeResources {
-            total: resources,
-            available: resources,
-            load: RayletResourceArray {
-                entries: ptr::null(),
-                len: 0,
-            },
-            normal_task_resources: RayletResourceArray {
-                entries: ptr::null(),
-                len: 0,
-            },
-            labels: RayletLabelArray {
-                entries: ptr::null(),
-                len: 0,
-            },
-            idle_resource_duration_ms: 0,
-            is_draining: 0,
-            draining_deadline_timestamp_ms: -1,
-            last_resource_update_ms: 0,
-            latest_resources_normal_task_timestamp: 0,
-            object_pulls_queued: 0,
-        };
-        (
-            raylet_rs_local_resource_manager_create(&node_resources as *const _),
-            cpu,
-        )
-    }
 
     #[test]
     fn resource_array_converts_to_map() {
@@ -794,169 +586,20 @@ mod tests {
     }
 
     #[test]
-    fn local_resource_manager_ffi_allocate_release() {
-        let (handle, cpu) = create_local_resource_manager_handle();
-        assert!(!handle.is_null());
-
-        let request_entries = [RayletResourceEntry {
-            name: cpu,
-            value: 1.0,
-        }];
-        let request = RayletResourceRequest {
-            resources: RayletResourceArray {
-                entries: request_entries.as_ptr(),
-                len: request_entries.len(),
-            },
-            requires_object_store_memory: 0,
-            label_selector: RayletLabelSelector {
-                constraints: ptr::null(),
-                len: 0,
-            },
-        };
-        assert_eq!(raylet_rs_local_resource_manager_allocate(handle, &request), 1);
-
-        let mut available = -1.0;
-        assert_eq!(
-            raylet_rs_local_resource_manager_get_available(handle, cpu, &mut available),
-            1
-        );
-        assert_eq!(available, 1.0);
-
-        let release_entries = [RayletResourceEntry {
-            name: cpu,
-            value: 1.0,
-        }];
-        let release_resources = RayletResourceArray {
-            entries: release_entries.as_ptr(),
-            len: release_entries.len(),
-        };
-        assert_eq!(
-            raylet_rs_local_resource_manager_release(handle, &release_resources),
-            1
-        );
-        assert_eq!(
-            raylet_rs_local_resource_manager_get_available(handle, cpu, &mut available),
-            1
-        );
-        assert_eq!(available, 2.0);
-
-        raylet_rs_local_resource_manager_destroy(handle);
-    }
-
-    #[test]
-    fn local_resource_manager_ffi_subtract_add_and_footprints() {
-        let (handle, cpu) = create_local_resource_manager_handle();
-        assert!(!handle.is_null());
-        assert_eq!(raylet_rs_local_resource_manager_is_node_idle(handle), 1);
-
-        let mut underflow = -1.0;
-        assert_eq!(
-            raylet_rs_local_resource_manager_subtract_resource_instances(
-                handle,
-                cpu,
-                1.5,
-                0,
-                &mut underflow,
-            ),
-            1
-        );
-        assert_eq!(underflow, 0.0);
-
-        let mut available = -1.0;
-        assert_eq!(
-            raylet_rs_local_resource_manager_get_available(handle, cpu, &mut available),
-            1
-        );
-        assert_eq!(available, 0.5);
-
-        assert_eq!(
-            raylet_rs_local_resource_manager_subtract_resource_instances(
-                handle,
-                cpu,
-                1.0,
-                0,
-                &mut underflow,
-            ),
-            1
-        );
-        assert_eq!(underflow, 0.5);
-
-        assert_eq!(
-            raylet_rs_local_resource_manager_add_resource_instances(handle, cpu, 1.25),
-            1
-        );
-        assert_eq!(
-            raylet_rs_local_resource_manager_get_available(handle, cpu, &mut available),
-            1
-        );
-        assert_eq!(available, 1.25);
-
-        assert_eq!(
-            raylet_rs_local_resource_manager_mark_footprint_busy(
-                handle,
-                RayletWorkFootprint::NodeWorkers,
-            ),
-            1
-        );
-        assert_eq!(raylet_rs_local_resource_manager_is_node_idle(handle), 0);
-        assert_eq!(
-            raylet_rs_local_resource_manager_mark_footprint_idle(
-                handle,
-                RayletWorkFootprint::NodeWorkers,
-            ),
-            1
-        );
-
-        assert_eq!(
-            raylet_rs_local_resource_manager_maybe_mark_footprint_busy(
-                handle,
-                RayletWorkFootprint::PullingTaskArguments,
-            ),
-            1
-        );
-        assert_eq!(raylet_rs_local_resource_manager_is_node_idle(handle), 0);
-        assert_eq!(
-            raylet_rs_local_resource_manager_mark_footprint_idle(
-                handle,
-                RayletWorkFootprint::PullingTaskArguments,
-            ),
-            1
-        );
-        assert_eq!(raylet_rs_local_resource_manager_is_node_idle(handle), 0);
-
-        let release_entries = [RayletResourceEntry {
-            name: cpu,
-            value: 0.75,
-        }];
-        let release_resources = RayletResourceArray {
-            entries: release_entries.as_ptr(),
-            len: release_entries.len(),
-        };
-        assert_eq!(
-            raylet_rs_local_resource_manager_release(handle, &release_resources),
-            1
-        );
-        assert_eq!(
-            raylet_rs_local_resource_manager_get_available(handle, cpu, &mut available),
-            1
-        );
-        assert_eq!(available, 2.0);
-        assert_eq!(raylet_rs_local_resource_manager_is_node_idle(handle), 1);
-
-        raylet_rs_local_resource_manager_destroy(handle);
-    }
-
-    #[test]
     fn ffi_layout_matches_cpp_expectations() {
         assert_eq!(size_of::<RayletStr>(), 16);
         assert_eq!(size_of::<RayletStrArray>(), 16);
+        assert_eq!(size_of::<RayletByteArray>(), 16);
         assert_eq!(size_of::<RayletResourceEntry>(), 24);
         assert_eq!(size_of::<RayletLabelEntry>(), 32);
+        assert_eq!(size_of::<RayletWorkerIdentity>(), 72);
+        assert_eq!(size_of::<RayletWorkerState>(), 96);
+        assert_eq!(size_of::<RayletWorkerRegisterRequest>(), 136);
+        assert_eq!(size_of::<RayletWorkerLeaseRequest>(), 72);
+        assert_eq!(size_of::<RayletWorkerReleaseRequest>(), 32);
+        assert_eq!(size_of::<RayletWorkerExitEvent>(), 48);
         assert_eq!(size_of::<RayletResourceRequest>(), 40);
         assert_eq!(size_of::<RayletSchedulingRequest>(), 56);
         assert_eq!(size_of::<RayletSchedulingDecision>(), 24);
-        assert_eq!(size_of::<RayletPgBundleSpec>(), 48);
-        assert_eq!(size_of::<RayletPgBundleAllocation>(), 56);
-        assert_eq!(size_of::<RayletPgCommitReleaseResult>(), 40);
     }
 }

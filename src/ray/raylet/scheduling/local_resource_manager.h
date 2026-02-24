@@ -25,6 +25,7 @@
 #include "ray/common/scheduling/fixed_point.h"
 #include "ray/observability/metric_interface.h"
 #include "ray/ray_syncer/ray_syncer.h"
+#include "ray/raylet/scheduling/ffi/scheduling_ffi.h"
 #include "src/ray/protobuf/gcs.pb.h"
 #include "src/ray/protobuf/node_manager.pb.h"
 
@@ -66,6 +67,8 @@ class LocalResourceManager : public syncer::ReporterInterface {
       std::function<void(const NodeResources &)> resource_change_subscriber,
       ray::observability::MetricInterface &resource_usage_gauge,
       std::function<absl::Time()> now_fn = nullptr);
+
+  ~LocalResourceManager();
 
   scheduling::NodeID GetNodeId() const { return local_node_id_; }
 
@@ -162,7 +165,7 @@ class LocalResourceManager : public syncer::ReporterInterface {
   /// Record the metrics.
   void RecordMetrics() const;
 
-  bool IsLocalNodeIdle() const { return GetResourceIdleTime() != absl::nullopt; }
+  bool IsLocalNodeIdle() const;
 
   /// Change the local node to the draining state.
   /// After that, no new tasks can be scheduled onto the local node.
@@ -259,6 +262,9 @@ class LocalResourceManager : public syncer::ReporterInterface {
   std::optional<rpc::DrainRayletRequest> drain_request_;
 
   ray::observability::MetricInterface &resource_usage_gauge_;
+
+  ray::raylet::ffi::RayletLocalResourceManagerHandle *ffi_local_resource_manager_ =
+      nullptr;
 
   FRIEND_TEST(ClusterResourceSchedulerTest, SchedulingUpdateTotalResourcesTest);
   FRIEND_TEST(ClusterResourceSchedulerTest, AvailableResourceInstancesOpsTest);

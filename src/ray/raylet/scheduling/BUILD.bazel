@@ -154,6 +154,8 @@ ray_cc_library(
     srcs = ["local_resource_manager.cc"],
     hdrs = ["local_resource_manager.h"],
     deps = [
+        ":scheduling_ffi",
+        "//rust/raylet-rs:raylet_rs_scheduler_ffi",
         "//src/ray/common/scheduling:cluster_resource_data",
         "//src/ray/common/scheduling:placement_group_util",
         "//src/ray/observability:metric_interface",

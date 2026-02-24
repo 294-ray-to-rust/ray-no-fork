@@ -6,6 +6,15 @@ use std::str;
 
 use crate::scheduling::local_resource_manager::{LocalResourceManager, WorkFootprint};
 
+/// Placement-group reservation ABI version.
+///
+/// Versioning and ownership rules for placement-group ABI structs:
+/// - `abi_version` is set by the caller to `RAYLET_PG_ABI_VERSION`.
+/// - Pointer fields are borrowed for the duration of a single FFI call.
+/// - Rust and C++ must not store borrowed pointers after the call returns.
+/// - Fields are append-only and semantic changes require a version bump.
+pub const RAYLET_PG_ABI_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FfiError {
     NullPointer(&'static str),
@@ -162,6 +171,59 @@ pub struct RayletSchedulingDecision {
     pub selected_node_id: i64,
     pub is_feasible: u8,
     pub is_spillback: u8,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletPgCommitReleaseOp {
+    Commit = 1,
+    Release = 2,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayletPgResultCode {
+    Ok = 0,
+    Infeasible = 1,
+    ResourcesBusy = 2,
+    Invalid = 3,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletPgBundleSpec {
+    pub abi_version: u32,
+    pub reserved: u32,
+    pub placement_group_id_high: i64,
+    pub placement_group_id_low: i64,
+    pub bundle_index: i64,
+    pub required_resources: RayletResourceArray,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletPgBundleAllocation {
+    pub abi_version: u32,
+    pub reserved: u32,
+    pub placement_group_id_high: i64,
+    pub placement_group_id_low: i64,
+    pub bundle_index: i64,
+    pub allocation_epoch: i64,
+    pub allocated_resources: RayletResourceArray,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct RayletPgCommitReleaseResult {
+    pub abi_version: u32,
+    pub reserved: u32,
+    pub placement_group_id_high: i64,
+    pub placement_group_id_low: i64,
+    pub bundle_index: i64,
+    pub operation: RayletPgCommitReleaseOp,
+    pub result: RayletPgResultCode,
+    pub reserved_flags: u16,
+    pub reserved_code: u32,
 }
 
 #[repr(C)]
@@ -893,5 +955,8 @@ mod tests {
         assert_eq!(size_of::<RayletResourceRequest>(), 40);
         assert_eq!(size_of::<RayletSchedulingRequest>(), 56);
         assert_eq!(size_of::<RayletSchedulingDecision>(), 24);
+        assert_eq!(size_of::<RayletPgBundleSpec>(), 48);
+        assert_eq!(size_of::<RayletPgBundleAllocation>(), 56);
+        assert_eq!(size_of::<RayletPgCommitReleaseResult>(), 40);
     }
 }

@@ -5,6 +5,15 @@
 
 namespace ray::raylet::ffi {
 
+// Placement-group reservation ABI version.
+//
+// Versioning and ownership rules for placement-group ABI structs:
+// - `abi_version` must be set to `kRayletPgAbiVersion` by the caller.
+// - Pointer fields are borrowed only for the duration of an FFI call.
+// - Callees must not retain pointers after returning to the caller.
+// - New fields are append-only and require a version bump when semantics change.
+inline constexpr uint32_t kRayletPgAbiVersion = 1;
+
 struct RayletStr {
   const char *data;
   size_t len;
@@ -93,6 +102,51 @@ struct RayletSchedulingDecision {
   int64_t selected_node_id;
   uint8_t is_feasible;
   uint8_t is_spillback;
+};
+
+enum class RayletPgCommitReleaseOp : uint8_t {
+  kCommit = 1,
+  kRelease = 2,
+};
+
+enum class RayletPgResultCode : uint8_t {
+  kOk = 0,
+  kInfeasible = 1,
+  kResourcesBusy = 2,
+  kInvalid = 3,
+};
+
+struct RayletPgBundleSpec {
+  // `required_resources` points to caller-owned memory and is borrow-only.
+  uint32_t abi_version;
+  uint32_t reserved;
+  int64_t placement_group_id_high;
+  int64_t placement_group_id_low;
+  int64_t bundle_index;
+  RayletResourceArray required_resources;
+};
+
+struct RayletPgBundleAllocation {
+  // `allocated_resources` points to caller-owned memory and is borrow-only.
+  uint32_t abi_version;
+  uint32_t reserved;
+  int64_t placement_group_id_high;
+  int64_t placement_group_id_low;
+  int64_t bundle_index;
+  int64_t allocation_epoch;
+  RayletResourceArray allocated_resources;
+};
+
+struct RayletPgCommitReleaseResult {
+  uint32_t abi_version;
+  uint32_t reserved;
+  int64_t placement_group_id_high;
+  int64_t placement_group_id_low;
+  int64_t bundle_index;
+  RayletPgCommitReleaseOp operation;
+  RayletPgResultCode result;
+  uint16_t reserved_flags;
+  uint32_t reserved_code;
 };
 
 struct RayletLocalResourceManagerHandle;

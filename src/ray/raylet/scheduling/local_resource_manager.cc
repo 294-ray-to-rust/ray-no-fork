@@ -28,6 +28,46 @@
 
 namespace ray {
 
+namespace {
+
+using ray::raylet::ffi::RayletLabelSelector;
+using ray::raylet::ffi::RayletNodeResources;
+using ray::raylet::ffi::RayletResourceArray;
+using ray::raylet::ffi::RayletResourceEntry;
+using ray::raylet::ffi::RayletResourceRequest;
+using ray::raylet::ffi::RayletStr;
+
+RayletStr ToRayletStr(const std::string &value) {
+  return RayletStr{value.c_str(), value.size()};
+}
+
+RayletResourceArray BuildResourceArray(
+    const absl::flat_hash_map<std::string, double> &map,
+    std::vector<std::string> *names_out,
+    std::vector<RayletResourceEntry> *entries_out) {
+  names_out->reserve(map.size());
+  entries_out->reserve(map.size());
+  for (const auto &[name, value] : map) {
+    names_out->push_back(name);
+    entries_out->push_back(RayletResourceEntry{ToRayletStr(names_out->back()), value});
+  }
+  return ray::raylet::ffi::RayletResourceArrayFromRaw(entries_out->data(),
+                                                      entries_out->size());
+}
+
+ray::raylet::ffi::RayletWorkFootprint ToFfiWorkFootprint(WorkFootprint item) {
+  switch (item) {
+  case WorkFootprint::NODE_WORKERS:
+    return ray::raylet::ffi::RayletWorkFootprint::kNodeWorkers;
+  case WorkFootprint::PULLING_TASK_ARGUMENTS:
+    return ray::raylet::ffi::RayletWorkFootprint::kPullingTaskArguments;
+  default:
+    UNREACHABLE;
+  }
+}
+
+}  // namespace
+
 LocalResourceManager::LocalResourceManager(
     scheduling::NodeID local_node_id,
     const NodeResources &node_resources,
@@ -52,7 +92,42 @@ LocalResourceManager::LocalResourceManager(
   for (const auto &resource_id : node_resources.total.ExplicitResourceIds()) {
     idle_time_states_[resource_id] = IdleTimeState{now, absl::nullopt};
   }
+
+  std::vector<std::string> total_names;
+  std::vector<RayletResourceEntry> total_entries;
+  std::vector<std::string> available_names;
+  std::vector<RayletResourceEntry> available_entries;
+  auto total = BuildResourceArray(
+      node_resources.total.GetResourceMap(), &total_names, &total_entries);
+  auto available = BuildResourceArray(
+      node_resources.available.GetResourceMap(), &available_names, &available_entries);
+  const auto empty_resources = RayletResourceArrayFromRaw(nullptr, 0);
+  const auto empty_labels = ray::raylet::ffi::RayletLabelArrayFromRaw(nullptr, 0);
+  RayletNodeResources ffi_node_resources;
+  ffi_node_resources.total = total;
+  ffi_node_resources.available = available;
+  ffi_node_resources.load = empty_resources;
+  ffi_node_resources.normal_task_resources = empty_resources;
+  ffi_node_resources.labels = empty_labels;
+  ffi_node_resources.idle_resource_duration_ms = 0;
+  ffi_node_resources.is_draining = 0;
+  ffi_node_resources.draining_deadline_timestamp_ms = -1;
+  ffi_node_resources.last_resource_update_ms = 0;
+  ffi_node_resources.latest_resources_normal_task_timestamp = 0;
+  ffi_node_resources.object_pulls_queued = 0;
+  ffi_local_resource_manager_ =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_create(&ffi_node_resources);
+  RAY_CHECK(ffi_local_resource_manager_ != nullptr)
+      << "Failed to create Rust LocalResourceManager FFI handle.";
   RAY_LOG(DEBUG) << "local resources: " << local_resources_.DebugString();
+}
+
+LocalResourceManager::~LocalResourceManager() {
+  if (ffi_local_resource_manager_ != nullptr) {
+    ray::raylet::ffi::raylet_rs_local_resource_manager_destroy(
+        ffi_local_resource_manager_);
+    ffi_local_resource_manager_ = nullptr;
+  }
 }
 
 void LocalResourceManager::AddLocalResourceInstances(
@@ -94,6 +169,20 @@ bool LocalResourceManager::AllocateTaskResourceInstances(
   auto allocation =
       local_resources_.available.TryAllocate(resource_request.GetResourceSet());
   if (allocation) {
+    std::vector<std::string> resource_names;
+    std::vector<RayletResourceEntry> resource_entries;
+    auto request_resources = BuildResourceArray(
+        resource_request.ToResourceMap(), &resource_names, &resource_entries);
+    RayletResourceRequest ffi_request;
+    ffi_request.resources = request_resources;
+    ffi_request.requires_object_store_memory =
+        static_cast<uint8_t>(resource_request.RequiresObjectStoreMemory());
+    ffi_request.label_selector = RayletLabelSelector{nullptr, 0};
+    const bool ffi_ok = ray::raylet::ffi::raylet_rs_local_resource_manager_allocate(
+                            ffi_local_resource_manager_, &ffi_request) != 0;
+    RAY_CHECK(ffi_ok) << "Rust LocalResourceManager allocate failed for "
+                      << resource_request.DebugString();
+
     *task_allocation = TaskResourceInstances(*allocation);
     for (const auto &resource_id : resource_request.ResourceIds()) {
       SetResourceNonIdle(resource_id);
@@ -124,8 +213,30 @@ void LocalResourceManager::FreeTaskResourceInstances(
       SetResourceIdle(resource_id);
     }
   }
+
+  absl::flat_hash_map<std::string, double> released;
+  for (const auto &resource_id : task_allocation->ResourceIds()) {
+    double sum = 0;
+    for (const auto &instance : task_allocation->Get(resource_id)) {
+      sum += instance.Double();
+    }
+    if (sum > 0) {
+      released[resource_id.Binary()] = sum;
+    }
+  }
+  std::vector<std::string> release_names;
+  std::vector<RayletResourceEntry> release_entries;
+  auto release_resources = BuildResourceArray(released, &release_names, &release_entries);
+  const bool ffi_ok = ray::raylet::ffi::raylet_rs_local_resource_manager_release(
+                          ffi_local_resource_manager_, &release_resources) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager release failed.";
 }
 void LocalResourceManager::MarkFootprintAsBusy(WorkFootprint item) {
+  const bool ffi_ok =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_mark_footprint_busy(
+          ffi_local_resource_manager_, ToFfiWorkFootprint(item)) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager mark footprint busy failed.";
+
   auto prev = idle_time_states_.find(item);
   if (prev != idle_time_states_.end() && !prev->second.current.has_value()) {
     return;
@@ -144,6 +255,11 @@ void LocalResourceManager::MarkFootprintAsBusy(WorkFootprint item) {
 }
 
 void LocalResourceManager::MaybeMarkFootprintAsBusy(WorkFootprint item) {
+  const bool ffi_ok =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_maybe_mark_footprint_busy(
+          ffi_local_resource_manager_, ToFfiWorkFootprint(item)) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager maybe mark footprint busy failed.";
+
   auto it = idle_time_states_.find(item);
 
   // If the footprint is already busy, do nothing.
@@ -167,6 +283,11 @@ void LocalResourceManager::MaybeMarkFootprintAsBusy(WorkFootprint item) {
 }
 
 void LocalResourceManager::MarkFootprintAsIdle(WorkFootprint item) {
+  const bool ffi_ok =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_mark_footprint_idle(
+          ffi_local_resource_manager_, ToFfiWorkFootprint(item)) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager mark footprint idle failed.";
+
   auto prev = idle_time_states_.find(item);
 
   // Already idle with no saved state to restore — do nothing.
@@ -210,6 +331,17 @@ void LocalResourceManager::AddResourceInstances(
   }
 
   local_resources_.available.Free(resource_id, resource_instances_fp);
+  double total_added = 0;
+  for (const auto &instance : resource_instances) {
+    total_added += instance;
+  }
+  const auto resource_name = resource_id.Binary();
+  const bool ffi_ok =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_add_resource_instances(
+          ffi_local_resource_manager_, ToRayletStr(resource_name), total_added) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager add resource instances failed for "
+                    << resource_name;
+
   const auto &available = local_resources_.available.Get(resource_id);
   const auto &total = local_resources_.total.Get(resource_id);
   bool is_idle = true;
@@ -238,6 +370,22 @@ std::vector<double> LocalResourceManager::SubtractResourceInstances(
 
   auto underflow = local_resources_.available.Subtract(
       resource_id, resource_instances_fp, allow_going_negative);
+
+  double total_subtracted = 0;
+  for (const auto &instance : resource_instances) {
+    total_subtracted += instance;
+  }
+  const auto resource_name = resource_id.Binary();
+  double ffi_underflow = 0;
+  const bool ffi_ok =
+      ray::raylet::ffi::raylet_rs_local_resource_manager_subtract_resource_instances(
+          ffi_local_resource_manager_,
+          ToRayletStr(resource_name),
+          total_subtracted,
+          static_cast<uint8_t>(allow_going_negative),
+          &ffi_underflow) != 0;
+  RAY_CHECK(ffi_ok) << "Rust LocalResourceManager subtract resource instances failed for "
+                    << resource_name;
 
   // If there's any non 0 instance delta to be subtracted, the source should be marked as
   // non-idle.
@@ -284,6 +432,14 @@ std::optional<absl::Time> LocalResourceManager::GetResourceIdleTime() const {
     all_idle_time = std::max(all_idle_time, idle_time_or_busy.value());
   }
   return all_idle_time;
+}
+
+bool LocalResourceManager::IsLocalNodeIdle() const {
+  const bool ffi_idle = ray::raylet::ffi::raylet_rs_local_resource_manager_is_node_idle(
+                            ffi_local_resource_manager_) != 0;
+  RAY_CHECK_EQ(ffi_idle, GetResourceIdleTime() != absl::nullopt)
+      << "Rust and C++ LocalResourceManager idle states diverged.";
+  return ffi_idle;
 }
 
 bool LocalResourceManager::AllocateLocalTaskResources(

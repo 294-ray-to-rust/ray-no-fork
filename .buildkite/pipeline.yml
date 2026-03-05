@@ -37,6 +37,11 @@ steps:
         2>&1;
         exit_code=$$?;
         cp -r $$(bazel info bazel-testlogs)/* /artifact-mount/ 2>/dev/null || true;
+        echo "--- :bar_chart: Test triage summary";
+        ci/triage-test-results.sh /artifact-mount 2>&1 || true;
+        echo "";
+        echo "--- :clipboard: Test target catalog";
+        python3 ci/catalog-test-targets.py . 2>&1 || true;
         exit $$exit_code
         '
     timeout_in_minutes: 60

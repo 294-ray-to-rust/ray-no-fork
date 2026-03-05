@@ -1,9 +1,31 @@
-# Minimal Buildkite pipeline for ray-no-fork.
+# Buildkite pipeline for ray-no-fork C++ builds and tests.
 #
-# This is a noop pipeline that always passes. The goal is to verify
-# end-to-end plumbing: PR opened → Buildkite triggers → status check
-# appears on the PR. Once this works, expand to real build/test steps.
+# Requires the ray-cpp-ci Docker image (see ci/docker/).
 
 steps:
   - label: ":white_check_mark: noop"
-    command: "echo 'Buildkite pipeline is working. Expand this to run real tests.'"
+    command: "echo 'Buildkite pipeline is working.'"
+
+  - label: ":test_tube: C++ tests"
+    commands:
+      - >-
+        docker run --rm
+        -v /tmp/bazel-testlogs:/artifact-mount
+        ray-cpp-ci
+        bash -c '
+        bazel test
+        --config=ci
+        --test_tag_filters=-cgroup
+        --jobs=HOST_CPUS*.5
+        --test_timeout=300,600,1200,3600
+        --local_test_jobs=HOST_CPUS*.5
+        //src/...
+        2>&1;
+        exit_code=$$?;
+        cp -r $$(bazel info bazel-testlogs)/* /artifact-mount/ 2>/dev/null || true;
+        exit $$exit_code
+        '
+    timeout_in_minutes: 60
+    soft_fail: true
+    artifact_paths:
+      - "/tmp/bazel-testlogs/**/*"

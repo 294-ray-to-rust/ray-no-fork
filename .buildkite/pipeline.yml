@@ -11,10 +11,12 @@ steps:
       - >-
         docker run --rm
         -v /tmp/bazel-testlogs:/artifact-mount
+        -v /tmp/bazel-cache:/bazel-cache
         ray-cpp-ci
         bash -c '
         bazel test
         --config=ci
+        --disk_cache=/bazel-cache
         --test_tag_filters=-cgroup
         --jobs=HOST_CPUS*.5
         --test_timeout=300,600,1200,3600

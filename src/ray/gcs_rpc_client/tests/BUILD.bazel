@@ -32,7 +32,10 @@ ray_cc_test(
         "@platforms//os:windows": ["compiler_param_file"],
         "//conditions:default": [],
     }),
-    tags = ["team:core"],
+    tags = [
+        "redis",
+        "team:core",
+    ],
     deps = [
         "//src/ray/common:test_utils",
         "//src/ray/gcs:gcs_server_lib",
@@ -66,6 +69,7 @@ ray_cc_test(
     tags = [
         "exclusive",
         "no_tsan",
+        "redis",
         "team:core",
     ],
     deps = [
@@ -95,6 +99,7 @@ ray_cc_test(
     ],
     tags = [
         "no_windows",
+        "redis",
         "team:core",
     ],
     deps = [

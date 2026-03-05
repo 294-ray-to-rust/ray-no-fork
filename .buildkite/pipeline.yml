@@ -19,7 +19,7 @@ steps:
         bash -c 'bazel build --config=ci --jobs=HOST_CPUS*.5 //src/...'
     timeout_in_minutes: 45
 
-  - label: ":test_tube: C++ tests"
+  - label: ":test_tube: C++ tests (non-Redis)"
     depends_on: build-cpp
     commands:
       - >-
@@ -29,7 +29,7 @@ steps:
         bash -c '
         bazel test
         --config=ci
-        --test_tag_filters=-cgroup
+        --test_tag_filters=-cgroup,-redis
         --jobs=HOST_CPUS*.5
         --test_timeout=300,600,1200,3600
         --local_test_jobs=HOST_CPUS*.5
@@ -43,3 +43,28 @@ steps:
     soft_fail: true
     artifact_paths:
       - "/tmp/artifacts/**/*"
+
+  - label: ":redis: Redis GCS tests"
+    depends_on: build-cpp
+    commands:
+      - >-
+        docker run --rm
+        -v /tmp/artifacts-redis:/artifact-mount
+        ray-cpp-ci
+        bash -c '
+        bazel test
+        --config=ci
+        --test_tag_filters=redis
+        --jobs=HOST_CPUS*.5
+        --test_timeout=300,600,1200,3600
+        --local_test_jobs=HOST_CPUS*.5
+        //src/...
+        2>&1;
+        exit_code=$$?;
+        cp -r $$(bazel info bazel-testlogs)/* /artifact-mount/ 2>/dev/null || true;
+        exit $$exit_code
+        '
+    timeout_in_minutes: 60
+    soft_fail: true
+    artifact_paths:
+      - "/tmp/artifacts-redis/**/*"

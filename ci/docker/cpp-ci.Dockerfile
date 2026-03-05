@@ -48,6 +48,15 @@ RUN apt-get update -qq && apt-get upgrade -qq -y \
         liblz4-dev \
         libunwind-dev \
         libncurses5 \
+        # perl is required by OpenSSL's ./Configure script (invoked by rules_foreign_cc)
+        perl \
+        # autoconf, automake, libtool are required by rules_foreign_cc for building
+        # third-party C/C++ libraries from source (e.g., jemalloc, OpenSSL)
+        autoconf \
+        automake \
+        libtool \
+        # pkg-config is needed by rules_foreign_cc to locate system libraries
+        pkg-config \
         # Python (needed by Bazel's Python toolchain rules)
         python-is-python3 \
         python3 \

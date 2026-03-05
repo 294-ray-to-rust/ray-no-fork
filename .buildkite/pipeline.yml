@@ -3,14 +3,29 @@
 # Requires the ray-cpp-ci Docker image (see ci/docker/).
 
 steps:
-  - label: ":white_check_mark: noop"
-    command: "echo 'Buildkite pipeline is working.'"
+  - label: ":docker: Build C++ CI image"
+    key: build-cpp-ci
+    commands:
+      - docker build -t ray-cpp-ci -f ci/docker/cpp-ci.Dockerfile .
+    timeout_in_minutes: 30
 
-  - label: ":test_tube: C++ tests"
+  - label: ":hammer: C++ build"
+    key: build-cpp
+    depends_on: build-cpp-ci
     commands:
       - >-
         docker run --rm
-        -v /tmp/bazel-testlogs:/artifact-mount
+        -v /tmp/bazel-cache:/bazel-cache
+        ray-cpp-ci
+        bash -c 'bazel build --config=ci --disk_cache=/bazel-cache --jobs=HOST_CPUS*.5 //src/...'
+    timeout_in_minutes: 45
+
+  - label: ":test_tube: C++ tests"
+    depends_on: build-cpp
+    commands:
+      - >-
+        docker run --rm
+        -v /tmp/artifacts:/artifact-mount
         -v /tmp/bazel-cache:/bazel-cache
         ray-cpp-ci
         bash -c '
@@ -30,4 +45,4 @@ steps:
     timeout_in_minutes: 60
     soft_fail: true
     artifact_paths:
-      - "/tmp/bazel-testlogs/**/*"
+      - "/tmp/artifacts/**/*"

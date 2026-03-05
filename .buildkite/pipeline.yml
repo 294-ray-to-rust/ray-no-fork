@@ -15,8 +15,9 @@ steps:
     commands:
       - >-
         docker run --rm
+        -v /tmp/bazel-cache:/bazel-cache
         ray-cpp-ci
-        bash -c 'bazel build --config=ci --jobs=HOST_CPUS*.5 //src/...'
+        bash -c 'bazel build --config=ci --disk_cache=/bazel-cache --jobs=HOST_CPUS*.5 //src/...'
     timeout_in_minutes: 45
 
   - label: ":test_tube: C++ tests"
@@ -24,11 +25,13 @@ steps:
     commands:
       - >-
         docker run --rm
+        -v /tmp/bazel-cache:/bazel-cache
         -v /tmp/artifacts:/artifact-mount
         ray-cpp-ci
         bash -c '
         bazel test
         --config=ci
+        --disk_cache=/bazel-cache
         --test_tag_filters=-cgroup
         --jobs=HOST_CPUS*.5
         --test_timeout=300,600,1200,3600

@@ -1,0 +1,37 @@
+# GitHub Actions workflow that replicates the Buildkite C++ CI pipeline.
+# Builds the cpp-ci Docker image and runs `bazel build //src/...` inside it.
+
+name: C++ CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: cpp-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpp-build:
+    name: "C++ build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          # GitHub runners have limited disk; reclaim space for the large Bazel build.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghcrunner
+          df -h /
+
+      - name: Build C++ CI Docker image
+        run: docker build -t ray-cpp-ci -f ci/docker/cpp-ci.Dockerfile .
+
+      - name: Bazel build //src/...
+        run: |
+          docker run --rm \
+            ray-cpp-ci \
+            bash -c 'bazel build --config=ci --jobs=HOST_CPUS*.5 //src/...'

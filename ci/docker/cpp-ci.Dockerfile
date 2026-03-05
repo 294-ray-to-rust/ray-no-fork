@@ -20,7 +20,7 @@ ENV TZ=America/Los_Angeles
 
 # Compiler flags — match base.build.Dockerfile
 ENV CC=clang
-ENV CXX=clang++-12
+ENV CXX=clang++
 
 # CI flags expected by install-bazel.sh and Bazel configs
 ENV BUILDKITE=true
@@ -66,8 +66,9 @@ RUN apt-get update -qq && apt-get upgrade -qq -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- clang symlinks ----------
-# So that CC=clang / clang-format / clang-tidy resolve without version suffix.
+# So that CC=clang / CXX=clang++ / clang-format / clang-tidy resolve without version suffix.
 RUN ln -s /usr/bin/clang-12 /usr/bin/clang \
+    && ln -s /usr/bin/clang++-12 /usr/bin/clang++ \
     && ln -s /usr/bin/clang-format-12 /usr/bin/clang-format \
     && ln -s /usr/bin/clang-tidy-12 /usr/bin/clang-tidy
 

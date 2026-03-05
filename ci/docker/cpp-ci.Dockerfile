@@ -48,6 +48,10 @@ RUN apt-get update -qq && apt-get upgrade -qq -y \
         liblz4-dev \
         libunwind-dev \
         libncurses5 \
+        # OpenSSL build (rules_foreign_cc) requires perl for ./Configure
+        perl \
+        # rules_foreign_cc build tool dependencies
+        pkg-config \
         # Python (needed by Bazel's Python toolchain rules)
         python-is-python3 \
         python3 \

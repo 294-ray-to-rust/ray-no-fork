@@ -9,8 +9,18 @@ steps:
       - docker build -t ray-cpp-ci -f ci/docker/cpp-ci.Dockerfile .
     timeout_in_minutes: 30
 
-  - label: ":test_tube: C++ tests"
+  - label: ":hammer: C++ build"
+    key: build-cpp
     depends_on: build-cpp-ci
+    commands:
+      - >-
+        docker run --rm
+        ray-cpp-ci
+        bash -c 'bazel build --config=ci --jobs=HOST_CPUS*.5 //src/...'
+    timeout_in_minutes: 45
+
+  - label: ":test_tube: C++ tests"
+    depends_on: build-cpp
     commands:
       - >-
         docker run --rm

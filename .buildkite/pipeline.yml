@@ -1,9 +1,12 @@
-# Minimal Buildkite pipeline for ray-no-fork.
+# Buildkite pipeline for ray-no-fork C++ builds.
 #
-# This is a noop pipeline that always passes. The goal is to verify
-# end-to-end plumbing: PR opened → Buildkite triggers → status check
-# appears on the PR. Once this works, expand to real build/test steps.
+# Builds all C++ code inside a Docker container using Bazel.
+# The ci/docker/cpp-ci.Dockerfile provides the build environment
+# (clang-12, bazelisk, Python 3.10 for Bazel toolchain rules).
 
 steps:
-  - label: ":white_check_mark: noop"
-    command: "echo 'Buildkite pipeline is working. Expand this to run real tests.'"
+  - label: ":building_construction: Build C++ code"
+    commands:
+      - docker build -t ray-cpp-ci -f ci/docker/cpp-ci.Dockerfile .
+      - docker run --rm -v /tmp/artifacts:/artifact-mount ray-cpp-ci bazel build --config=ci //src/...
+    timeout_in_minutes: 90

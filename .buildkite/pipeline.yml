@@ -25,6 +25,7 @@ steps:
     commands:
       - >-
         docker run --rm
+        -v /tmp/bazel-cache:/bazel-cache
         -v /tmp/artifacts:/artifact-mount
         -v /tmp/bazel-cache:/bazel-cache
         ray-cpp-ci

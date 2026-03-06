@@ -5,7 +5,7 @@ steps:
   - label: ":test_tube: test-rules"
     key: test-rules
     commands:
-      - curl -sfL "https://raw.githubusercontent.com/ray-project/rayci/stable/run_rayci.sh" | bash -s -- test-rules
+      - /usr/local/bin/rayci test-rules
     instance_type: small
     tags:
       - tools

@@ -1,0 +1,29 @@
+# Fork-specific CI config. Loaded via RAYCI_GLOBAL_CONFIG env var.
+# This replaces oss_config.yaml to prevent any accidental access
+# to upstream Ray's AWS/GCP/Azure resources.
+
+release_byod:
+  ray_ecr: ""
+  byod_ecr: ""
+  byod_ecr_region: ""
+  aws_cr: ""
+  gcp_cr: ""
+  azure_cr: ""
+  aws2gce_credentials: ""
+
+ci_pipeline:
+  premerge: []
+  postmerge: []
+  buildkite_secret: ""
+
+state_machine:
+  disabled: 1
+  pr:
+    aws_bucket: ""
+  branch:
+    aws_bucket: ""
+
+release_image_step:
+  ray: ""
+  ray_ml: ""
+  ray_llm: ""

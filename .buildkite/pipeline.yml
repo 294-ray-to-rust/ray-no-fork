@@ -1,49 +1,10 @@
-# Buildkite pipeline for ray-no-fork C++ builds and tests.
+# Buildkite pipeline entrypoint.
 #
-# Requires the ray-cpp-ci Docker image (see ci/docker/).
+# This single bootstrap step downloads the rayci binary (version pinned in
+# .rayciversion) and uses it to generate and upload the real pipeline from
+# the .buildkite/*.rayci.yml definitions.
 
 steps:
-  - label: ":docker: Build C++ CI image"
-    key: build-cpp-ci
+  - label: ":pipeline: bootstrap rayci"
     commands:
-      - docker build -t ray-cpp-ci -f ci/docker/cpp-ci.Dockerfile .
-    timeout_in_minutes: 30
-
-  - label: ":hammer: C++ build"
-    key: build-cpp
-    depends_on: build-cpp-ci
-    commands:
-      - >-
-        docker run --rm
-        -v /tmp/bazel-cache:/bazel-cache
-        ray-cpp-ci
-        bash -c 'bazel build --config=ci --disk_cache=/bazel-cache --jobs=HOST_CPUS*.5 //src/...'
-    timeout_in_minutes: 45
-
-  - label: ":test_tube: C++ tests"
-    depends_on: build-cpp
-    commands:
-      - >-
-        docker run --rm
-        -v /tmp/bazel-cache:/bazel-cache
-        -v /tmp/artifacts:/artifact-mount
-        -v /tmp/bazel-cache:/bazel-cache
-        ray-cpp-ci
-        bash -c '
-        bazel test
-        --config=ci
-        --disk_cache=/bazel-cache
-        --test_tag_filters=-cgroup
-        --jobs=HOST_CPUS*.5
-        --test_timeout=300,600,1200,3600
-        --local_test_jobs=HOST_CPUS*.5
-        //src/...
-        2>&1;
-        exit_code=$$?;
-        cp -r $$(bazel info bazel-testlogs)/* /artifact-mount/ 2>/dev/null || true;
-        exit $$exit_code
-        '
-    timeout_in_minutes: 60
-    soft_fail: true
-    artifact_paths:
-      - "/tmp/artifacts/**/*"
+      - curl -sfL "https://raw.githubusercontent.com/ray-project/rayci/stable/run_rayci.sh" | bash -s -- -upload

@@ -24,6 +24,8 @@ forge_prefix: "cr.ray.io/rayproject/"
 # Buildkite agent queues for image-building steps.
 builder_queues:
   builder: "default"
+  builder-arm64: "default"
+  builder-windows: "default"
 
 # Buildkite agent queues for test/runner steps.
 # Map rayci instance types to queue names.  Using "default" everywhere
@@ -33,10 +35,17 @@ runner_queues:
   small: "default"
   medium: "default"
   large: "default"
+  gpu: "default"
+  gpu-large: "default"
+  g6-large: "default"
+  macos-arm64: "default"
+  medium-arm64: "default"
+  windows: "default"
 
 env:
   BUILDKITE_BAZEL_CACHE_URL: ""
   RAYCI_STAGE: "premerge"
+  RAYCI_DISABLE_TEST_DB: "1"
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

@@ -45,7 +45,13 @@ echo \
 apt-get update
 apt-get install -y docker-ce-cli
 
-echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> /root/.bazelrc
+if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
+  if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then
+    echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> /root/.bazelrc
+  else
+    echo "build --disk_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> /root/.bazelrc
+  fi
+fi
 
 EOF
 

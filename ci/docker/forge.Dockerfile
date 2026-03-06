@@ -138,7 +138,13 @@ set -euo pipefail
 {
   echo "build --config=ci"
   echo "build --announce_rc"
-  echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}"
+  if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
+    if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then
+      echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}"
+    else
+      echo "build --disk_cache=${BUILDKITE_BAZEL_CACHE_URL}"
+    fi
+  fi
 } > ~/.bazelrc
 
 EOF

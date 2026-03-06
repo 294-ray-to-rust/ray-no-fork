@@ -75,11 +75,19 @@ build_wheel_windows() {
     echo "build --announce_rc";
     echo "build --config=ci";
     echo "startup --output_user_root=c:/raytmp";
-    echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}";
+    if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
+      if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then
+        echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}";
+      else
+        echo "build --disk_cache=${BUILDKITE_BAZEL_CACHE_URL}";
+      fi
+    fi
   } >> ~/.bazelrc
 
-  if [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
-    echo "build --remote_upload_local_results=false" >> ~/.bazelrc
+  if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" == https://* ]]; then
+    if [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
+      echo "build --remote_upload_local_results=false" >> ~/.bazelrc
+    fi
   fi
 
   local pyversion="${BUILD_ONE_PYTHON_ONLY}"

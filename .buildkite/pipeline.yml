@@ -1,10 +1,10 @@
 # Buildkite pipeline entrypoint.
 #
-# This single bootstrap step downloads the rayci binary (version pinned in
-# .rayciversion) and uses it to generate and upload the real pipeline from
-# the .buildkite/*.rayci.yml definitions.
+# This bootstrap step uses the pre-installed rayci binary to generate and
+# upload the real pipeline from the .buildkite/*.rayci.yml definitions.
+# The expected rayci version is documented in .rayciversion.
 
 steps:
   - label: ":pipeline: bootstrap rayci"
     commands:
-      - curl -sfL "https://raw.githubusercontent.com/ray-project/rayci/stable/run_rayci.sh" | bash -s -- -upload -config .buildkite/fork-config.yaml
+      - /usr/local/bin/rayci -upload -config .buildkite/fork-config.yaml

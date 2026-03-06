@@ -22,10 +22,12 @@ A copy of this license is made available in this container at /NGC-DL-CONTAINER-
 """
 
 _AZURE_REGISTRY_NAME = "rayreleasetest"
-_DOCKER_ECR_REPO = os.environ.get(
+_DOCKER_WORK_REPO = os.environ.get(
     "RAYCI_WORK_REPO",
     "029272617770.dkr.ecr.us-west-2.amazonaws.com/rayproject/citemp",
 )
+# Backward-compatible alias
+_DOCKER_ECR_REPO = _DOCKER_WORK_REPO
 _DOCKER_GCP_REGISTRY = os.environ.get(
     "RAYCI_GCP_REGISTRY",
     "us-west1-docker.pkg.dev/anyscale-oss-ci",
@@ -54,8 +56,8 @@ def get_docker_image(docker_tag: str, build_id: Optional[str] = None) -> str:
     if not build_id:
         build_id = _RAYCI_BUILD_ID
     if build_id:
-        return f"{_DOCKER_ECR_REPO}:{build_id}-{docker_tag}"
-    return f"{_DOCKER_ECR_REPO}:{docker_tag}"
+        return f"{_DOCKER_WORK_REPO}:{build_id}-{docker_tag}"
+    return f"{_DOCKER_WORK_REPO}:{docker_tag}"
 
 
 class Container(abc.ABC):

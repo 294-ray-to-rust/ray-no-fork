@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from ci.ray_ci.container import _DOCKER_ECR_REPO
+from ci.ray_ci.container import _DOCKER_WORK_REPO
 from ci.ray_ci.linux_tester_container import LinuxTesterContainer
 from ci.ray_ci.tester_container import RUN_PER_FLAKY_TEST
 from ci.ray_ci.utils import chunk_into_n, ci_init
@@ -166,7 +166,7 @@ def test_ray_installation() -> None:
 
     with mock.patch("subprocess.check_call", side_effect=_mock_subprocess):
         LinuxTesterContainer("team", build_type="debug")
-        docker_image = f"{_DOCKER_ECR_REPO}:team"
+        docker_image = f"{_DOCKER_WORK_REPO}:team"
         assert install_ray_cmds[-1] == [
             "docker",
             "build",
@@ -194,7 +194,7 @@ def test_ray_installation_wheel() -> None:
 
     with mock.patch("subprocess.check_call", side_effect=_mock_subprocess):
         LinuxTesterContainer("team", build_type="wheel", python_version="3.10")
-        docker_image = f"{_DOCKER_ECR_REPO}:team"
+        docker_image = f"{_DOCKER_WORK_REPO}:team"
         cmd = install_ray_cmds[-1]
         assert cmd[0:6] == [
             "docker",

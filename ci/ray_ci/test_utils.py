@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 import sys
 from typing import List
 from unittest import mock
@@ -8,7 +9,9 @@ import pytest
 
 from ci.ray_ci.utils import (
     chunk_into_n,
-    ecr_docker_login,
+    docker_login,
+    _ecr_docker_login,
+    _ghcr_docker_login,
     filter_tests,
     get_flaky_test_names,
 )
@@ -22,8 +25,7 @@ def test_chunk_into_n() -> None:
     assert chunk_into_n([1, 2], 1) == [[1, 2]]
 
 
-@mock.patch("boto3.client")
-def test_ecr_docker_login(mock_client) -> None:
+def test_ecr_docker_login() -> None:
     def _mock_subprocess_run(
         cmd: List[str],
         stdin=None,
@@ -33,14 +35,62 @@ def test_ecr_docker_login(mock_client) -> None:
     ) -> None:
         assert stdin.read() == b"password"
 
-    mock_client.return_value.get_authorization_token.return_value = {
+    mock_boto3 = mock.MagicMock()
+    mock_boto3.client.return_value.get_authorization_token.return_value = {
         "authorizationData": [
             {"authorizationToken": base64.b64encode(b"AWS:password")},
         ],
     }
 
-    with mock.patch("subprocess.run", side_effect=_mock_subprocess_run):
-        ecr_docker_login("docker_ecr")
+    with mock.patch.dict("sys.modules", {"boto3": mock_boto3}), \
+         mock.patch("subprocess.run", side_effect=_mock_subprocess_run):
+        _ecr_docker_login("docker_ecr")
+
+
+def test_ghcr_docker_login() -> None:
+    def _mock_subprocess_run(
+        cmd: List[str],
+        stdin=None,
+        stdout=None,
+        stderr=None,
+        check=True,
+    ) -> None:
+        assert stdin.read() == b"my-ghcr-token"
+        assert cmd[-1] == "ghcr.io"
+        assert cmd[3] == "USERNAME"
+
+    with mock.patch.dict(
+        "os.environ", {"GITHUB_TOKEN": "my-ghcr-token"}, clear=False
+    ), mock.patch("subprocess.run", side_effect=_mock_subprocess_run):
+        _ghcr_docker_login("ghcr.io")
+
+
+def test_ghcr_docker_login_missing_token() -> None:
+    with mock.patch.dict(
+        "os.environ", {}, clear=True
+    ):
+        with pytest.raises(RuntimeError, match="GITHUB_TOKEN or GHCR_TOKEN"):
+            _ghcr_docker_login("ghcr.io")
+
+
+def test_docker_login_dispatches_ecr() -> None:
+    with mock.patch("ci.ray_ci.utils._ecr_docker_login") as mock_ecr:
+        docker_login("029272617770.dkr.ecr.us-west-2.amazonaws.com")
+        mock_ecr.assert_called_once_with(
+            "029272617770.dkr.ecr.us-west-2.amazonaws.com"
+        )
+
+
+def test_docker_login_dispatches_ghcr() -> None:
+    with mock.patch("ci.ray_ci.utils._ghcr_docker_login") as mock_ghcr:
+        docker_login("ghcr.io")
+        mock_ghcr.assert_called_once_with("ghcr.io")
+
+
+def test_docker_login_unknown_registry(caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        docker_login("registry.example.com")
+    assert "Unknown registry type" in caplog.text
 
 
 def _make_test(name: str, state: str, team: str) -> Test:

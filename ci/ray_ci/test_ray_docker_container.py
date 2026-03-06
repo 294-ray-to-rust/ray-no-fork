@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from ci.ray_ci.configs import DEFAULT_PYTHON_TAG_VERSION
-from ci.ray_ci.container import _DOCKER_ECR_REPO
+from ci.ray_ci.container import _DOCKER_WORK_REPO
 from ci.ray_ci.docker_container import GPU_PLATFORM
 from ci.ray_ci.ray_docker_container import RayDockerContainer
 from ci.ray_ci.test_base import RayCITestBase
@@ -44,7 +44,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert cmd == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
                 f"rayproject/ray:{sha}-{pv}-cu124 "
                 f"ray:{sha}-{pv}-cu124_pip-freeze.txt"
             )
@@ -60,7 +60,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert cmd == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
                 f"rayproject/ray-llm:{sha}-{pv}-cu128 "
                 f"ray-llm:{sha}-{pv}-cu128_pip-freeze.txt"
             )
@@ -76,7 +76,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert cmd == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
                 f"rayproject/ray-ml:{sha}-{pv}-cpu "
                 f"ray-ml:{sha}-{pv}-cpu_pip-freeze.txt"
             )
@@ -113,7 +113,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
                 f"rayproject/ray:{sha}-{pv}-cu121 "
                 f"ray:{sha}-{pv}-cu121_pip-freeze.txt"
             )
@@ -138,7 +138,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
                 f"rayproject/ray-llm:{sha}-{pv}-cu128 "
                 f"ray-llm:{sha}-{pv}-cu128_pip-freeze.txt"
             )
@@ -162,7 +162,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
                 f"rayproject/ray-ml:{sha}-{pv}-cpu "
                 f"ray-ml:{sha}-{pv}-cpu_pip-freeze.txt"
             )
@@ -206,7 +206,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-py{v}-{cuda}-base "
                 f"rayproject/ray:{sha}-{pv}-cu118 "
                 f"ray:{sha}-{pv}-cu118_pip-freeze.txt"
             )
@@ -223,7 +223,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-llm-py{v}-{cuda}-base "
                 f"rayproject/ray-llm:{sha}-{pv}-cu128 "
                 f"ray-llm:{sha}-{pv}-cu128_pip-freeze.txt"
             )
@@ -239,7 +239,7 @@ class TestRayDockerContainer(RayCITestBase):
             assert self.cmds[0] == (
                 "./ci/build/build-ray-docker.sh "
                 f"ray-{RAY_VERSION}-{cv}-{cv}-manylinux2014_x86_64.whl "
-                f"{_DOCKER_ECR_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
+                f"{_DOCKER_WORK_REPO}:{ray_ci_build_id}-ray-ml-py{v}-cpu-base "
                 f"rayproject/ray-ml:{sha}-{pv}-cpu "
                 f"ray-ml:{sha}-{pv}-cpu_pip-freeze.txt"
             )

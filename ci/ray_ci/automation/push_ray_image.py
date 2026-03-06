@@ -22,7 +22,7 @@ from ci.ray_ci.docker_container import (
     RayType,
 )
 from ci.ray_ci.ray_image import IMAGE_TYPE_CONFIG, RayImage, RayImageError
-from ci.ray_ci.utils import ci_init, ecr_docker_login
+from ci.ray_ci.utils import ci_init, docker_login
 
 from ray_release.configs.global_config import get_global_config
 
@@ -265,7 +265,7 @@ def main(
     logger.info(f"Processing {len(platforms)} platform(s): {platforms}")
 
     ecr_registry = rayci_work_repo.split("/")[0]
-    ecr_docker_login(ecr_registry)
+    docker_login(ecr_registry)
 
     all_tags = []
     for plat in platforms:

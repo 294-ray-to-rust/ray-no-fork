@@ -8,10 +8,10 @@ import yaml
 from ci.ray_ci.configs import (
     PYTHON_VERSIONS,
 )
-from ci.ray_ci.container import _DOCKER_ECR_REPO
+from ci.ray_ci.container import _DOCKER_WORK_REPO
 from ci.ray_ci.linux_tester_container import LinuxTesterContainer
 from ci.ray_ci.tester_container import TesterContainer
-from ci.ray_ci.utils import ci_init, ecr_docker_login
+from ci.ray_ci.utils import ci_init, docker_login
 from ci.ray_ci.windows_tester_container import WindowsTesterContainer
 
 from ray_release.test import Test, TestState
@@ -225,7 +225,7 @@ def main(
         raise Exception("Please use `bazelisk run //ci/ray_ci`")
     os.chdir(bazel_workspace_dir)
     ci_init()
-    ecr_docker_login(_DOCKER_ECR_REPO.split("/")[0])
+    docker_login(_DOCKER_WORK_REPO.split("/")[0])
 
     bisect_run_test_target = bisect_run_test_target or os.environ.get(
         "RAYCI_BISECT_TEST_TARGET"

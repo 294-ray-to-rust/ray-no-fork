@@ -467,7 +467,7 @@ class TestMultiplePlatforms:
     WORK_REPO = "123456789.dkr.ecr.us-west-2.amazonaws.com/rayci-work"
 
     @mock.patch("ci.ray_ci.automation.push_ray_image.ci_init")
-    @mock.patch("ci.ray_ci.automation.push_ray_image.ecr_docker_login")
+    @mock.patch("ci.ray_ci.automation.push_ray_image.docker_login")
     @mock.patch("ci.ray_ci.automation.push_ray_image._copy_image")
     @mock.patch("ci.ray_ci.automation.push_ray_image._image_exists")
     @mock.patch("ci.ray_ci.automation.push_ray_image.get_global_config")
@@ -528,7 +528,7 @@ class TestMultiplePlatforms:
         )
 
     @mock.patch("ci.ray_ci.automation.push_ray_image.ci_init")
-    @mock.patch("ci.ray_ci.automation.push_ray_image.ecr_docker_login")
+    @mock.patch("ci.ray_ci.automation.push_ray_image.docker_login")
     @mock.patch("ci.ray_ci.automation.push_ray_image._copy_image")
     @mock.patch("ci.ray_ci.automation.push_ray_image._image_exists")
     @mock.patch("ci.ray_ci.automation.push_ray_image.get_global_config")

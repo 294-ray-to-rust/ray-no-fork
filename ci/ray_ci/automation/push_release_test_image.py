@@ -32,7 +32,7 @@ from ci.ray_ci.automation.image_tags_lib import (
     image_exists,
 )
 from ci.ray_ci.container import _AZURE_REGISTRY_NAME
-from ci.ray_ci.utils import ci_init, ecr_docker_login
+from ci.ray_ci.utils import ci_init, docker_login
 
 from ray_release.configs.global_config import get_global_config
 
@@ -300,7 +300,7 @@ def main(
         return
 
     # Authenticate with all registries
-    ecr_docker_login(ecr_registry)
+    docker_login(ecr_registry)
     _run_gcloud_docker_login()
     _run_azure_docker_login()
 

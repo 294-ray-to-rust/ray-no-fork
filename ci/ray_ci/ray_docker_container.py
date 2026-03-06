@@ -2,7 +2,7 @@ import os
 from typing import List, Optional
 
 from ci.ray_ci.configs import DEFAULT_ARCHITECTURE, PYTHON_VERSIONS
-from ci.ray_ci.container import _DOCKER_ECR_REPO
+from ci.ray_ci.container import _DOCKER_WORK_REPO
 from ci.ray_ci.docker_container import RAY_REPO_MAP, DockerContainer, RayType
 from ci.ray_ci.utils import RAY_VERSION, docker_pull
 
@@ -38,7 +38,7 @@ class RayDockerContainer(DockerContainer):
         image_repo = RAY_REPO_MAP[self.image_type]
 
         base_image = (
-            f"{_DOCKER_ECR_REPO}:{rayci_build_id}"
+            f"{_DOCKER_WORK_REPO}:{rayci_build_id}"
             f"-{image_repo}-py{self.python_version}-{self.platform}-{suffix}"
         )
 

@@ -4,8 +4,8 @@ import subprocess
 from ci.ray_ci.container import (
     _AZURE_REGISTRY_NAME,
     _DOCKER_AZURE_REGISTRY,
-    _DOCKER_ECR_REPO,
     _DOCKER_GCP_REGISTRY,
+    _DOCKER_WORK_REPO,
 )
 from ci.ray_ci.docker_container import DockerContainer
 
@@ -21,7 +21,7 @@ class AnyscaleDockerContainer(DockerContainer):
         """
         Build and publish anyscale docker images
         """
-        aws_registry = _DOCKER_ECR_REPO.split("/")[0]
+        aws_registry = _DOCKER_WORK_REPO.split("/")[0]
         gcp_registry = _DOCKER_GCP_REGISTRY
         azure_registry = _DOCKER_AZURE_REGISTRY
         tag = self._get_canonical_tag()

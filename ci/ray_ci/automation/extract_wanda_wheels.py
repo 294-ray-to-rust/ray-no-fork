@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 
 from ci.ray_ci.automation.crane_lib import call_crane_export
-from ci.ray_ci.utils import ecr_docker_login, logger
+from ci.ray_ci.utils import docker_login, logger
 
 
 def _default_output_dir() -> str:
@@ -68,7 +68,7 @@ def main(
     logger.info(f"Extracting wheels from: {wanda_image}")
 
     ecr_registry = rayci_work_repo.split("/")[0]
-    ecr_docker_login(ecr_registry)
+    docker_login(ecr_registry)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         call_crane_export(wanda_image, tmpdir)

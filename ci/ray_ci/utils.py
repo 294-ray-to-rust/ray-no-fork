@@ -8,8 +8,6 @@ import tempfile
 from math import ceil
 from typing import List
 
-import boto3
-
 import ci.ray_ci.bazel_sharding as bazel_sharding
 
 from ray_release.bazel import bazel_runfile
@@ -48,16 +46,49 @@ def shard_tests(
     return bazel_sharding.main(test_targets, index=shard_id, count=shard_count)
 
 
-def ecr_docker_login(docker_ecr: str) -> None:
+def docker_login(registry: str) -> None:
+    """Login to a container registry, auto-detecting the auth mechanism.
+
+    Supports:
+    - ECR (*.dkr.ecr.*.amazonaws.com): uses boto3 for auth
+    - GHCR (ghcr.io): uses GITHUB_TOKEN or GHCR_TOKEN env var
+    - Other: logs a warning and skips login
     """
-    Login to ECR with AWS credentials
-    """
+    if ".dkr.ecr." in registry and ".amazonaws.com" in registry:
+        _ecr_docker_login(registry)
+    elif "ghcr.io" in registry:
+        _ghcr_docker_login(registry)
+    else:
+        logger.warning(
+            "Unknown registry type: %s, skipping docker login", registry
+        )
+
+
+def _ecr_docker_login(docker_ecr: str) -> None:
+    """Login to ECR with AWS credentials."""
+    import boto3
+
     token = boto3.client("ecr", region_name="us-west-2").get_authorization_token()
     user, password = (
         base64.b64decode(token["authorizationData"][0]["authorizationToken"])
         .decode("utf-8")
         .split(":")
     )
+    _docker_login_with_token(docker_ecr, user, password)
+
+
+def _ghcr_docker_login(registry: str) -> None:
+    """Login to GHCR using GITHUB_TOKEN or GHCR_TOKEN env var."""
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GHCR_TOKEN", "")
+    if not token:
+        raise RuntimeError(
+            "GITHUB_TOKEN or GHCR_TOKEN env var required for GHCR auth"
+        )
+    _docker_login_with_token(registry, "USERNAME", token)
+
+
+def _docker_login_with_token(registry: str, user: str, password: str) -> None:
+    """Run docker login with the given credentials via stdin."""
     with tempfile.TemporaryFile() as f:
         f.write(bytes(password, "utf-8"))
         f.flush()
@@ -70,13 +101,17 @@ def ecr_docker_login(docker_ecr: str) -> None:
                 "--username",
                 user,
                 "--password-stdin",
-                docker_ecr,
+                registry,
             ],
             stdin=f,
             stdout=sys.stdout,
             stderr=sys.stderr,
             check=True,
         )
+
+
+# Keep backward-compatible alias
+ecr_docker_login = _ecr_docker_login
 
 
 def docker_pull(image: str) -> None:

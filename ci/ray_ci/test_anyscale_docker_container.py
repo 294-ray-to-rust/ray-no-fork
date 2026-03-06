@@ -8,8 +8,8 @@ import pytest
 from ci.ray_ci.anyscale_docker_container import AnyscaleDockerContainer
 from ci.ray_ci.container import (
     _DOCKER_AZURE_REGISTRY,
-    _DOCKER_ECR_REPO,
     _DOCKER_GCP_REGISTRY,
+    _DOCKER_WORK_REPO,
 )
 from ci.ray_ci.test_base import RayCITestBase
 
@@ -35,7 +35,7 @@ class TestAnyscaleDockerContainer(RayCITestBase):
             )
             container.run()
             cmd = self.cmds[-1]
-            aws_ecr = _DOCKER_ECR_REPO.split("/")[0]
+            aws_ecr = _DOCKER_WORK_REPO.split("/")[0]
             aws_prj = f"{aws_ecr}/anyscale/ray-ml"
             gcp_prj = f"{_DOCKER_GCP_REGISTRY}/anyscale/ray-ml"
             azure_prj = f"{_DOCKER_AZURE_REGISTRY}/anyscale/ray-ml"

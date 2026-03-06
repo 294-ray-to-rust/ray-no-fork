@@ -7,4 +7,4 @@
 steps:
   - label: ":pipeline: bootstrap rayci"
     commands:
-      - curl -sfL "https://raw.githubusercontent.com/ray-project/rayci/stable/run_rayci.sh" | bash -s -- -upload
+      - curl -sfL "https://raw.githubusercontent.com/ray-project/rayci/stable/run_rayci.sh" | bash -s -- -upload -config .buildkite/fork-config.yaml

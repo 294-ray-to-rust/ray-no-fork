@@ -1,0 +1,49 @@
+# Fork-specific rayci configuration.
+#
+# This file overrides the built-in Ray CI config so that pipeline steps
+# target our fork's infrastructure instead of Ray's upstream AWS accounts.
+#
+# TODO(#91): Replace placeholder values below once infrastructure
+# configuration is provided.
+
+# Container registry for Wanda-built CI images (required).
+# Wanda pushes/pulls images here during the build.
+ci_work_repo: "PLACEHOLDER_REGISTRY"
+
+# S3/GCS path for temp files shared across build steps (required).
+ci_temp: "PLACEHOLDER_CI_TEMP"
+
+# S3 bucket for build artifacts (optional but recommended).
+artifacts_bucket: ""
+
+# Prefix for Wanda-built forge images. Use a domain that does not resolve
+# publicly so the container runtime never accidentally pulls a remote image
+# when a local build is intended.
+forge_prefix: "cr.ray.io/rayproject/"
+
+# Buildkite agent queues for image-building steps.
+builder_queues:
+  builder: "default"
+
+# Buildkite agent queues for test/runner steps.
+# Map rayci instance types to queue names.  Using "default" everywhere
+# until dedicated queues are provisioned (see #91).
+runner_queues:
+  default: "default"
+  small: "default"
+  medium: "default"
+  large: "default"
+
+env:
+  BUILDKITE_BAZEL_CACHE_URL: ""
+  RAYCI_STAGE: "premerge"
+
+# Tags that cause steps to be unconditionally skipped.
+skip_tags:
+  - disabled
+  - skip-on-premerge
+
+# Use Ray's changed-file rule files for conditional test selection.
+test_rules_files:
+  - .buildkite/test.rules.txt
+  - .buildkite/always.rules.txt

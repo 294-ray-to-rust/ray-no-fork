@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import logging
 import sys
 from typing import List
@@ -10,6 +11,7 @@ import pytest
 from ci.ray_ci.utils import (
     chunk_into_n,
     docker_login,
+    _docker_config_has_auth,
     _ecr_docker_login,
     _ghcr_docker_login,
     filter_tests,
@@ -68,9 +70,57 @@ def test_ghcr_docker_login() -> None:
 def test_ghcr_docker_login_missing_token() -> None:
     with mock.patch.dict(
         "os.environ", {}, clear=True
+    ), mock.patch(
+        "ci.ray_ci.utils._docker_config_has_auth", return_value=False
     ):
         with pytest.raises(RuntimeError, match="GITHUB_TOKEN or GHCR_TOKEN"):
             _ghcr_docker_login("ghcr.io")
+
+
+def test_ghcr_docker_login_falls_back_to_docker_config(caplog) -> None:
+    """When no token env var is set but Docker config has auth, skip login."""
+    with mock.patch.dict(
+        "os.environ", {}, clear=True
+    ), mock.patch(
+        "ci.ray_ci.utils._docker_config_has_auth", return_value=True
+    ), caplog.at_level(logging.INFO):
+        _ghcr_docker_login("ghcr.io")  # should not raise
+    assert "already authenticated" in caplog.text
+
+
+def test_docker_config_has_auth_exact_match(tmp_path) -> None:
+    docker_dir = tmp_path / ".docker"
+    docker_dir.mkdir()
+    config = {"auths": {"ghcr.io": {"auth": "dummytoken"}}}
+    (docker_dir / "config.json").write_text(json.dumps(config))
+
+    with mock.patch("ci.ray_ci.utils.Path.home", return_value=tmp_path):
+        assert _docker_config_has_auth("ghcr.io") is True
+        assert _docker_config_has_auth("docker.io") is False
+
+
+def test_docker_config_has_auth_https_prefix(tmp_path) -> None:
+    docker_dir = tmp_path / ".docker"
+    docker_dir.mkdir()
+    config = {"auths": {"https://ghcr.io": {"auth": "dummytoken"}}}
+    (docker_dir / "config.json").write_text(json.dumps(config))
+
+    with mock.patch("ci.ray_ci.utils.Path.home", return_value=tmp_path):
+        assert _docker_config_has_auth("ghcr.io") is True
+
+
+def test_docker_config_has_auth_no_file(tmp_path) -> None:
+    with mock.patch("ci.ray_ci.utils.Path.home", return_value=tmp_path):
+        assert _docker_config_has_auth("ghcr.io") is False
+
+
+def test_docker_config_has_auth_invalid_json(tmp_path) -> None:
+    docker_dir = tmp_path / ".docker"
+    docker_dir.mkdir()
+    (docker_dir / "config.json").write_text("not valid json")
+
+    with mock.patch("ci.ray_ci.utils.Path.home", return_value=tmp_path):
+        assert _docker_config_has_auth("ghcr.io") is False
 
 
 def test_docker_login_dispatches_ecr() -> None:

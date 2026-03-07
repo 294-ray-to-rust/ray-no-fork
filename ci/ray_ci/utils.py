@@ -1,11 +1,13 @@
 import base64
 import io
+import json
 import logging
 import os
 import subprocess
 import sys
 import tempfile
 from math import ceil
+from pathlib import Path
 from typing import List
 
 import ci.ray_ci.bazel_sharding as bazel_sharding
@@ -78,13 +80,36 @@ def _ecr_docker_login(docker_ecr: str) -> None:
 
 
 def _ghcr_docker_login(registry: str) -> None:
-    """Login to GHCR using GITHUB_TOKEN or GHCR_TOKEN env var."""
+    """Login to GHCR using GITHUB_TOKEN or GHCR_TOKEN env var.
+
+    Falls back to existing Docker credentials if no token env var is set.
+    """
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GHCR_TOKEN", "")
     if not token:
+        if _docker_config_has_auth(registry):
+            logger.info(
+                "No GITHUB_TOKEN/GHCR_TOKEN env var, but Docker is already "
+                "authenticated to %s — skipping login",
+                registry,
+            )
+            return
         raise RuntimeError(
             "GITHUB_TOKEN or GHCR_TOKEN env var required for GHCR auth"
         )
     _docker_login_with_token(registry, "USERNAME", token)
+
+
+def _docker_config_has_auth(registry: str) -> bool:
+    """Check if Docker config already has credentials for the given registry."""
+    config_path = Path.home() / ".docker" / "config.json"
+    if not config_path.exists():
+        return False
+    try:
+        config = json.loads(config_path.read_text())
+        auths = config.get("auths", {})
+        return registry in auths or f"https://{registry}" in auths
+    except (json.JSONDecodeError, OSError):
+        return False
 
 
 def _docker_login_with_token(registry: str, user: str, password: str) -> None:

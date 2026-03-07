@@ -7,4 +7,4 @@
 steps:
   - label: ":pipeline: bootstrap rayci"
     commands:
-      - /usr/local/bin/rayci -upload -config .buildkite/fork-config.yaml
+      - /usr/local/bin/rayci -upload -config .buildkite/fork-config.yaml -buildkite-dir .buildkite/fork-pipeline/

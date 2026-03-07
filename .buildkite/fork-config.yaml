@@ -3,12 +3,9 @@
 # This file overrides the built-in Ray CI config so that pipeline steps
 # target our fork's infrastructure instead of Ray's upstream AWS accounts.
 #
-# TODO(#91): Replace placeholder values below once infrastructure
-# configuration is provided.
-
 # Container registry for Wanda-built CI images (required).
 # Wanda pushes/pulls images here during the build.
-ci_work_repo: "PLACEHOLDER_REGISTRY"
+ci_work_repo: "ghcr.io/294-ray-to-rust/ci"
 
 # S3/GCS path for temp files shared across build steps (required).
 ci_temp: "/tmp/artifacts/ci-temp/"

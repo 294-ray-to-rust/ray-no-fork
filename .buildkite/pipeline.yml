@@ -7,4 +7,28 @@
 steps:
   - label: ":pipeline: bootstrap rayci"
     commands:
-      - /usr/local/bin/rayci -upload -config .buildkite/fork-config.yaml -buildkite-dir .buildkite/fork-pipeline/
+      - |
+        set -euo pipefail
+
+        mkdir -p /tmp/artifacts
+
+        echo "--- :gear: Generating pipeline"
+        /usr/local/bin/rayci -output /tmp/artifacts/pipeline.yaml \
+          -config .buildkite/fork-config.yaml \
+          -buildkite-dir .buildkite/fork-pipeline/
+
+        STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline.yaml || echo 0)
+        GROUP_COUNT=$$(grep -c "group:" /tmp/artifacts/pipeline.yaml || echo 0)
+        echo "Generated pipeline: $$STEP_COUNT steps across $$GROUP_COUNT groups"
+
+        if [ "$$STEP_COUNT" -eq 0 ]; then
+          echo "ERROR: No pipeline steps generated!"
+          exit 1
+        fi
+
+        echo "--- :buildkite: Uploading pipeline"
+        buildkite-agent pipeline upload /tmp/artifacts/pipeline.yaml
+
+        echo "Pipeline uploaded successfully ($$STEP_COUNT steps)"
+    artifact_paths:
+      - /tmp/artifacts/pipeline.yaml

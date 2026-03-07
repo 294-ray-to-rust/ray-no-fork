@@ -11,7 +11,7 @@
 ci_work_repo: "PLACEHOLDER_REGISTRY"
 
 # S3/GCS path for temp files shared across build steps (required).
-ci_temp: "PLACEHOLDER_CI_TEMP"
+ci_temp: "/tmp/artifacts/ci-temp/"
 
 # S3 bucket for build artifacts (optional but recommended).
 artifacts_bucket: ""

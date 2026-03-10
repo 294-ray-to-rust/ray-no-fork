@@ -1,1 +1,25 @@
-../base.rayci.yml
+group: base
+steps:
+  - name: oss-ci-base_test-multipy
+    label: "wanda: oss-ci-base_test-py{{matrix}}"
+    wanda: ci/docker/base.test.wanda.yaml
+    matrix:
+      - "3.10"
+      - "3.11"
+      - "3.12"
+      - "3.13"
+      - "3.14"
+    env:
+      PYTHON: "{{matrix}}"
+
+  - name: oss-ci-base_build-multipy
+    label: "wanda: oss-ci-base_build-py{{matrix}}"
+    wanda: ci/docker/base.build.wanda.yaml
+    matrix:
+      - "3.10"
+      - "3.11"
+      - "3.12"
+    env:
+      PYTHON: "{{matrix}}"
+    depends_on: oss-ci-base_test-multipy
+    tags: cibase

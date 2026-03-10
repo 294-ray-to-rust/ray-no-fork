@@ -18,19 +18,6 @@ steps:
       BUILD_VARIANT: "build"
     depends_on: oss-ci-base_build-multipy
 
-  - name: coregpubuild-multipy
-    label: "wanda: coregpubuild-py{{matrix}}"
-    wanda: ci/docker/core.build.wanda.yaml
-    tags: cibase
-    depends_on: oss-ci-base_gpu-multipy
-    env:
-      PYTHON: "{{matrix}}"
-      BASE_TYPE: "gpu"
-      BUILD_VARIANT: "gpubuild"
-      RAYCI_IS_GPU_BUILD: "true"
-    matrix:
-      - "3.10"
-
   - name: minbuild-core
     label: "wanda: minbuild-core-py{{matrix}}"
     wanda: ci/docker/min.build.wanda.yaml

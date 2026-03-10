@@ -41,12 +41,15 @@ else
   if ! command -v yq &>/dev/null; then
     YQ_BIN="/tmp/yq"
     YQ_URL="https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
-    if command -v wget &>/dev/null; then
-      wget -qO "$YQ_BIN" "$YQ_URL"
-    elif command -v curl &>/dev/null; then
+    if command -v curl &>/dev/null; then
       curl -fsSL -o "$YQ_BIN" "$YQ_URL"
+    elif command -v wget &>/dev/null; then
+      wget -qO "$YQ_BIN" "$YQ_URL"
+    elif command -v nix-shell &>/dev/null; then
+      echo "Using nix-shell to download yq"
+      nix-shell -p curl --run "curl -fsSL -o '$YQ_BIN' '$YQ_URL'"
     else
-      echo "ERROR: neither wget nor curl found; cannot download yq"
+      echo "ERROR: cannot download yq (no curl, wget, or nix-shell)"
       exit 1
     fi
     chmod +x "$YQ_BIN"

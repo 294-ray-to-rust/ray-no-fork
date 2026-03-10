@@ -10,6 +10,9 @@ steps:
       - |
         set -euo pipefail
 
+        echo "--- :buildkite: Agent info"
+        buildkite-agent --version
+
         mkdir -p /tmp/artifacts
 
         echo "--- :gear: Generating pipeline"
@@ -44,27 +47,49 @@ steps:
           .steps = [
             .steps[] |
             if has("group") then
-              .steps[] as $$inner |
-              $$inner *
-              {"depends_on": (($$inner.depends_on // []) + (."depends_on" // []) | unique)}
+              .as $$group |
+              .steps[] |
+              . * (
+                if ((."depends_on" // []) + ($$group."depends_on" // []) | length) > 0
+                then {"depends_on": ((."depends_on" // []) + ($$group."depends_on" // []) | unique)}
+                else {}
+                end
+              )
             else
               .
             end
-          ] |
-          .steps[].depends_on |= (if length == 0 then null else . end)
+          ]
         ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
 
-        FLAT_STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline_flat.yaml || echo 0)
-        echo "Flattened pipeline: $$FLAT_STEP_COUNT steps (was $$STEP_COUNT across $$GROUP_COUNT groups)"
+        echo "--- :mag: Validating flattened pipeline"
+        yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
+          echo "ERROR: Flattened YAML is not valid! Falling back to original."
+          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+        }
+
+        ORIG_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
+        FLAT_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
+        echo "Step counts: original=$$ORIG_STEP_COUNT, flattened=$$FLAT_STEP_COUNT"
+
+        if [ "$$FLAT_STEP_COUNT" -eq 0 ]; then
+          echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
+          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+          FLAT_STEP_COUNT=$$ORIG_STEP_COUNT
+        fi
+
+        echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
+        diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
+             <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
+             > /tmp/artifacts/flatten_diff.txt 2>&1 || true
 
         echo "--- :canary: Uploading canary step"
         echo 'steps:
           - label: ":canary: pipeline upload canary"
             command: "echo Pipeline upload mechanism is working. Full pipeline has been uploaded."' \
-          | buildkite-agent pipeline upload
+          | buildkite-agent pipeline upload --no-interpolation
 
         echo "--- :buildkite: Uploading pipeline"
-        buildkite-agent pipeline upload /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
+        buildkite-agent pipeline upload --no-interpolation /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
         if [ -s /tmp/artifacts/upload_stderr.txt ]; then
           echo "--- :warning: pipeline upload stderr"
           cat /tmp/artifacts/upload_stderr.txt
@@ -79,3 +104,4 @@ steps:
       - /tmp/artifacts/pipeline.yaml
       - /tmp/artifacts/pipeline_flat.yaml
       - /tmp/artifacts/upload_stderr.txt
+      - /tmp/artifacts/flatten_diff.txt

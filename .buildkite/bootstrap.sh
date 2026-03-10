@@ -40,8 +40,15 @@ else
   echo "--- :wrench: Installing yq"
   if ! command -v yq &>/dev/null; then
     YQ_BIN="/tmp/yq"
-    wget -qO "$YQ_BIN" \
-      https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    YQ_URL="https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+    if command -v wget &>/dev/null; then
+      wget -qO "$YQ_BIN" "$YQ_URL"
+    elif command -v curl &>/dev/null; then
+      curl -fsSL -o "$YQ_BIN" "$YQ_URL"
+    else
+      echo "ERROR: neither wget nor curl found; cannot download yq"
+      exit 1
+    fi
     chmod +x "$YQ_BIN"
     export PATH="/tmp:$PATH"
   fi

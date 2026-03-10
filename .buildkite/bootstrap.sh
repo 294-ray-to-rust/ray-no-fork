@@ -98,18 +98,6 @@ else
        > /tmp/artifacts/flatten_diff.txt 2>&1 || true
 fi
 
-echo "--- :canary: Uploading canary step"
-echo 'steps:
-  - label: ":canary: pipeline upload canary"
-    agents:
-      queue: "ethan-home"
-    command: |
-      echo "Canary step is executing at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-      buildkite-agent meta-data set "canary-executed" "true"
-      buildkite-agent meta-data set "canary-timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-      buildkite-agent annotate "✅ **Canary step executed** at $(date -u). This confirms buildkite-agent pipeline upload is working." --style success --context canary-probe' \
-  | buildkite-agent pipeline upload
-
 echo "--- :buildkite: Uploading pipeline"
 # Do NOT use --no-interpolation here. The rayci-generated YAML (from
 # fork-pipeline/*.rayci.yml) uses Buildkite's ${ } escape syntax for
@@ -124,25 +112,13 @@ if [ -s /tmp/artifacts/upload_stderr.txt ]; then
   cat /tmp/artifacts/upload_stderr.txt
 fi
 
-echo "--- :mag: Uploading probe step"
-echo 'steps:
-  - label: ":mag: upload verification probe"
-    agents:
-      queue: "ethan-home"
-    command: |
-      echo "Upload probe is executing — this step was dynamically uploaded with the full pipeline."
-      buildkite-agent meta-data set "probe-executed" "true"
-      CANARY=$(buildkite-agent meta-data get "canary-executed" 2>/dev/null || echo "unknown")
-      buildkite-agent annotate "🔍 **Upload probe executed**. Canary: $CANARY. This confirms the full pipeline was uploaded and at least one step ran." --style info --context upload-probe' \
-  | buildkite-agent pipeline upload
-
 if [ "${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps with original groups (flattening skipped via RAYCI_SKIP_FLATTEN=1, $(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML). Check for 'canary-probe' and 'upload-probe' annotations to confirm execution." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps with original groups (flattening skipped via RAYCI_SKIP_FLATTEN=1, $(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
     --style success --context pipeline-info
 else
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML). Check for 'canary-probe' and 'upload-probe' annotations to confirm execution." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
     --style success --context pipeline-info
 fi
 

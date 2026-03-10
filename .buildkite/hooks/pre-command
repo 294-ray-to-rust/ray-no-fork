@@ -9,6 +9,13 @@
 # remain on the node when a Buildkite runner is re-used.
 set -ex
 
+# On NixOS, packages like rayci are installed under
+# /run/current-system/sw/bin which may not be in the default
+# PATH inherited by Buildkite command shells.
+if [[ -d "/run/current-system/sw/bin" ]]; then
+  export PATH="/run/current-system/sw/bin:$PATH"
+fi
+
 echo "Creating artifact directory..."
 if [[ "${OSTYPE}" == linux* ]]; then
   if [[ -d "/tmp/artifacts" ]]; then

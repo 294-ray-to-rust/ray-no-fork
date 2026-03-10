@@ -6,6 +6,8 @@
 
 steps:
   - label: ":pipeline: bootstrap rayci"
+    env:
+      RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-0}"
     commands:
       - |
         set -euo pipefail
@@ -31,31 +33,37 @@ steps:
         echo "--- :page_facing_up: Pipeline YAML preview (last 20 lines)"
         tail -20 /tmp/artifacts/pipeline.yaml
 
-        echo "--- :wrench: Installing yq"
-        if ! command -v yq &>/dev/null; then
-          wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod +x /usr/local/bin/yq
+        if [ "$${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
+          echo "RAYCI_SKIP_FLATTEN=1: Skipping group flattening, uploading original grouped YAML"
+          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+          FLAT_STEP_COUNT=$$STEP_COUNT
+        else
+          echo "--- :wrench: Installing yq"
+          if ! command -v yq &>/dev/null; then
+            wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            chmod +x /usr/local/bin/yq
+          fi
+          yq --version
+
+          echo "--- :scissors: Flattening group blocks"
+          yq '
+            .steps = [
+              .steps[] |
+              if has("group") then
+                .steps[] as $$inner |
+                $$inner *
+                {"depends_on": (($$inner.depends_on // []) + (."depends_on" // []) | unique)}
+              else
+                .
+              end
+            ] |
+            .steps[].depends_on |= (if length == 0 then null else . end)
+          ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+
+          FLAT_STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline_flat.yaml || echo 0)
+          echo "Flattened pipeline: $$FLAT_STEP_COUNT steps (was $$STEP_COUNT across $$GROUP_COUNT groups)"
         fi
-        yq --version
-
-        echo "--- :scissors: Flattening group blocks"
-        yq '
-          .steps = [
-            .steps[] |
-            if has("group") then
-              .steps[] as $$inner |
-              $$inner *
-              {"depends_on": (($$inner.depends_on // []) + (."depends_on" // []) | unique)}
-            else
-              .
-            end
-          ] |
-          .steps[].depends_on |= (if length == 0 then null else . end)
-        ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
-
-        FLAT_STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline_flat.yaml || echo 0)
-        echo "Flattened pipeline: $$FLAT_STEP_COUNT steps (was $$STEP_COUNT across $$GROUP_COUNT groups)"
 
         echo "--- :canary: Uploading canary step"
         echo 'steps:
@@ -70,9 +78,15 @@ steps:
           cat /tmp/artifacts/upload_stderr.txt
         fi
 
-        buildkite-agent annotate \
-          "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps flattened from $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)" \
-          --style success --context pipeline-info
+        if [ "$${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
+          buildkite-agent annotate \
+            "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps with original groups (flattening skipped via RAYCI_SKIP_FLATTEN=1, $$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)" \
+            --style success --context pipeline-info
+        else
+          buildkite-agent annotate \
+            "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps flattened from $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)" \
+            --style success --context pipeline-info
+        fi
 
         echo "Pipeline uploaded successfully ($$FLAT_STEP_COUNT steps)"
     artifact_paths:

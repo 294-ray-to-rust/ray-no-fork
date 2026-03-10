@@ -45,9 +45,11 @@ steps:
         else
           echo "--- :wrench: Installing yq"
           if ! command -v yq &>/dev/null; then
-            wget -qO /usr/local/bin/yq \
+            YQ_BIN="/tmp/yq"
+            wget -qO "$$YQ_BIN" \
               https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-            chmod +x /usr/local/bin/yq
+            chmod +x "$$YQ_BIN"
+            export PATH="/tmp:$$PATH"
           fi
           yq --version
 

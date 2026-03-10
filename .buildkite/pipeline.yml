@@ -6,6 +6,8 @@
 
 steps:
   - label: ":pipeline: bootstrap rayci"
+    agents:
+      queue: "ethan-home"
     env:
       RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-0}"
     commands:
@@ -93,6 +95,8 @@ steps:
         echo "--- :canary: Uploading canary step"
         echo 'steps:
           - label: ":canary: pipeline upload canary"
+            agents:
+              queue: "ethan-home"
             command: |
               echo "Canary step is executing at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
               buildkite-agent meta-data set "canary-executed" "true"
@@ -110,6 +114,8 @@ steps:
         echo "--- :mag: Uploading probe step"
         echo 'steps:
           - label: ":mag: upload verification probe"
+            agents:
+              queue: "ethan-home"
             command: |
               echo "Upload probe is executing — this step was dynamically uploaded with the full pipeline."
               buildkite-agent meta-data set "probe-executed" "true"

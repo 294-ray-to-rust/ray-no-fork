@@ -105,7 +105,16 @@ steps:
           | buildkite-agent pipeline upload
 
         echo "--- :buildkite: Uploading pipeline"
-        buildkite-agent pipeline upload --no-interpolation /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
+        # Do NOT use --no-interpolation here. The rayci-generated YAML (from
+        # fork-pipeline/*.rayci.yml) uses Buildkite's $${ } escape syntax for
+        # variables that must resolve at step execution time (e.g.
+        # $${BUILDKITE_PARALLEL_JOB_COUNT}, $${RAYCI_WORK_REPO}). Buildkite
+        # interpolation converts $${ } → ${ } at upload time so the shell can
+        # evaluate them when the step runs. With --no-interpolation the double-
+        # dollar sequences stay literal and bash interprets $$ as the PID,
+        # producing garbage like "12345{RAYCI_WORK_REPO}".
+        # See: https://github.com/294-ray-to-rust/ray-no-fork/issues/149
+        buildkite-agent pipeline upload /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
         if [ -s /tmp/artifacts/upload_stderr.txt ]; then
           echo "--- :warning: pipeline upload stderr"
           cat /tmp/artifacts/upload_stderr.txt

@@ -49,53 +49,67 @@ else
       echo "Using nix-shell to download yq"
       nix-shell -p curl --run "curl -fsSL -o '$YQ_BIN' '$YQ_URL'"
     else
-      echo "ERROR: cannot download yq (no curl, wget, or nix-shell)"
-      exit 1
+      echo "WARNING: cannot download yq (no curl, wget, or nix-shell)"
+      echo "Falling back to uploading original grouped YAML (no flattening)."
+      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      FLAT_STEP_COUNT=$STEP_COUNT
+      YQ_AVAILABLE=0
     fi
-    chmod +x "$YQ_BIN"
-    export PATH="/tmp:$PATH"
+    if [ "${YQ_AVAILABLE:-1}" = "1" ]; then
+      chmod +x "$YQ_BIN"
+      export PATH="/tmp:$PATH"
+    fi
   fi
-  yq --version
 
-  echo "--- :scissors: Flattening group blocks"
-  yq '
-    .steps = [
-      .steps[] |
-      if has("group") then
-        .as $group |
+  if command -v yq &>/dev/null; then
+    yq --version
+
+    echo "--- :scissors: Flattening group blocks"
+    yq '
+      .steps = [
         .steps[] |
-        . * (
-          if ((."depends_on" // []) + ($group."depends_on" // []) | length) > 0
-          then {"depends_on": ((."depends_on" // []) + ($group."depends_on" // []) | unique)}
-          else {}
-          end
-        )
-      else
-        .
-      end
-    ]
-  ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+        if has("group") then
+          .as $group |
+          .steps[] |
+          . * (
+            if ((."depends_on" // []) + ($group."depends_on" // []) | length) > 0
+            then {"depends_on": ((."depends_on" // []) + ($group."depends_on" // []) | unique)}
+            else {}
+            end
+          )
+        else
+          .
+        end
+      ]
+    ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
 
-  echo "--- :mag: Validating flattened pipeline"
-  yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
-    echo "ERROR: Flattened YAML is not valid! Falling back to original."
+    echo "--- :mag: Validating flattened pipeline"
+    yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
+      echo "ERROR: Flattened YAML is not valid! Falling back to original."
+      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+    }
+
+    ORIG_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
+    FLAT_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
+    echo "Step counts: original=$ORIG_STEP_COUNT, flattened=$FLAT_STEP_COUNT"
+
+    if [ "$FLAT_STEP_COUNT" -eq 0 ]; then
+      echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
+      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      FLAT_STEP_COUNT=$ORIG_STEP_COUNT
+    fi
+
+    DID_FLATTEN=1
+
+    echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
+    diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
+         <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
+         > /tmp/artifacts/flatten_diff.txt 2>&1 || true
+  else
+    echo "yq not available, skipping flattening."
     cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
-  }
-
-  ORIG_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
-  FLAT_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
-  echo "Step counts: original=$ORIG_STEP_COUNT, flattened=$FLAT_STEP_COUNT"
-
-  if [ "$FLAT_STEP_COUNT" -eq 0 ]; then
-    echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
-    cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
-    FLAT_STEP_COUNT=$ORIG_STEP_COUNT
+    FLAT_STEP_COUNT=$STEP_COUNT
   fi
-
-  echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
-  diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
-       <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
-       > /tmp/artifacts/flatten_diff.txt 2>&1 || true
 fi
 
 echo "--- :buildkite: Uploading pipeline"
@@ -112,13 +126,13 @@ if [ -s /tmp/artifacts/upload_stderr.txt ]; then
   cat /tmp/artifacts/upload_stderr.txt
 fi
 
-if [ "${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
+if [ "${DID_FLATTEN:-0}" = "1" ]; then
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps with original groups (flattening skipped via RAYCI_SKIP_FLATTEN=1, $(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
     --style success --context pipeline-info
 else
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps (no flattening, $(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
     --style success --context pipeline-info
 fi
 

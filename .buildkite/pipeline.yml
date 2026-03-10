@@ -31,6 +31,32 @@ steps:
         echo "--- :page_facing_up: Pipeline YAML preview (last 20 lines)"
         tail -20 /tmp/artifacts/pipeline.yaml
 
+        echo "--- :wrench: Installing yq"
+        if ! command -v yq &>/dev/null; then
+          wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+        fi
+        yq --version
+
+        echo "--- :scissors: Flattening group blocks"
+        yq '
+          .steps = [
+            .steps[] |
+            if has("group") then
+              .steps[] as $$inner |
+              $$inner *
+              {"depends_on": (($$inner.depends_on // []) + (."depends_on" // []) | unique)}
+            else
+              .
+            end
+          ] |
+          .steps[].depends_on |= (if length == 0 then null else . end)
+        ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+
+        FLAT_STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline_flat.yaml || echo 0)
+        echo "Flattened pipeline: $$FLAT_STEP_COUNT steps (was $$STEP_COUNT across $$GROUP_COUNT groups)"
+
         echo "--- :canary: Uploading canary step"
         echo 'steps:
           - label: ":canary: pipeline upload canary"
@@ -38,17 +64,18 @@ steps:
           | buildkite-agent pipeline upload
 
         echo "--- :buildkite: Uploading pipeline"
-        buildkite-agent pipeline upload /tmp/artifacts/pipeline.yaml 2>/tmp/artifacts/upload_stderr.txt
+        buildkite-agent pipeline upload /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
         if [ -s /tmp/artifacts/upload_stderr.txt ]; then
           echo "--- :warning: pipeline upload stderr"
           cat /tmp/artifacts/upload_stderr.txt
         fi
 
         buildkite-agent annotate \
-          "Pipeline bootstrap: uploaded $$STEP_COUNT steps across $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline.yaml) lines of YAML)" \
+          "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps flattened from $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)" \
           --style success --context pipeline-info
 
-        echo "Pipeline uploaded successfully ($$STEP_COUNT steps)"
+        echo "Pipeline uploaded successfully ($$FLAT_STEP_COUNT steps)"
     artifact_paths:
       - /tmp/artifacts/pipeline.yaml
+      - /tmp/artifacts/pipeline_flat.yaml
       - /tmp/artifacts/upload_stderr.txt

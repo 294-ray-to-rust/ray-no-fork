@@ -20,24 +20,24 @@ forge_prefix: "cr.ray.io/rayproject/"
 
 # Buildkite agent queues for image-building steps.
 builder_queues:
-  builder: "default"
-  builder-arm64: "default"
-  builder-windows: "default"
+  builder: "ethan-home"
+  builder-arm64: "ethan-home"
+  builder-windows: "ethan-home"
 
 # Buildkite agent queues for test/runner steps.
-# Map rayci instance types to queue names.  Using "default" everywhere
-# until dedicated queues are provisioned (see #91).
+# Map rayci instance types to queue names. All steps target the
+# "ethan-home" self-hosted agent queue (see #129).
 runner_queues:
-  default: "default"
-  small: "default"
-  medium: "default"
-  large: "default"
-  gpu: "default"
-  gpu-large: "default"
-  g6-large: "default"
-  macos-arm64: "default"
-  medium-arm64: "default"
-  windows: "default"
+  default: "ethan-home"
+  small: "ethan-home"
+  medium: "ethan-home"
+  large: "ethan-home"
+  gpu: "ethan-home"
+  gpu-large: "ethan-home"
+  g6-large: "ethan-home"
+  macos-arm64: "ethan-home"
+  medium-arm64: "ethan-home"
+  windows: "ethan-home"
 
 env:
   RAYCI_GLOBAL_CONFIG: "ci/ray_ci/fork_config.yaml"

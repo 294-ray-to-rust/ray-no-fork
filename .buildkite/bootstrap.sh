@@ -14,7 +14,7 @@ buildkite-agent --version
 mkdir -p /tmp/artifacts
 
 echo "--- :gear: Generating pipeline"
-/usr/local/bin/rayci -output /tmp/artifacts/pipeline.yaml \
+rayci -output /tmp/artifacts/pipeline.yaml \
   -config .buildkite/fork-config.yaml \
   -buildkite-dir .buildkite/fork-pipeline/
 

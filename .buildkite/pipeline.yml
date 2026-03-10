@@ -6,6 +6,8 @@
 
 steps:
   - label: ":pipeline: bootstrap rayci"
+    env:
+      RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-0}"
     commands:
       - |
         set -euo pipefail
@@ -34,53 +36,59 @@ steps:
         echo "--- :page_facing_up: Pipeline YAML preview (last 20 lines)"
         tail -20 /tmp/artifacts/pipeline.yaml
 
-        echo "--- :wrench: Installing yq"
-        if ! command -v yq &>/dev/null; then
-          wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod +x /usr/local/bin/yq
-        fi
-        yq --version
+        if [ "$${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
+          echo "RAYCI_SKIP_FLATTEN=1: Skipping group flattening, uploading original grouped YAML"
+          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+          FLAT_STEP_COUNT=$$STEP_COUNT
+        else
+          echo "--- :wrench: Installing yq"
+          if ! command -v yq &>/dev/null; then
+            wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            chmod +x /usr/local/bin/yq
+          fi
+          yq --version
 
-        echo "--- :scissors: Flattening group blocks"
-        yq '
-          .steps = [
-            .steps[] |
-            if has("group") then
-              .as $$group |
+          echo "--- :scissors: Flattening group blocks"
+          yq '
+            .steps = [
               .steps[] |
-              . * (
-                if ((."depends_on" // []) + ($$group."depends_on" // []) | length) > 0
-                then {"depends_on": ((."depends_on" // []) + ($$group."depends_on" // []) | unique)}
-                else {}
-                end
-              )
-            else
-              .
-            end
-          ]
-        ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+              if has("group") then
+                .as $$group |
+                .steps[] |
+                . * (
+                  if ((."depends_on" // []) + ($$group."depends_on" // []) | length) > 0
+                  then {"depends_on": ((."depends_on" // []) + ($$group."depends_on" // []) | unique)}
+                  else {}
+                  end
+                )
+              else
+                .
+              end
+            ]
+          ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
 
-        echo "--- :mag: Validating flattened pipeline"
-        yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
-          echo "ERROR: Flattened YAML is not valid! Falling back to original."
-          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
-        }
+          echo "--- :mag: Validating flattened pipeline"
+          yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
+            echo "ERROR: Flattened YAML is not valid! Falling back to original."
+            cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+          }
 
-        ORIG_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
-        FLAT_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
-        echo "Step counts: original=$$ORIG_STEP_COUNT, flattened=$$FLAT_STEP_COUNT"
+          ORIG_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
+          FLAT_STEP_COUNT=$$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
+          echo "Step counts: original=$$ORIG_STEP_COUNT, flattened=$$FLAT_STEP_COUNT"
 
-        if [ "$$FLAT_STEP_COUNT" -eq 0 ]; then
-          echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
-          cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
-          FLAT_STEP_COUNT=$$ORIG_STEP_COUNT
+          if [ "$$FLAT_STEP_COUNT" -eq 0 ]; then
+            echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
+            cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+            FLAT_STEP_COUNT=$$ORIG_STEP_COUNT
+          fi
+
+          echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
+          diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
+               <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
+               > /tmp/artifacts/flatten_diff.txt 2>&1 || true
         fi
-
-        echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
-        diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
-             <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
-             > /tmp/artifacts/flatten_diff.txt 2>&1 || true
 
         echo "--- :canary: Uploading canary step"
         echo 'steps:
@@ -109,9 +117,15 @@ steps:
               buildkite-agent annotate "🔍 **Upload probe executed**. Canary: $$CANARY. This confirms the full pipeline was uploaded and at least one step ran." --style info --context upload-probe' \
           | buildkite-agent pipeline upload
 
-        buildkite-agent annotate \
-          "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps flattened from $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML). Check for 'canary-probe' and 'upload-probe' annotations to confirm execution." \
-          --style success --context pipeline-info
+        if [ "$${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
+          buildkite-agent annotate \
+            "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps with original groups (flattening skipped via RAYCI_SKIP_FLATTEN=1, $$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML). Check for 'canary-probe' and 'upload-probe' annotations to confirm execution." \
+            --style success --context pipeline-info
+        else
+          buildkite-agent annotate \
+            "Pipeline bootstrap: uploaded $$FLAT_STEP_COUNT steps flattened from $$GROUP_COUNT groups ($$(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML). Check for 'canary-probe' and 'upload-probe' annotations to confirm execution." \
+            --style success --context pipeline-info
+        fi
 
         echo "Pipeline uploaded successfully ($$FLAT_STEP_COUNT steps)"
     artifact_paths:

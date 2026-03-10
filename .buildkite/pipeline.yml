@@ -98,10 +98,10 @@ steps:
             agents:
               queue: "ethan-home"
             command: |
-              echo "Canary step is executing at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              echo "Canary step is executing at $$(date -u +%Y-%m-%dT%H:%M:%SZ)"
               buildkite-agent meta-data set "canary-executed" "true"
-              buildkite-agent meta-data set "canary-timestamp" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-              buildkite-agent annotate "✅ **Canary step executed** at $(date -u). This confirms buildkite-agent pipeline upload is working." --style success --context canary-probe' \
+              buildkite-agent meta-data set "canary-timestamp" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              buildkite-agent annotate "✅ **Canary step executed** at $$(date -u). This confirms buildkite-agent pipeline upload is working." --style success --context canary-probe' \
           | buildkite-agent pipeline upload
 
         echo "--- :buildkite: Uploading pipeline"

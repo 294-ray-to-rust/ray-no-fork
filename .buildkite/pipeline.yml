@@ -1,7 +1,7 @@
 # Buildkite pipeline entrypoint.
 #
-# This bootstrap step uses the pre-installed rayci binary to generate and
-# upload the real pipeline from the .buildkite/*.rayci.yml definitions.
+# This bootstrap step ensures rayci is available, then uses it to generate
+# and upload the real pipeline from the .buildkite/*.rayci.yml definitions.
 # The expected rayci version is documented in .rayciversion.
 
 steps:
@@ -11,6 +11,16 @@ steps:
         set -euo pipefail
 
         mkdir -p /tmp/artifacts
+
+        echo "--- :wrench: Ensuring rayci is available"
+        if ! command -v rayci &>/dev/null; then
+          RAYCI_VERSION=$$(cat .rayciversion)
+          echo "rayci not in PATH, installing v$${RAYCI_VERSION}"
+          curl -fsSL -o /usr/local/bin/rayci \
+            "https://github.com/ray-project/rayci/releases/download/v$${RAYCI_VERSION}/rayci-linux-amd64"
+          chmod +x /usr/local/bin/rayci
+        fi
+        rayci --version || true
 
         echo "--- :gear: Generating pipeline"
         rayci -output /tmp/artifacts/pipeline.yaml \

@@ -26,9 +26,36 @@ steps:
           exit 1
         fi
 
-        echo "--- :buildkite: Uploading pipeline"
-        buildkite-agent pipeline upload /tmp/artifacts/pipeline.yaml
+        echo "--- :wrench: Installing yq"
+        if ! command -v yq &>/dev/null; then
+          wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+        fi
+        yq --version
 
-        echo "Pipeline uploaded successfully ($$STEP_COUNT steps)"
+        echo "--- :scissors: Flattening group blocks"
+        yq '
+          .steps = [
+            .steps[] |
+            if has("group") then
+              .steps[] as $$inner |
+              $$inner *
+              {"depends_on": (($$inner.depends_on // []) + (."depends_on" // []) | unique)}
+            else
+              .
+            end
+          ] |
+          .steps[].depends_on |= (if length == 0 then null else . end)
+        ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+
+        FLAT_STEP_COUNT=$$(grep -c "key:" /tmp/artifacts/pipeline_flat.yaml || echo 0)
+        echo "Flattened pipeline: $$FLAT_STEP_COUNT steps (was $$STEP_COUNT across $$GROUP_COUNT groups)"
+
+        echo "--- :buildkite: Uploading pipeline"
+        buildkite-agent pipeline upload /tmp/artifacts/pipeline_flat.yaml
+
+        echo "Pipeline uploaded successfully ($$FLAT_STEP_COUNT steps)"
     artifact_paths:
       - /tmp/artifacts/pipeline.yaml
+      - /tmp/artifacts/pipeline_flat.yaml

@@ -14,7 +14,7 @@ steps:
     env:
       RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-0}"
     commands:
-      - bash .buildkite/bootstrap.sh
+      - . .buildkite/bootstrap.sh
     artifact_paths:
       - /tmp/artifacts/pipeline.yaml
       - /tmp/artifacts/pipeline_flat.yaml

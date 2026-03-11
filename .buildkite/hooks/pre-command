@@ -25,7 +25,11 @@ if [[ "${OSTYPE}" == linux* ]]; then
       fi
   fi
 
-  docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c 'chown -R 2000 /artifact-mount/' || true
+  # Create directory if needed, set ownership to 2000 for containers,
+  # and make world-writable so both host agent (UID 993) and containers
+  # (UID 2000) can write to it.
+  mkdir -p /tmp/artifacts
+  docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c 'chown -R 2000 /artifact-mount/ && chmod -R 777 /artifact-mount/' || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then
     rm -rf /c/tmp/artifacts/*

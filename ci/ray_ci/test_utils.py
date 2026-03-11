@@ -13,7 +13,9 @@ from ci.ray_ci.utils import (
     docker_login,
     _docker_config_has_auth,
     _ecr_docker_login,
+    _get_github_token_scopes,
     _ghcr_docker_login,
+    _warn_if_ghcr_token_lacks_push_scope,
     filter_tests,
     get_flaky_test_names,
 )
@@ -224,6 +226,101 @@ def test_filter_tests_fail(state_filter, prefix, error_message):
     with pytest.raises(ValueError, match=error_message):
         filter_tests(io.StringIO("\n".join(test_targets)), output, prefix, state_filter)
     return
+
+
+class TestGhcrTokenScopeCheck:
+    """Tests for GHCR token scope verification (issue #176)."""
+
+    def test_get_scopes_returns_list_for_classic_pat(self) -> None:
+        """Classic PAT returns X-OAuth-Scopes header."""
+        mock_resp = mock.MagicMock()
+        mock_resp.headers = {"X-OAuth-Scopes": "repo, write:packages"}
+        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+        mock_resp.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch("urllib.request.urlopen", return_value=mock_resp):
+            scopes = _get_github_token_scopes("ghp_test123")
+        assert scopes == ["repo", "write:packages"]
+
+    def test_get_scopes_returns_none_for_fine_grained_pat(self) -> None:
+        """Fine-grained PATs don't return X-OAuth-Scopes."""
+        mock_resp = mock.MagicMock()
+        mock_resp.headers = {}
+        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+        mock_resp.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch("urllib.request.urlopen", return_value=mock_resp):
+            scopes = _get_github_token_scopes("github_pat_test123")
+        assert scopes is None
+
+    def test_get_scopes_returns_none_on_network_error(self) -> None:
+        """Network failures should not block CI."""
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=Exception("connection timeout"),
+        ):
+            scopes = _get_github_token_scopes("ghp_test123")
+        assert scopes is None
+
+    def test_get_scopes_empty_header(self) -> None:
+        """Empty X-OAuth-Scopes header returns empty list."""
+        mock_resp = mock.MagicMock()
+        mock_resp.headers = {"X-OAuth-Scopes": ""}
+        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+        mock_resp.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch("urllib.request.urlopen", return_value=mock_resp):
+            scopes = _get_github_token_scopes("ghp_test123")
+        assert scopes == []
+
+    def test_warn_if_missing_write_packages(self, caplog) -> None:
+        """Should warn when write:packages is missing."""
+        with mock.patch(
+            "ci.ray_ci.utils._get_github_token_scopes",
+            return_value=["repo", "read:packages"],
+        ), caplog.at_level(logging.WARNING):
+            _warn_if_ghcr_token_lacks_push_scope("ghp_test")
+        assert "missing 'write:packages' scope" in caplog.text
+        assert "issue #176" in caplog.text
+
+    def test_no_warn_with_write_packages(self, caplog) -> None:
+        """Should not warn when write:packages is present."""
+        with mock.patch(
+            "ci.ray_ci.utils._get_github_token_scopes",
+            return_value=["repo", "write:packages"],
+        ), caplog.at_level(logging.WARNING):
+            _warn_if_ghcr_token_lacks_push_scope("ghp_test")
+        assert "missing" not in caplog.text
+
+    def test_no_warn_with_admin_packages(self, caplog) -> None:
+        """admin:packages implies write:packages."""
+        with mock.patch(
+            "ci.ray_ci.utils._get_github_token_scopes",
+            return_value=["repo", "admin:packages"],
+        ), caplog.at_level(logging.WARNING):
+            _warn_if_ghcr_token_lacks_push_scope("ghp_test")
+        assert "missing" not in caplog.text
+
+    def test_no_warn_when_scopes_unavailable(self, caplog) -> None:
+        """Should silently skip check for fine-grained PATs."""
+        with mock.patch(
+            "ci.ray_ci.utils._get_github_token_scopes",
+            return_value=None,
+        ), caplog.at_level(logging.WARNING):
+            _warn_if_ghcr_token_lacks_push_scope("github_pat_test")
+        assert "missing" not in caplog.text
+
+    def test_ghcr_login_calls_scope_check(self) -> None:
+        """_ghcr_docker_login should call _warn_if_ghcr_token_lacks_push_scope."""
+        with mock.patch.dict(
+            "os.environ", {"GITHUB_TOKEN": "ghp_test"}, clear=False
+        ), mock.patch(
+            "ci.ray_ci.utils._warn_if_ghcr_token_lacks_push_scope"
+        ) as mock_warn, mock.patch(
+            "subprocess.run"
+        ):
+            _ghcr_docker_login("ghcr.io")
+            mock_warn.assert_called_once_with("ghp_test")
 
 
 if __name__ == "__main__":

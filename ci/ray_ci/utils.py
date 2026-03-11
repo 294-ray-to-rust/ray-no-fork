@@ -6,9 +6,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from math import ceil
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import ci.ray_ci.bazel_sharding as bazel_sharding
 
@@ -83,6 +84,7 @@ def _ghcr_docker_login(registry: str) -> None:
     """Login to GHCR using GITHUB_TOKEN or GHCR_TOKEN env var.
 
     Falls back to existing Docker credentials if no token env var is set.
+    Warns if the token lacks write:packages scope (needed for docker push).
     """
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GHCR_TOKEN", "")
     if not token:
@@ -96,7 +98,71 @@ def _ghcr_docker_login(registry: str) -> None:
         raise RuntimeError(
             "GITHUB_TOKEN or GHCR_TOKEN env var required for GHCR auth"
         )
+
+    # Check token scopes before login to provide early, actionable feedback
+    # when the token lacks write:packages (see issue #176).
+    _warn_if_ghcr_token_lacks_push_scope(token)
+
     _docker_login_with_token(registry, "USERNAME", token)
+
+
+def _warn_if_ghcr_token_lacks_push_scope(token: str) -> None:
+    """Check if a GHCR token has write:packages scope and warn if not.
+
+    Uses the GitHub API's X-OAuth-Scopes response header to detect missing
+    permissions early, before a docker push fails with the cryptic
+    'permission_denied: create_package' error.
+
+    Only works for classic PATs; fine-grained PATs and GitHub App tokens
+    do not return X-OAuth-Scopes, so this check is best-effort.
+    """
+    scopes = _get_github_token_scopes(token)
+    if scopes is None:
+        # Token type doesn't expose scopes (fine-grained PAT / App token);
+        # we can't check, so don't warn.
+        logger.debug(
+            "GHCR token does not expose OAuth scopes "
+            "(likely a fine-grained PAT or App token); "
+            "skipping write:packages pre-check"
+        )
+        return
+
+    has_write = "write:packages" in scopes or "admin:packages" in scopes
+    if not has_write:
+        logger.warning(
+            "GHCR token is missing 'write:packages' scope. "
+            "Docker push to ghcr.io will fail with 'permission_denied: "
+            "create_package'. Current scopes: %s. "
+            "See issue #176 for details on granting the required scope.",
+            ", ".join(scopes) if scopes else "(none)",
+        )
+
+
+def _get_github_token_scopes(token: str) -> Optional[List[str]]:
+    """Query the GitHub API to retrieve the OAuth scopes for a token.
+
+    Returns a list of scope strings for classic PATs, or None if the
+    token type does not expose scopes (fine-grained PAT, App token).
+    Returns None on any network/API error to avoid blocking CI.
+    """
+    req = urllib.request.Request(
+        "https://api.github.com/user",
+        headers={
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ray-ci",
+        },
+        method="HEAD",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            scopes_header = resp.headers.get("X-OAuth-Scopes")
+            if scopes_header is None:
+                return None
+            return [s.strip() for s in scopes_header.split(",") if s.strip()]
+    except Exception as exc:
+        logger.debug("Failed to check GHCR token scopes: %s", exc)
+        return None
 
 
 def _docker_config_has_auth(registry: str) -> bool:

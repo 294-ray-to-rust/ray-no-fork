@@ -64,10 +64,11 @@ else
     echo "--- :scissors: Flattening group blocks"
     # Flatten groups using select instead of if-then-else (more compatible with yq v4)
     # First, extract non-group steps, then extract and flatten group steps
+    # Note: depends_on can be string or array, so we wrap in array and flatten to normalize
     yq eval '
       .steps = (
         [.steps[] | select(has("group") | not)] +
-        [.steps[] | select(has("group")) | . as $g | .steps[] | . * {"depends_on": ((."depends_on" // []) + ($g."depends_on" // []) | unique)}]
+        [.steps[] | select(has("group")) | . as $g | .steps[] | . * {"depends_on": (([."depends_on" // []] | flatten) + ([$g."depends_on" // []] | flatten) | unique)}]
       )
     ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
 

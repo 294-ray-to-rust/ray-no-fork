@@ -12,7 +12,7 @@ steps:
     agents:
       queue: "ethan-home"
     env:
-      RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-0}"
+      RAYCI_SKIP_FLATTEN: "${RAYCI_SKIP_FLATTEN:-1}"
     commands:
       - . .buildkite/bootstrap.sh
     artifact_paths:

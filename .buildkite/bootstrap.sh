@@ -66,7 +66,7 @@ else
       .steps = [
         .steps[] |
         if has("group") then
-          .as $group |
+          . as $group |
           .steps[] |
           . * (
             if ((."depends_on" // []) + ($group."depends_on" // []) | length) > 0

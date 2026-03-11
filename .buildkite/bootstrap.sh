@@ -62,23 +62,14 @@ else
     yq --version
 
     echo "--- :scissors: Flattening group blocks"
-    # Write yq expression to file to avoid shell quoting issues
-    cat > /tmp/flatten.yq << 'YQEXPR'
-.steps = [
-  .steps[] |
-  if has("group") then
-    . as $group | .steps[] | . * (
-      if ((."depends_on" // []) + ($group."depends_on" // []) | length) > 0
-      then {"depends_on": ((."depends_on" // []) + ($group."depends_on" // []) | unique)}
-      else {}
-      end
-    )
-  else
-    .
-  end
-]
-YQEXPR
-    yq eval --from-file /tmp/flatten.yq /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
+    # Flatten groups using select instead of if-then-else (more compatible with yq v4)
+    # First, extract non-group steps, then extract and flatten group steps
+    yq eval '
+      .steps = (
+        [.steps[] | select(has("group") | not)] +
+        [.steps[] | select(has("group")) | . as $g | .steps[] | . * {"depends_on": ((."depends_on" // []) + ($g."depends_on" // []) | unique)}]
+      )
+    ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml
 
     echo "--- :mag: Validating flattened pipeline"
     yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {

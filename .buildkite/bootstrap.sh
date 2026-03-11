@@ -62,18 +62,16 @@ else
     yq --version
 
     echo "--- :scissors: Flattening group blocks"
-    yq '
+    yq eval '
       .steps = [
         .steps[] |
-        if has("group") then
-          . as $group |
-          .steps[] |
-          . * (
+        if (has("group")) then
+          (. as $group | .steps[] | . * (
             if ((."depends_on" // []) + ($group."depends_on" // []) | length) > 0
             then {"depends_on": ((."depends_on" // []) + ($group."depends_on" // []) | unique)}
             else {}
             end
-          )
+          ))
         else
           .
         end

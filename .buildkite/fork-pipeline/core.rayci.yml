@@ -52,24 +52,6 @@ steps:
         --except-tags custom_setup
         --install-mask all-ray-libraries
 
-  - label: ":ray: core: python {{matrix.python}} tests ({{matrix.worker_id}})"
-    if: build.pull_request.labels includes "continuous-build"
-    tags:
-      - python
-      - dashboard
-    instance_type: large
-    commands:
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
-        --install-mask all-ray-libraries
-        --workers 4 --worker-id "{{matrix.worker_id}}" --parallelism-per-worker 3
-        --python-version {{matrix.python}} --build-name corebuild-py{{matrix.python}}
-        --except-tags custom_setup
-    depends_on: corebuild-multipy
-    matrix:
-      setup:
-        python: ["3.12"]
-        worker_id: ["0", "1", "2", "3"]
-
   - label: ":ray: core: ray client tests"
     tags:
       - ray_client

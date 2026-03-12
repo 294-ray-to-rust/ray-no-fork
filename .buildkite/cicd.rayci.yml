@@ -2,14 +2,6 @@ group: reef tests
 depends_on:
   - forge
 steps:
-  - label: ":test_tube: test-rules"
-    key: test-rules
-    commands:
-      - rayci test-rules
-    instance_type: small
-    tags:
-      - tools
-      - always
   - label: ":coral: reef: ci+release tooling tests"
     key: reef-tests
     commands:

@@ -63,8 +63,9 @@ else
 
     echo "--- :scissors: Flattening group blocks"
     # The yq expression below flattens group blocks: it extracts steps
-    # from inside groups and merges each group's depends_on into its
-    # child steps.  If the expression fails (e.g. yq version
+    # from inside groups. NOTE: group-level depends_on is NOT propagated
+    # to child steps — each step must have its own depends_on.
+    # If the expression fails (e.g. yq version
     # incompatibility), fall back to the original grouped YAML.
     if yq '
       .steps = [

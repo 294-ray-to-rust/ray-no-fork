@@ -44,6 +44,8 @@ env:
   BUILDKITE_BAZEL_CACHE_URL: "http://rayci.localhost:9090"
   RAYCI_STAGE: "premerge"
   RAYCI_DISABLE_TEST_DB: "1"
+  GHCR_TOKEN: ""
+  GITHUB_TOKEN: ""
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

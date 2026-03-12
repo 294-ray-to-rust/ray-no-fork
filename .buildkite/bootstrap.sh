@@ -41,20 +41,29 @@ else
   if ! command -v yq &>/dev/null; then
     YQ_BIN="/tmp/yq"
     YQ_URL="https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+    YQ_AVAILABLE=0
     if command -v curl &>/dev/null; then
-      curl -fsSL -o "$YQ_BIN" "$YQ_URL"
+      if curl -fsSL -o "$YQ_BIN" "$YQ_URL" 2>/dev/null; then
+        YQ_AVAILABLE=1
+      else
+        echo "WARNING: yq download failed (curl), skipping flattening."
+      fi
     elif command -v wget &>/dev/null; then
-      wget -qO "$YQ_BIN" "$YQ_URL"
+      if wget -qO "$YQ_BIN" "$YQ_URL" 2>/dev/null; then
+        YQ_AVAILABLE=1
+      else
+        echo "WARNING: yq download failed (wget), skipping flattening."
+      fi
     else
       echo "WARNING: cannot download yq (no curl or wget)"
+    fi
+    if [ "$YQ_AVAILABLE" = "1" ]; then
+      chmod +x "$YQ_BIN"
+      export PATH="/tmp:$PATH"
+    else
       echo "Falling back to uploading original grouped YAML (no flattening)."
       cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
       FLAT_STEP_COUNT=$STEP_COUNT
-      YQ_AVAILABLE=0
-    fi
-    if [ "${YQ_AVAILABLE:-1}" = "1" ]; then
-      chmod +x "$YQ_BIN"
-      export PATH="/tmp:$PATH"
     fi
   fi
 

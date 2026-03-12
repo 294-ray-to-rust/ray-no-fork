@@ -21,6 +21,7 @@ steps:
           --build-type skip
     instance_type: small
     tags: tools
+    depends_on: forge
   - label: ":coral: reef: raydepsets tests"
     key: raydepsets-tests
     commands:
@@ -31,6 +32,7 @@ steps:
           --build-type skip
     instance_type: small
     tags: tools
+    depends_on: forge
   - label: ":coral: reef: privileged container tests"
     commands:
       - bazel run //ci/ray_ci:test_in_docker --

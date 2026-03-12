@@ -47,6 +47,12 @@ env:
   GHCR_TOKEN: ""
   GITHUB_TOKEN: ""
 
+hook_env_keys:
+  - RAYCI_CHECKOUT_DIR
+
+docker_plugin:
+  allow_mount_buildkite_agent: true
+
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:
   - disabled

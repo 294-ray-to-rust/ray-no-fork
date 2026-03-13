@@ -40,6 +40,7 @@ runner_queues:
   windows: "ethan-home"
 
 env:
+  RAYCI_CHECKOUT_DIR: "set-by-pre-command-hook"
   RAYCI_GLOBAL_CONFIG: "ci/ray_ci/fork_config.yaml"
   BUILDKITE_BAZEL_CACHE_URL: "http://rayci.localhost:9090"
   RAYCI_STAGE: "premerge"

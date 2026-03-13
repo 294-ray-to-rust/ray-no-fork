@@ -34,7 +34,9 @@ steps:
           --build-type cgroup
           --privileged
     instance_type: small
-    depends_on: oss-ci-base_test-multipy
+    depends_on:
+      - oss-ci-base_test-multipy
+      - forge
     tags: tools
   - label: ":coral: reef: iwyu tests"
     commands:

@@ -46,7 +46,9 @@ steps:
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 3
         --python-version 3.10 --build-name corebuild-py3.10
         --except-tags custom_setup
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: ray client tests"
     tags:
@@ -58,7 +60,9 @@ steps:
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 3
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags ray_client
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: redis tests"
     tags:
@@ -74,7 +78,9 @@ steps:
         --test-env=TEST_EXTERNAL_REDIS=1
         --except-tags custom_setup
         --python-version 3.10 --build-name corebuild-py3.10
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: memory pressure tests"
     tags:
@@ -100,7 +106,9 @@ steps:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags=tmpfs --tmp-filesystem=tmpfs
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: out of disk redis tests"
     tags:
@@ -113,7 +121,9 @@ steps:
         --test-env=TEST_EXTERNAL_REDIS=1
         --only-tags=tmpfs --tmp-filesystem=tmpfs
         --python-version 3.10 --build-name corebuild-py3.10
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: doc tests"
     tags:
@@ -139,7 +149,9 @@ steps:
         --except-tags gpu
         --python-version 3.10 --build-name corebuild-py3.10
         --skip-ray-installation
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: dashboard tests"
     tags:
@@ -154,7 +166,9 @@ steps:
       - docker run -i --rm --volume /tmp/artifacts:/artifact-mount --shm-size=2.5gb
         "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash -iecuo pipefail
         "./python/ray/dashboard/tests/run_ui_tests.sh"
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: debug tests"
     tags:
@@ -169,7 +183,9 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags debug_tests
         --except-tags kubernetes,manual
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: asan tests"
     tags:
@@ -184,7 +200,9 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags asan_tests
         --except-tags kubernetes,manual
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: wheel tests"
     key: core-wheel-tests
@@ -254,6 +272,7 @@ steps:
         --skip-ray-installation
     depends_on:
       - minbuild-core
+      - forge
     matrix:
       - "3.10"
       - "3.11"
@@ -278,7 +297,9 @@ steps:
       - docker run --privileged -i --rm --volume /tmp/artifacts:/artifact-mount --shm-size=2.5gb
         "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash
         "./src/ray/common/cgroup2/integration_tests/sysfs_cgroup_driver_integration_test_entrypoint.sh"
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: cpp tests"
     tags: core_cpp
@@ -289,7 +310,9 @@ steps:
         //:all //src/... core --except-tags=cgroup --build-type clang
         --python-version 3.10 --build-name corebuild-py3.10
         --cache-test-results --parallelism-per-worker 2
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: cpp asan tests"
     tags: core_cpp
@@ -300,6 +323,7 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
       - corebuild-multipy
+      - forge
 
   - label: ":ray: core: cpp ubsan tests"
     tags: core_cpp
@@ -311,6 +335,7 @@ steps:
         --cache-test-results --parallelism-per-worker 2
     depends_on:
       - corebuild-multipy
+      - forge
 
   - label: ":ray: core: cpp tsan tests"
     tags: core_cpp
@@ -322,6 +347,7 @@ steps:
         --cache-test-results --parallelism-per-worker 2
     depends_on:
       - corebuild-multipy
+      - forge
 
   - label: ":ray: core: flaky tests"
     key: core_flaky_tests
@@ -339,6 +365,7 @@ steps:
         --except-tags multi_gpu,cgroup
     depends_on:
       - corebuild-multipy
+      - forge
 
   - label: ":ray: core: cpp worker tests"
     tags:
@@ -366,7 +393,9 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --build-type java
         --only-tags needs_java
-    depends_on: corebuild-multipy
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":core: core: spark-on-ray tests"
     # NOTE: The Spark-on-Ray tests intentionally aren't triggered by the `java` tag to
@@ -383,5 +412,6 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
       - corebuild-multipy
+      - forge
 
 

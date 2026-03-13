@@ -170,7 +170,6 @@ def test_ray_installation() -> None:
         assert install_ray_cmds[-1] == [
             "docker",
             "build",
-            "--pull",
             "--progress=plain",
             "-t",
             docker_image,
@@ -196,10 +195,9 @@ def test_ray_installation_wheel() -> None:
         LinuxTesterContainer("team", build_type="wheel", python_version="3.10")
         docker_image = f"{_DOCKER_WORK_REPO}:team"
         cmd = install_ray_cmds[-1]
-        assert cmd[0:6] == [
+        assert cmd[0:5] == [
             "docker",
             "build",
-            "--pull",
             "--progress=plain",
             "-t",
             docker_image,

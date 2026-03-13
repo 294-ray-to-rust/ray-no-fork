@@ -93,9 +93,12 @@ def _ghcr_docker_login(registry: str) -> None:
                 registry,
             )
             return
-        raise RuntimeError(
-            "GITHUB_TOKEN or GHCR_TOKEN env var required for GHCR auth"
+        logger.warning(
+            "No GITHUB_TOKEN/GHCR_TOKEN and no Docker config for %s. "
+            "Proceeding without auth (images must be locally cached).",
+            registry,
         )
+        return
     _docker_login_with_token(registry, "USERNAME", token)
 
 

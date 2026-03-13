@@ -34,5 +34,12 @@ elif [[ "${OSTYPE}" == msys ]]; then
 fi
 
 
+# Make checkout writable by Docker container users (UID mismatch: host=993, forge=2000).
+# The post-command hook restores ownership via chown after each step.
+if [[ "${OSTYPE}" == linux* ]] && [[ -n "${BUILDKITE_BUILD_CHECKOUT_PATH:-}" ]]; then
+  docker run --rm -v "${BUILDKITE_BUILD_CHECKOUT_PATH}:/work" alpine:latest \
+    chmod -R a+rwX /work 2>/dev/null || true
+fi
+
 RAYCI_CHECKOUT_DIR="$(pwd)"
 export RAYCI_CHECKOUT_DIR

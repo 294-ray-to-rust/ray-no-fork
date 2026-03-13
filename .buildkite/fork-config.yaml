@@ -46,6 +46,11 @@ env:
   RAYCI_DISABLE_TEST_DB: "1"
   GHCR_TOKEN: ""
   GITHUB_TOKEN: ""
+  # Fix git "dubious ownership" error inside Docker containers.
+  # Container user (forge, UID 2000) differs from checkout owner (UID 993).
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: "safe.directory"
+  GIT_CONFIG_VALUE_0: "*"
 
 hook_env_keys:
   - RAYCI_CHECKOUT_DIR

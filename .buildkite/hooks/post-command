@@ -31,3 +31,12 @@ fi
 # inside another test container
 rm -rf /tmp/bazel_event_logs
 rm -rf /tmp/artifacts/test-summaries
+
+# Fix file ownership after Docker-plugin steps.
+# Docker containers create files as root inside mounted checkout volumes.
+# The Buildkite agent (non-root on NixOS) can't clean these up, breaking
+# git operations for all subsequent steps. See build 228 for evidence.
+if [[ "${OSTYPE}" == linux* ]] && [[ -n "${BUILDKITE_BUILD_CHECKOUT_PATH:-}" ]]; then
+  docker run --rm -v "${BUILDKITE_BUILD_CHECKOUT_PATH}:/work" alpine:latest \
+    chown -R "$(id -u):$(id -g)" /work 2>/dev/null || true
+fi

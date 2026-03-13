@@ -53,7 +53,6 @@ class LinuxContainer(Container):
         build_cmd = [
             "docker",
             "build",
-            "--pull",
             "--progress=plain",
             "-t",
             self._get_docker_image(),

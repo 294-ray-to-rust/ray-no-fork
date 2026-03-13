@@ -67,14 +67,15 @@ def test_ghcr_docker_login() -> None:
         _ghcr_docker_login("ghcr.io")
 
 
-def test_ghcr_docker_login_missing_token() -> None:
+def test_ghcr_docker_login_missing_token(caplog) -> None:
+    """When no token and no Docker config, log warning and return gracefully."""
     with mock.patch.dict(
         "os.environ", {}, clear=True
     ), mock.patch(
         "ci.ray_ci.utils._docker_config_has_auth", return_value=False
-    ):
-        with pytest.raises(RuntimeError, match="GITHUB_TOKEN or GHCR_TOKEN"):
-            _ghcr_docker_login("ghcr.io")
+    ), caplog.at_level(logging.WARNING):
+        _ghcr_docker_login("ghcr.io")  # should not raise
+    assert "Proceeding without auth" in caplog.text
 
 
 def test_ghcr_docker_login_falls_back_to_docker_config(caplog) -> None:

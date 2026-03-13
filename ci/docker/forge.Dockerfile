@@ -23,10 +23,6 @@ apt-get install -y ca-certificates curl zip unzip sudo gnupg tzdata git apt-tran
 # Add docker client APT repository
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-# Download and install Microsoft signing key
-curl -fsSL https://packages.microsoft.com/keys/microsoft.asc |
-  gpg --dearmor | tee /etc/apt/keyrings/microsoft.gpg > /dev/null
-chmod go+r /etc/apt/keyrings/microsoft.gpg
 
 echo \
   "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
@@ -36,32 +32,13 @@ echo \
 # Add NodeJS APT repository
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 
-AZ_VER=2.72.0
-AZ_DIST="$(lsb_release -cs)"
-
-# Add Azure CLI repository
-echo "Types: deb
-URIs: https://packages.microsoft.com/repos/azure-cli/
-Suites: ${AZ_DIST}
-Components: main
-Architectures: $(dpkg --print-architecture)
-Signed-by: /etc/apt/keyrings/microsoft.gpg" | tee /etc/apt/sources.list.d/azure-cli.sources
-
-# Add Google Cloud CLI repository
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg |
-  gpg --dearmor -o /etc/apt/keyrings/cloud.google.gpg
-echo "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] \
-  https://packages.cloud.google.com/apt cloud-sdk main" |
-  tee /etc/apt/sources.list.d/google-cloud-sdk.list
-
 # Install packages
 
 apt-get update
 apt-get install -y \
-  awscli nodejs build-essential python-is-python3 \
+  nodejs build-essential python-is-python3 \
   python3-pip openjdk-8-jre wget jq \
-  docker-ce-cli azure-cli="${AZ_VER}"-1~"${AZ_DIST}" \
-  google-cloud-cli
+  docker-ce-cli
 
 # Install uv
 curl -fsSL https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="/usr/local/bin" sh

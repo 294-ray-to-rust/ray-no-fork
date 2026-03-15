@@ -211,7 +211,7 @@ class TesterContainer(Container):
         return list(tests.values())
 
     def _cleanup_bazel_log_mount(self, bazel_log_dir: str) -> None:
-        shutil.rmtree(bazel_log_dir)
+        shutil.rmtree(bazel_log_dir, ignore_errors=True)
 
     def _run_tests_in_docker(
         self,

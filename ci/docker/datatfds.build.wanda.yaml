@@ -12,5 +12,7 @@ srcs:
 build_args:
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_ml-py$PYTHON
   - PYTHON_DEPSET=python/deplocks/tests/data/$REQUIREMENTS_FILE
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/datatfdsbuild-py$PYTHON

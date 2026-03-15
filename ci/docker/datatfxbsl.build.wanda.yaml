@@ -10,5 +10,7 @@ srcs:
   - python/requirements/ml/data-requirements.txt
 build_args:
   - ARROW_VERSION=14.*
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/datatfxbslbuild-py$PYTHON

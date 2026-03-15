@@ -17,5 +17,7 @@ srcs:
 build_args:
   - PYTHON_VERSION
   - EXTRA_DEPENDENCY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/minbuild-$EXTRA_DEPENDENCY-py$PYTHON_VERSION

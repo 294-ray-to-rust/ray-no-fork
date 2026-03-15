@@ -8,6 +8,9 @@ RUN if [ -n "$APT_PROXY" ]; then \
       echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
     fi
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 ARG ARROW_VERSION=23.*
 ARG ARROW_MONGO_VERSION=
 ARG RAY_CI_JAVA_BUILD=

@@ -1,6 +1,9 @@
 ARG DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_ml-py3.10
 FROM $DOCKER_IMAGE_BASE_BUILD
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 ARG RAYCI_IS_GPU_BUILD
 
 SHELL ["/bin/bash", "-ice"]

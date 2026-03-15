@@ -12,6 +12,8 @@ srcs:
   - python/requirements/test-requirements.txt
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - DOCKER_IMAGE_BASE_TEST=cr.ray.io/rayproject/oss-ci-base_test-py$PYTHON
   - RAYCI_DISABLE_JAVA
 tags:

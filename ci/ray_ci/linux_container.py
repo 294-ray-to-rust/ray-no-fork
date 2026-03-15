@@ -62,6 +62,10 @@ class LinuxContainer(Container):
             f"BUILD_TYPE={build_type or ''}",
             "--build-arg",
             f"BUILDKITE_CACHE_READONLY={cache_readonly}",
+            "--build-arg",
+            f"PIP_INDEX_URL={os.environ.get('PIP_INDEX_URL', '')}",
+            "--build-arg",
+            f"PIP_TRUSTED_HOST={os.environ.get('PIP_TRUSTED_HOST', '')}",
         ]
 
         if not build_type or build_type in (

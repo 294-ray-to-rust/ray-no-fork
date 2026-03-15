@@ -11,6 +11,8 @@ srcs:
   - ci/suppress_output
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - BUILDKITE_BAZEL_CACHE_URL
   - PYTHON
 tags:

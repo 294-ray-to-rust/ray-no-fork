@@ -5,6 +5,8 @@ srcs:
   - python/deplocks/ci/serve_tracing_depset_py3.10.lock
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - ENABLE_TRACING=1
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_build-py3.10
   - PYTHON=3.10

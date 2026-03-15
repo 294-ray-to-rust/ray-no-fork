@@ -2,6 +2,9 @@
 
 FROM cr.ray.io/rayproject/oss-ci-base_build-py3.10
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 SHELL ["/bin/bash", "-ice"]
 
 COPY . .

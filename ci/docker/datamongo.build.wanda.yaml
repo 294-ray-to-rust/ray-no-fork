@@ -11,6 +11,8 @@ srcs:
   - python/requirements/ml/data-test-requirements.txt
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - ARROW_VERSION=9.*
   - ARROW_MONGO_VERSION=0.5.*
   - RAY_CI_JAVA_BUILD=1

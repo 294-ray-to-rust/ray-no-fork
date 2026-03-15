@@ -9,6 +9,9 @@ RUN if [ -n "$APT_PROXY" ]; then \
       echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
     fi
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 ARG PYTHON_VERSION=3.10
 ARG IMAGE_TYPE="ray"
 ARG PIP_REQUIREMENTS="python/deplocks/base_extra_testdeps/${IMAGE_TYPE}-base_extra_testdeps_py${PYTHON_VERSION}.lock"

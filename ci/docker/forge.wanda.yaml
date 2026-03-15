@@ -3,6 +3,8 @@ froms:
   - ubuntu:22.04
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - BUILDKITE_BAZEL_CACHE_URL
 dockerfile: ci/docker/forge.Dockerfile
 srcs:

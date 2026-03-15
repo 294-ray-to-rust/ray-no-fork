@@ -5,6 +5,8 @@ srcs:
   - python/deplocks/ci/serve_base_depset_py$PYTHON.lock
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_build-py$PYTHON
   - PYTHON=$PYTHON
   - IMAGE_TYPE=base

@@ -14,3 +14,6 @@ tags:
 build_args:
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_$BASE_TYPE-py$PYTHON
   - RAY_CUDA_CODE=$RAY_CUDA_CODE
+
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST

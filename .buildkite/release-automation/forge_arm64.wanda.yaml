@@ -1,4 +1,7 @@
 name: "forge-arm64"
 froms:
   - ubuntu:20.04
+build_args:
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 dockerfile: .buildkite/release-automation/forge_arm64.Dockerfile

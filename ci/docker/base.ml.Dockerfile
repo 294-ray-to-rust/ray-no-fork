@@ -3,6 +3,9 @@
 ARG DOCKER_IMAGE_BASE_TEST=cr.ray.io/rayproject/oss-ci-base_test
 FROM $DOCKER_IMAGE_BASE_TEST
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 COPY . .
 
 RUN <<EOF

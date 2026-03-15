@@ -64,9 +64,7 @@ def test_ghcr_docker_login() -> None:
         assert cmd[3] == "USERNAME"
 
     with (
-        mock.patch.dict(
-            "os.environ", {"GITHUB_TOKEN": "my-ghcr-token"}, clear=False
-        ),
+        mock.patch.dict("os.environ", {"GITHUB_TOKEN": "my-ghcr-token"}, clear=False),
         mock.patch("subprocess.run", side_effect=_mock_subprocess_run),
     ):
         _ghcr_docker_login("ghcr.io")
@@ -76,9 +74,7 @@ def test_ghcr_docker_login_missing_token(caplog) -> None:
     """When no token and no Docker config, log warning and return gracefully."""
     with (
         mock.patch.dict("os.environ", {}, clear=True),
-        mock.patch(
-            "ci.ray_ci.utils._docker_config_has_auth", return_value=False
-        ),
+        mock.patch("ci.ray_ci.utils._docker_config_has_auth", return_value=False),
         caplog.at_level(logging.WARNING),
     ):
         _ghcr_docker_login("ghcr.io")  # should not raise
@@ -89,9 +85,7 @@ def test_ghcr_docker_login_falls_back_to_docker_config(caplog) -> None:
     """When no token env var is set but Docker config has auth, skip login."""
     with (
         mock.patch.dict("os.environ", {}, clear=True),
-        mock.patch(
-            "ci.ray_ci.utils._docker_config_has_auth", return_value=True
-        ),
+        mock.patch("ci.ray_ci.utils._docker_config_has_auth", return_value=True),
         caplog.at_level(logging.INFO),
     ):
         _ghcr_docker_login("ghcr.io")  # should not raise

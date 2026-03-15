@@ -30,7 +30,10 @@ all_rules = size_rules + timeout_rules + manual_rules + size_and_timeout_rules
 @pytest.fixture
 def mock_build_dir():
     """Create a mock bazel workspace"""
-    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as tmphome:
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        tempfile.TemporaryDirectory() as tmphome,
+    ):
         with open(os.path.join(tmpdir, "WORKSPACE"), "w") as f:
             f.write('workspace(name = "fake_workspace")\n')
         with open(os.path.join(tmpdir, ".bazelversion"), "w") as f:

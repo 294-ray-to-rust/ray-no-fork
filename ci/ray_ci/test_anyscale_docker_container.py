@@ -26,10 +26,13 @@ class TestAnyscaleDockerContainer(RayCITestBase):
         v = self.get_non_default_python()
         pv = self.get_python_version(v)
 
-        with mock.patch(
-            "ci.ray_ci.docker_container.LinuxContainer.run_script",
-            side_effect=_mock_run_script,
-        ), mock.patch.dict(os.environ, {"BUILDKITE_BRANCH": "test_branch"}):
+        with (
+            mock.patch(
+                "ci.ray_ci.docker_container.LinuxContainer.run_script",
+                side_effect=_mock_run_script,
+            ),
+            mock.patch.dict(os.environ, {"BUILDKITE_BRANCH": "test_branch"}),
+        ):
             container = AnyscaleDockerContainer(
                 v, "cu12.1.1-cudnn8", "ray-ml", upload=True
             )

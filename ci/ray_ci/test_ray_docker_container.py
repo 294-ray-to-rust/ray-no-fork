@@ -23,11 +23,12 @@ class TestRayDockerContainer(RayCITestBase):
         def _mock_run_script(input: List[str]) -> None:
             self.cmds.append(input[0])
 
-        with mock.patch(
-            "ci.ray_ci.ray_docker_container.docker_pull", return_value=None
-        ), mock.patch(
-            "ci.ray_ci.docker_container.LinuxContainer.run_script",
-            side_effect=_mock_run_script,
+        with (
+            mock.patch("ci.ray_ci.ray_docker_container.docker_pull", return_value=None),
+            mock.patch(
+                "ci.ray_ci.docker_container.LinuxContainer.run_script",
+                side_effect=_mock_run_script,
+            ),
         ):
             sha = "123456"
             ray_ci_build_id = "a1b2c3d4"
@@ -86,16 +87,17 @@ class TestRayDockerContainer(RayCITestBase):
             for i in input:
                 self.cmds.append(i)
 
-        with mock.patch(
-            "ci.ray_ci.ray_docker_container.docker_pull", return_value=None
-        ), mock.patch(
-            "ci.ray_ci.docker_container.LinuxContainer.run_script",
-            side_effect=_mock_run_script,
-        ), mock.patch(
-            "ci.ray_ci.ray_docker_container.RayDockerContainer._should_upload",
-            return_value=True,
-        ), mock.patch.dict(
-            os.environ, {"RAYCI_SCHEDULE": "nightly"}
+        with (
+            mock.patch("ci.ray_ci.ray_docker_container.docker_pull", return_value=None),
+            mock.patch(
+                "ci.ray_ci.docker_container.LinuxContainer.run_script",
+                side_effect=_mock_run_script,
+            ),
+            mock.patch(
+                "ci.ray_ci.ray_docker_container.RayDockerContainer._should_upload",
+                return_value=True,
+            ),
+            mock.patch.dict(os.environ, {"RAYCI_SCHEDULE": "nightly"}),
         ):
             formatted_date = datetime.now().strftime("%y%m%d")
             sha = "123456"
@@ -180,16 +182,17 @@ class TestRayDockerContainer(RayCITestBase):
             for i in input:
                 self.cmds.append(i)
 
-        with mock.patch(
-            "ci.ray_ci.ray_docker_container.docker_pull", return_value=None
-        ), mock.patch(
-            "ci.ray_ci.docker_container.LinuxContainer.run_script",
-            side_effect=_mock_run_script,
-        ), mock.patch(
-            "ci.ray_ci.ray_docker_container.RayDockerContainer._should_upload",
-            return_value=False,
-        ), mock.patch.dict(
-            os.environ, {"RAYCI_SCHEDULE": "daytime"}
+        with (
+            mock.patch("ci.ray_ci.ray_docker_container.docker_pull", return_value=None),
+            mock.patch(
+                "ci.ray_ci.docker_container.LinuxContainer.run_script",
+                side_effect=_mock_run_script,
+            ),
+            mock.patch(
+                "ci.ray_ci.ray_docker_container.RayDockerContainer._should_upload",
+                return_value=False,
+            ),
+            mock.patch.dict(os.environ, {"RAYCI_SCHEDULE": "daytime"}),
         ):
             sha = "123456"
             ray_ci_build_id = "a1b2c3d4"

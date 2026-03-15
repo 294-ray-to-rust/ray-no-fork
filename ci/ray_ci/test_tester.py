@@ -68,12 +68,15 @@ def test_linux_privileged() -> None:
 
 
 def test_get_container() -> None:
-    with mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-        return_value=None,
-    ), mock.patch(
-        "ci.ray_ci.windows_tester_container.WindowsTesterContainer.install_ray",
-        return_value=None,
+    with (
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+            return_value=None,
+        ),
+        mock.patch(
+            "ci.ray_ci.windows_tester_container.WindowsTesterContainer.install_ray",
+            return_value=None,
+        ),
     ):
         container = _get_container(
             team="core",
@@ -103,21 +106,27 @@ def test_get_container() -> None:
 
 
 def test_get_empty_test_targets() -> None:
-    with mock.patch(
-        "subprocess.check_output",
-        return_value="\n".encode("utf-8"),
-    ), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-        return_value=None,
-    ), mock.patch(
-        "ray_release.test.Test.gen_from_s3",
-        return_value=set(),
-    ), mock.patch(
-        "ci.ray_ci.tester._get_new_tests",
-        return_value=set(),
-    ), mock.patch(
-        "ray_release.test.Test.gen_microcheck_tests",
-        return_value=set(),
+    with (
+        mock.patch(
+            "subprocess.check_output",
+            return_value="\n".encode("utf-8"),
+        ),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+            return_value=None,
+        ),
+        mock.patch(
+            "ray_release.test.Test.gen_from_s3",
+            return_value=set(),
+        ),
+        mock.patch(
+            "ci.ray_ci.tester._get_new_tests",
+            return_value=set(),
+        ),
+        mock.patch(
+            "ray_release.test.Test.gen_microcheck_tests",
+            return_value=set(),
+        ),
     ):
         # Test that the set of test target is empty, rather than a set of empty string
         assert (
@@ -174,21 +183,27 @@ def test_get_test_targets() -> None:
                 }
             ),
         ]
-        with mock.patch(
-            "subprocess.check_output",
-            return_value="\n".join(test_targets).encode("utf-8"),
-        ), mock.patch(
-            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-            return_value=None,
-        ), mock.patch(
-            "ray_release.test.Test.gen_from_s3",
-            return_value=test_objects,
-        ), mock.patch(
-            "ci.ray_ci.tester._get_new_tests",
-            return_value=set(),
-        ), mock.patch(
-            "ray_release.test.Test.gen_microcheck_tests",
-            return_value={test.get_target() for test in test_objects},
+        with (
+            mock.patch(
+                "subprocess.check_output",
+                return_value="\n".join(test_targets).encode("utf-8"),
+            ),
+            mock.patch(
+                "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+                return_value=None,
+            ),
+            mock.patch(
+                "ray_release.test.Test.gen_from_s3",
+                return_value=test_objects,
+            ),
+            mock.patch(
+                "ci.ray_ci.tester._get_new_tests",
+                return_value=set(),
+            ),
+            mock.patch(
+                "ray_release.test.Test.gen_microcheck_tests",
+                return_value={test.get_target() for test in test_objects},
+            ),
         ):
             assert set(
                 _get_test_targets(
@@ -397,9 +412,12 @@ def test_get_flaky_test_targets() -> None:
         },
     ]
     for test in test_harness:
-        with TemporaryDirectory() as tmp, mock.patch(
-            "ray_release.test.Test.gen_from_s3",
-            return_value=test["input"]["s3"],
+        with (
+            TemporaryDirectory() as tmp,
+            mock.patch(
+                "ray_release.test.Test.gen_from_s3",
+                return_value=test["input"]["s3"],
+            ),
         ):
             with open(os.path.join(tmp, "core.tests.yml"), "w") as f:
                 f.write(test["input"]["core_test_yaml"])

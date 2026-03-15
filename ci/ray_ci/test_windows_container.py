@@ -14,15 +14,16 @@ def test_install_ray() -> None:
     def _mock_subprocess(inputs: List[str], stdout, stderr) -> None:
         install_ray_cmds.append(inputs)
 
-    with mock.patch(
-        "subprocess.check_call", side_effect=_mock_subprocess
-    ), mock.patch.dict(
-        "os.environ",
-        {
-            "BUILDKITE_BAZEL_CACHE_URL": "http://hi.com",
-            "BUILDKITE_CACHE_READONLY": "true",
-            "BUILDKITE_PIPELINE_ID": "woot",
-        },
+    with (
+        mock.patch("subprocess.check_call", side_effect=_mock_subprocess),
+        mock.patch.dict(
+            "os.environ",
+            {
+                "BUILDKITE_BAZEL_CACHE_URL": "http://hi.com",
+                "BUILDKITE_CACHE_READONLY": "true",
+                "BUILDKITE_PIPELINE_ID": "woot",
+            },
+        ),
     ):
         WindowsContainer("hi").install_ray()
         image = "029272617770.dkr.ecr.us-west-2.amazonaws.com/rayproject/citemp:hi"

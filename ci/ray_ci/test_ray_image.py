@@ -1,4 +1,5 @@
 """Tests for ci.ray_ci.ray_image.RayImage."""
+
 import sys
 
 import pytest

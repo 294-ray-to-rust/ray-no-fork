@@ -44,8 +44,10 @@ def test_ecr_docker_login() -> None:
         ],
     }
 
-    with mock.patch.dict("sys.modules", {"boto3": mock_boto3}), \
-         mock.patch("subprocess.run", side_effect=_mock_subprocess_run):
+    with (
+        mock.patch.dict("sys.modules", {"boto3": mock_boto3}),
+        mock.patch("subprocess.run", side_effect=_mock_subprocess_run),
+    ):
         _ecr_docker_login("docker_ecr")
 
 
@@ -61,30 +63,31 @@ def test_ghcr_docker_login() -> None:
         assert cmd[-1] == "ghcr.io"
         assert cmd[3] == "USERNAME"
 
-    with mock.patch.dict(
-        "os.environ", {"GITHUB_TOKEN": "my-ghcr-token"}, clear=False
-    ), mock.patch("subprocess.run", side_effect=_mock_subprocess_run):
+    with (
+        mock.patch.dict("os.environ", {"GITHUB_TOKEN": "my-ghcr-token"}, clear=False),
+        mock.patch("subprocess.run", side_effect=_mock_subprocess_run),
+    ):
         _ghcr_docker_login("ghcr.io")
 
 
 def test_ghcr_docker_login_missing_token(caplog) -> None:
     """When no token and no Docker config, log warning and return gracefully."""
-    with mock.patch.dict(
-        "os.environ", {}, clear=True
-    ), mock.patch(
-        "ci.ray_ci.utils._docker_config_has_auth", return_value=False
-    ), caplog.at_level(logging.WARNING):
+    with (
+        mock.patch.dict("os.environ", {}, clear=True),
+        mock.patch("ci.ray_ci.utils._docker_config_has_auth", return_value=False),
+        caplog.at_level(logging.WARNING),
+    ):
         _ghcr_docker_login("ghcr.io")  # should not raise
     assert "Proceeding without auth" in caplog.text
 
 
 def test_ghcr_docker_login_falls_back_to_docker_config(caplog) -> None:
     """When no token env var is set but Docker config has auth, skip login."""
-    with mock.patch.dict(
-        "os.environ", {}, clear=True
-    ), mock.patch(
-        "ci.ray_ci.utils._docker_config_has_auth", return_value=True
-    ), caplog.at_level(logging.INFO):
+    with (
+        mock.patch.dict("os.environ", {}, clear=True),
+        mock.patch("ci.ray_ci.utils._docker_config_has_auth", return_value=True),
+        caplog.at_level(logging.INFO),
+    ):
         _ghcr_docker_login("ghcr.io")  # should not raise
     assert "already authenticated" in caplog.text
 
@@ -127,9 +130,7 @@ def test_docker_config_has_auth_invalid_json(tmp_path) -> None:
 def test_docker_login_dispatches_ecr() -> None:
     with mock.patch("ci.ray_ci.utils._ecr_docker_login") as mock_ecr:
         docker_login("029272617770.dkr.ecr.us-west-2.amazonaws.com")
-        mock_ecr.assert_called_once_with(
-            "029272617770.dkr.ecr.us-west-2.amazonaws.com"
-        )
+        mock_ecr.assert_called_once_with("029272617770.dkr.ecr.us-west-2.amazonaws.com")
 
 
 def test_docker_login_dispatches_ghcr() -> None:

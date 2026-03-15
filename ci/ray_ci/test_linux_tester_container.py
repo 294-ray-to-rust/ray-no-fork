@@ -86,9 +86,12 @@ def test_run_tests_in_docker() -> None:
     def _mock_popen(input: List[str]) -> None:
         inputs.append(" ".join(input))
 
-    with mock.patch("subprocess.Popen", side_effect=_mock_popen), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-        return_value=None,
+    with (
+        mock.patch("subprocess.Popen", side_effect=_mock_popen),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+            return_value=None,
+        ),
     ):
         LinuxTesterContainer(
             "team",
@@ -132,11 +135,12 @@ def test_run_script_in_docker() -> None:
         assert "/bin/bash -iecuo pipefail -- run command" in input_str
         return b""
 
-    with mock.patch(
-        "subprocess.check_output", side_effect=_mock_check_output
-    ), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-        return_value=None,
+    with (
+        mock.patch("subprocess.check_output", side_effect=_mock_check_output),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+            return_value=None,
+        ),
     ):
         container = LinuxTesterContainer("team")
         container.run_script_with_output(["run command"])
@@ -231,20 +235,27 @@ def test_run_tests() -> None:
     def _mock_shard_tests(tests: List[str], workers: int, worker_id: int) -> List[str]:
         return chunk_into_n(tests, workers)[worker_id]
 
-    with tempfile.TemporaryDirectory() as tmpdir, mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.get_artifact_mount",
-        return_value=("/tmp/artifacts", tmpdir),
-    ), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer._persist_test_results",
-        return_value=None,
-    ), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer._run_tests_in_docker",
-        side_effect=_mock_run_tests_in_docker,
-    ), mock.patch(
-        "ci.ray_ci.tester_container.shard_tests", side_effect=_mock_shard_tests
-    ), mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
-        return_value=None,
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.get_artifact_mount",
+            return_value=("/tmp/artifacts", tmpdir),
+        ),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer._persist_test_results",
+            return_value=None,
+        ),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer._run_tests_in_docker",
+            side_effect=_mock_run_tests_in_docker,
+        ),
+        mock.patch(
+            "ci.ray_ci.tester_container.shard_tests", side_effect=_mock_shard_tests
+        ),
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.install_ray",
+            return_value=None,
+        ),
     ):
         container = LinuxTesterContainer("team", shard_count=2, shard_ids=[0, 1])
         # test_targets are not empty
@@ -257,9 +268,12 @@ def test_run_tests() -> None:
 
 
 def test_create_bazel_log_mount() -> None:
-    with tempfile.TemporaryDirectory() as tmpdir, mock.patch(
-        "ci.ray_ci.linux_tester_container.LinuxTesterContainer.get_artifact_mount",
-        return_value=("/tmp/artifacts", tmpdir),
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        mock.patch(
+            "ci.ray_ci.linux_tester_container.LinuxTesterContainer.get_artifact_mount",
+            return_value=("/tmp/artifacts", tmpdir),
+        ),
     ):
         container = LinuxTesterContainer("team", skip_ray_installation=True)
         assert container._create_bazel_log_mount("w00t") == (

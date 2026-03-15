@@ -5,6 +5,7 @@ Centralizes wanda image naming, validation, repo lookup, arch suffix,
 and variation suffix computation used by both ci/build/build_image.py
 and ci/ray_ci/automation/push_ray_image.py.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

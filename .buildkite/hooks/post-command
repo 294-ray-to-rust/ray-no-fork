@@ -32,6 +32,13 @@ fi
 rm -rf /tmp/bazel_event_logs
 rm -rf /tmp/artifacts/test-summaries
 
+# Remove build artifacts that Docker creates as root.
+# These block the agent's git checkout on subsequent builds (see builds 75-80, 178).
+if [[ "${OSTYPE}" == linux* ]] && [[ -n "${BUILDKITE_BUILD_CHECKOUT_PATH:-}" ]]; then
+  docker run --rm -v "${BUILDKITE_BUILD_CHECKOUT_PATH}:/work" alpine:latest \
+    sh -c "rm -rf /work/python/ray.egg-info /work/python/build" 2>/dev/null || true
+fi
+
 # Fix file ownership after Docker-plugin steps.
 # Docker containers create files as root inside mounted checkout volumes.
 # The Buildkite agent (non-root on NixOS) can't clean these up, breaking

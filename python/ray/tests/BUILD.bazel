@@ -1116,12 +1116,12 @@ py_test(
 #    py_test_module_list should support subdirectories.
 py_test(
     name = "test_autoscaler_aws",
-    size = "small",
+    size = "medium",
     srcs = ["aws/test_autoscaler_aws.py"],
     tags = [
         "exclusive",
         "no_windows",
-        "small_size_python_tests",
+        "medium_size_python_tests",
         "team:core",
     ],
     deps = [

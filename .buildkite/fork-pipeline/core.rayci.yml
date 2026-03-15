@@ -39,11 +39,13 @@ steps:
       - python
       - dashboard
     instance_type: large
-    parallelism: 4
+    parallelism: 2
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 3
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --except-tags custom_setup
     depends_on:
@@ -54,10 +56,12 @@ steps:
     tags:
       - ray_client
     instance_type: large
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
         --install-mask all-ray-libraries
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 3
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags ray_client
     depends_on:
@@ -71,10 +75,12 @@ steps:
       - skip-on-premerge
     instance_type: large
     parallelism: 4
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 3
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --test-env=TEST_EXTERNAL_REDIS=1
         --except-tags custom_setup
         --python-version 3.10 --build-name corebuild-py3.10
@@ -88,6 +94,8 @@ steps:
       - oss
       - skip-on-premerge
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - cleanup() { ./ci/build/upload_build_info.sh; }; trap cleanup EXIT
       - (cd python/ray/dashboard/client && npm ci && npm run build)
@@ -102,6 +110,8 @@ steps:
       - python
       - oss
     instance_type: small
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -116,6 +126,8 @@ steps:
       - oss
       - skip-on-premerge
     instance_type: small
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --test-env=TEST_EXTERNAL_REDIS=1
@@ -130,17 +142,19 @@ steps:
       - python
       - doc
     instance_type: large
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       # doc tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
         --only-tags doctest
         --python-version 3.10 --build-name corebuild-py3.10
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
       # doc examples
       - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
         --install-mask all-ray-libraries
         --except-tags doctest,post_wheel_build,gpu,multi_gpu,mem_pressure
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --skip-ray-installation
       # doc memory pressure example
@@ -158,9 +172,11 @@ steps:
       - python
       - dashboard
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- python/ray/dashboard/... core
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
       # ui tests
       - docker run -i --rm --volume /tmp/artifacts:/artifact-mount --volume /scratch/bazel-repo-cache:/bazel-repo-cache --shm-size=2.5gb
@@ -175,11 +191,13 @@ steps:
       - python
       - skip-on-premerge
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --install-mask all-ray-libraries
         --build-type debug
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags debug_tests
         --except-tags kubernetes,manual
@@ -192,6 +210,8 @@ steps:
       - python
       - skip-on-premerge
     instance_type: large
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --install-mask all-ray-libraries
@@ -208,11 +228,13 @@ steps:
     key: core-wheel-tests
     tags: linux_wheels
     instance_type: large
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //doc/... core
         --install-mask all-ray-libraries
         --build-type wheel
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags post_wheel_build
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
@@ -229,12 +251,14 @@ steps:
       - oss
       - min_build
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
       # core tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -243,7 +267,7 @@ steps:
         --python-version {{matrix}}
         --except-tags basic_test,manual,cgroup
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -253,7 +277,7 @@ steps:
         --skip-ray-installation
       # core redis tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -264,7 +288,7 @@ steps:
         --skip-ray-installation
       # serve tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... serve
-        --parallelism-per-worker 3
+        --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -285,6 +309,8 @@ steps:
       - core_cpp
       - python
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //:all
         //python/ray/tests/resource_isolation:test_resource_isolation_integration
@@ -305,6 +331,8 @@ steps:
     tags: core_cpp
 
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
         //:all //src/... core --except-tags=cgroup --build-type clang
@@ -317,6 +345,8 @@ steps:
   - label: ":ray: core: cpp asan tests"
     tags: core_cpp
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
         --build-type asan-clang --cache-test-results --parallelism-per-worker 2
@@ -328,6 +358,8 @@ steps:
   - label: ":ray: core: cpp ubsan tests"
     tags: core_cpp
     instance_type: large
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -340,6 +372,8 @@ steps:
   - label: ":ray: core: cpp tsan tests"
     tags: core_cpp
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -357,6 +391,8 @@ steps:
       - skip-on-premerge
     instance_type: large
     soft_fail: true
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -373,6 +409,8 @@ steps:
       - cpp
       - oss
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - if [[ "$${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
           echo "build --remote_upload_local_results=false" >> ~/.bazelrc;
@@ -388,6 +426,8 @@ steps:
       - java
       - python
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -403,6 +443,8 @@ steps:
     tags:
       - spark_on_ray
     instance_type: medium
+    concurrency: 4
+    concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --build-type debug

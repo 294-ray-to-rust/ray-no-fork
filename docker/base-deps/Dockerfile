@@ -8,6 +8,11 @@ ARG BASE_IMAGE="ubuntu:22.04"
 # --- HAProxy Build Stage ---
 FROM ${BASE_IMAGE} AS haproxy-builder
 
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 RUN <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -36,6 +41,12 @@ EOF
 
 # --- Main image ---
 FROM ${BASE_IMAGE}
+
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 # If this arg is not "autoscaler" then no autoscaler requirements will be included
 ENV TZ=America/Los_Angeles
 ENV LC_ALL=C.UTF-8

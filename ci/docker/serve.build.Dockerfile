@@ -3,6 +3,11 @@
 ARG DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_build-py3.10
 FROM $DOCKER_IMAGE_BASE_BUILD AS haproxy-builder
 
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 RUN <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -29,6 +34,11 @@ rm -rf "${HAPROXY_BUILD_DIR}"
 EOF
 
 FROM $DOCKER_IMAGE_BASE_BUILD
+
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
 
 ARG ENABLE_TRACING
 ARG PYDANTIC_VERSION

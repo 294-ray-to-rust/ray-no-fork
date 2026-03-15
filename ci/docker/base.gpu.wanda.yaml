@@ -10,6 +10,7 @@ srcs:
   - ci/env/install-miniforge.sh
   - ci/suppress_output
 build_args:
+  - APT_PROXY
   - BUILDKITE_BAZEL_CACHE_URL
   - PYTHON
 tags:

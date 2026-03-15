@@ -11,6 +11,7 @@ srcs:
   - python/requirements_compiled.txt
   - python/requirements/test-requirements.txt
 build_args:
+  - APT_PROXY
   - DOCKER_IMAGE_BASE_TEST=cr.ray.io/rayproject/oss-ci-base_test-aarch64
   - RAYCI_DISABLE_JAVA
 tags:

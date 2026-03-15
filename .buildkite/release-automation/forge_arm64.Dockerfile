@@ -2,6 +2,11 @@
 
 FROM ubuntu:22.04
 
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN <<EOF

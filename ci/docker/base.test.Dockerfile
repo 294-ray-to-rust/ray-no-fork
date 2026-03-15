@@ -2,6 +2,11 @@
 
 FROM ubuntu:focal
 
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 ARG BUILDKITE_BAZEL_CACHE_URL
 ARG PYTHON=3.10
 

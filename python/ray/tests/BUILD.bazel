@@ -502,14 +502,12 @@ py_test_module_list(
     size = "small",
     files = [
         "accelerators/test_accelerators.py",
-        "accelerators/test_amd_gpu.py",
         "accelerators/test_intel_gpu.py",
         "accelerators/test_metax_gpu.py",
         "accelerators/test_npu.py",
         "accelerators/test_nvidia_gpu.py",
         "accelerators/test_rbln.py",
         "accelerators/test_tpu.py",
-        "test_actor_lineage_reconstruction.py",
         "test_actor_out_of_order.py",
         "test_annotations.py",
         "test_args.py",
@@ -528,7 +526,6 @@ py_test_module_list(
         "test_environ.py",
         "test_error_ray_not_initialized.py",
         "test_exceptions.py",
-        "test_gcs_pubsub.py",
         "test_grpc_client_credentials.py",
         "test_ids.py",
         "test_kill_raylet_signal_log.py",
@@ -551,7 +548,6 @@ py_test_module_list(
         "test_protobuf_compatibility.py",
         "test_queue.py",
         "test_raylet_output.py",
-        "test_reconstruction_stress.py",
         "test_reconstruction_stress_spill.py",
         "test_reference_counting.py",
         "test_runtime_env_fork_process.py",
@@ -578,6 +574,38 @@ py_test_module_list(
         ":conftest",
         "//:ray_lib",
     ],
+)
+
+py_test(
+    name = "test_amd_gpu",
+    size = "medium",
+    srcs = ["accelerators/test_amd_gpu.py"],
+    tags = ["exclusive", "medium_size_python_tests", "team:core"],
+    deps = [":conftest", "//:ray_lib"],
+)
+
+py_test(
+    name = "test_actor_lineage_reconstruction",
+    size = "medium",
+    srcs = ["test_actor_lineage_reconstruction.py"],
+    tags = ["exclusive", "medium_size_python_tests", "team:core"],
+    deps = [":conftest", "//:ray_lib"],
+)
+
+py_test(
+    name = "test_gcs_pubsub",
+    size = "medium",
+    srcs = ["test_gcs_pubsub.py"],
+    tags = ["exclusive", "medium_size_python_tests", "team:core"],
+    deps = [":conftest", "//:ray_lib"],
+)
+
+py_test(
+    name = "test_reconstruction_stress",
+    size = "medium",
+    srcs = ["test_reconstruction_stress.py"],
+    tags = ["exclusive", "medium_size_python_tests", "team:core"],
+    deps = [":conftest", "//:ray_lib"],
 )
 
 py_test_module_list(
@@ -802,7 +830,6 @@ py_test_module_list(
         "kuberay/test_kuberay_node_provider.py",
         "test_cli_logger.py",
         "test_client_metadata.py",
-        "test_client_terminate.py",
         "test_coordinator_server.py",
         "test_monitor.py",
         "test_node_provider_availability_tracker.py",
@@ -817,6 +844,14 @@ py_test_module_list(
         ":conftest",
         "//:ray_lib",
     ],
+)
+
+py_test(
+    name = "test_client_terminate",
+    size = "medium",
+    srcs = ["test_client_terminate.py"],
+    tags = ["exclusive", "medium_size_python_tests", "team:core"],
+    deps = [":conftest", "//:ray_lib"],
 )
 
 py_test_module_list(

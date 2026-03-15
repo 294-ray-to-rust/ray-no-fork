@@ -163,7 +163,7 @@ steps:
         --parallelism-per-worker 3
         --python-version 3.10 --build-name corebuild-py3.10
       # ui tests
-      - docker run -i --rm --volume /tmp/artifacts:/artifact-mount --shm-size=2.5gb
+      - docker run -i --rm --volume /tmp/artifacts:/artifact-mount --volume /scratch/bazel-repo-cache:/bazel-repo-cache --shm-size=2.5gb
         "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash -iecuo pipefail
         "./python/ray/dashboard/tests/run_ui_tests.sh"
     depends_on:
@@ -294,7 +294,7 @@ steps:
       - bazel run //ci/ray_ci:test_in_docker -- //:all //src/ray/common/cgroup2/tests/... core
         --build-type clang --cache-test-results
         --python-version 3.10 --build-name corebuild-py3.10
-      - docker run --privileged -i --rm --volume /tmp/artifacts:/artifact-mount --shm-size=2.5gb
+      - docker run --privileged -i --rm --volume /tmp/artifacts:/artifact-mount --volume /scratch/bazel-repo-cache:/bazel-repo-cache --shm-size=2.5gb
         "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash
         "./src/ray/common/cgroup2/integration_tests/sysfs_cgroup_driver_integration_test_entrypoint.sh"
     depends_on:

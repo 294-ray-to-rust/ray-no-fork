@@ -28,6 +28,7 @@ class LinuxTesterContainer(TesterContainer, LinuxContainer):
             volumes=[
                 f"{os.environ.get('RAYCI_CHECKOUT_DIR')}:/ray-mount",
                 "/var/run/docker.sock:/var/run/docker.sock",
+                "/scratch/bazel-repo-cache:/bazel-repo-cache",
             ],
             python_version=python_version,
             tmp_filesystem=tmp_filesystem,

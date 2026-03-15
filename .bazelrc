@@ -177,6 +177,7 @@ test:ci-base --test_env=PATH
 
 build:ci --color=yes
 build:ci --curses=no
+build:ci --repository_cache=/bazel-repo-cache
 build:ci --keep_going
 build:ci --progress_report_interval=100
 build:ci --show_progress_rate_limit=15

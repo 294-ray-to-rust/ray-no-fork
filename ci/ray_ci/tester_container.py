@@ -66,6 +66,9 @@ class TesterContainer(Container):
         bazel_log_dir_host = os.path.join(artifact_host, tmp_dir)
         bazel_log_dir_container = os.path.join(artifact_container, tmp_dir)
         os.mkdir(bazel_log_dir_container)
+        # Ensure the directory is world-writable so that test containers
+        # (which may run as a different UID) can create bazel event logs.
+        os.chmod(bazel_log_dir_container, 0o1777)
         return (bazel_log_dir_host, bazel_log_dir_container)
 
     def run_tests(

@@ -266,6 +266,11 @@ def test_create_bazel_log_mount() -> None:
             "/tmp/artifacts/w00t",
             os.path.join(tmpdir, "w00t"),
         )
+        # Verify the directory is world-writable so test containers can write to it
+        import stat
+
+        mode = os.stat(os.path.join(tmpdir, "w00t")).st_mode
+        assert mode & stat.S_IWOTH, "bazel log dir should be world-writable"
 
 
 def test_get_test_results() -> None:

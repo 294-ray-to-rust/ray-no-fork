@@ -26,6 +26,9 @@ if [[ "${OSTYPE}" == linux* ]]; then
   fi
 
   docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
+
+  # Ensure Bazel repository cache directory structure exists for --repository_cache
+  mkdir -p /scratch/bazel-repo-cache/content_addressable/sha256 2>/dev/null || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then
     rm -rf /c/tmp/artifacts/*

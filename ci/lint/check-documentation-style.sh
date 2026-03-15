@@ -2,6 +2,9 @@
 
 set -euxo pipefail
 
+# Vale's RST parser requires rst2html from docutils
+pip install docutils
+
 VALE_BIN=$(mktemp -d)
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     wget https://github.com/errata-ai/vale/releases/download/v3.4.1/vale_3.4.1_Linux_64-bit.tar.gz -P "$VALE_BIN"

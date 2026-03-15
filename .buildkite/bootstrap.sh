@@ -14,9 +14,21 @@ buildkite-agent --version
 mkdir -p /tmp/artifacts
 
 echo "--- :gear: Generating pipeline"
+
+# Select pipeline directory based on branch type:
+# - Merge queue branches (gh-readonly-queue/*) and main get the full test suite
+# - All other branches (PRs, feature branches) get only forge + lint
+if [[ "${BUILDKITE_BRANCH:-}" == gh-readonly-queue/* ]] || [[ "${BUILDKITE_BRANCH:-}" == "main" ]]; then
+  PIPELINE_DIR=".buildkite/fork-pipeline/"
+else
+  PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
+fi
+echo "Branch: ${BUILDKITE_BRANCH:-unknown} -> Pipeline dir: $PIPELINE_DIR"
+echo "Pipeline mode: $(if [[ \"$PIPELINE_DIR\" == *fork-pipeline-pr* ]]; then echo 'PR (forge+lint only)'; else echo 'Full suite'; fi)"
+
 rayci -output /tmp/artifacts/pipeline.yaml \
   -config .buildkite/fork-config.yaml \
-  -buildkite-dir .buildkite/fork-pipeline/
+  -buildkite-dir "$PIPELINE_DIR"
 
 STEP_COUNT=$(grep -c "key:" /tmp/artifacts/pipeline.yaml || echo 0)
 GROUP_COUNT=$(grep -c "group:" /tmp/artifacts/pipeline.yaml || echo 0)

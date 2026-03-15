@@ -9,11 +9,11 @@ from unittest import mock
 import pytest
 
 from ci.ray_ci.utils import (
-    chunk_into_n,
-    docker_login,
     _docker_config_has_auth,
     _ecr_docker_login,
     _ghcr_docker_login,
+    chunk_into_n,
+    docker_login,
     filter_tests,
     get_flaky_test_names,
 )

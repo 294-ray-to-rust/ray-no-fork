@@ -23,7 +23,8 @@ if [[ "${BUILDKITE_BRANCH:-}" == gh-readonly-queue/* ]] || [[ "${BUILDKITE_BRANC
 else
   PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
 fi
-echo "Branch: ${BUILDKITE_BRANCH:-unknown} → Pipeline dir: $PIPELINE_DIR"
+echo "Branch: ${BUILDKITE_BRANCH:-unknown} -> Pipeline dir: $PIPELINE_DIR"
+echo "Pipeline mode: $(if [[ \"$PIPELINE_DIR\" == *fork-pipeline-pr* ]]; then echo 'PR (forge+lint only)'; else echo 'Full suite'; fi)"
 
 rayci -output /tmp/artifacts/pipeline.yaml \
   -config .buildkite/fork-config.yaml \

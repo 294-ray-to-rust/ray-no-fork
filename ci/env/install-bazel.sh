@@ -114,15 +114,18 @@ if [[ "${CI-}" == "true" && "${BUILDKITE-}" != "" ]]; then
     echo "Using local disk cache on mac"
     echo "build --disk_cache=/tmp/bazel-cache" >> ~/.bazelrc
     echo "build --repository_cache=/tmp/bazel-repo-cache" >> ~/.bazelrc
-  elif [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
-    if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then
-      echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> ~/.bazelrc
-      if [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
-        echo "build --remote_upload_local_results=false" >> ~/.bazelrc
+  elif [[ "${platform}" == linux ]]; then
+    echo "build --repository_cache=/bazel-repo-cache" >> ~/.bazelrc
+    if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
+      if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then
+        echo "build --remote_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> ~/.bazelrc
+        if [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
+          echo "build --remote_upload_local_results=false" >> ~/.bazelrc
+        fi
+      else
+        echo "Using local disk cache at ${BUILDKITE_BAZEL_CACHE_URL}"
+        echo "build --disk_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> ~/.bazelrc
       fi
-    else
-      echo "Using local disk cache at ${BUILDKITE_BAZEL_CACHE_URL}"
-      echo "build --disk_cache=${BUILDKITE_BAZEL_CACHE_URL}" >> ~/.bazelrc
     fi
   fi
 fi

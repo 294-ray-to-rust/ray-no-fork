@@ -14,7 +14,10 @@ class BuilderContainer(LinuxContainer):
     ) -> None:
         super().__init__(
             f"manylinux-{architecture}",
-            volumes=[f"{os.environ.get('RAYCI_CHECKOUT_DIR')}:/rayci"],
+            volumes=[
+                f"{os.environ.get('RAYCI_CHECKOUT_DIR')}:/rayci",
+                "/scratch/bazel-repo-cache:/bazel-repo-cache",
+            ],
         )
         python_version_info = PYTHON_VERSIONS.get(python_version)
         assert build_type in BUILD_TYPES, f"build_type must be one of {BUILD_TYPES}"

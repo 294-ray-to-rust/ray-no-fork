@@ -101,6 +101,7 @@ def test_run_tests_in_docker() -> None:
         assert "--network host" in input_str
         assert '--gpus "device=0,1"' in input_str
         assert "--volume /tmp:/tmp/bazel_event_logs" in input_str
+        assert "--volume /scratch/bazel-repo-cache:/bazel-repo-cache" in input_str
         assert (
             "bazel test --jobs=1 --config=ci $(./ci/run/bazel_export_options) "
             "--config=ci-debug --test_env v=k --test_arg flag t1 t2" in input_str

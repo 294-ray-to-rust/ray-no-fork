@@ -7,6 +7,8 @@ srcs:
   - python/deplocks/llm/rayllm_py312_cu129.lock
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - BASE_IMAGE=cr.ray.io/rayproject/ray-py$PYTHON_VERSION-cu$CUDA_VERSION-base
 tags:
   - cr.ray.io/rayproject/ray-llm-py$PYTHON_VERSION-cu$CUDA_VERSION-base

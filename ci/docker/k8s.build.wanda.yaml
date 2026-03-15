@@ -1,5 +1,8 @@
 name: k8sbuild
 froms: ["cr.ray.io/rayproject/oss-ci-base_build-py3.10"]
+build_args:
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 dockerfile: ci/docker/k8s.build.Dockerfile
 srcs:
   - python/requirements.txt

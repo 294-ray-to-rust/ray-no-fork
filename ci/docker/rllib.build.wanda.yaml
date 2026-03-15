@@ -14,5 +14,7 @@ srcs:
 build_args:
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_$BASE_TYPE-py$PYTHON
   - RAYCI_IS_GPU_BUILD
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/rllib$BUILD_VARIANT-py$PYTHON

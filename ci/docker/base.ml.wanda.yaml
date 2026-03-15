@@ -20,5 +20,7 @@ srcs:
   - python/requirements/ml/core-requirements.txt
 build_args:
   - DOCKER_IMAGE_BASE_TEST=cr.ray.io/rayproject/oss-ci-base_test-py$PYTHON
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/oss-ci-base_ml-py$PYTHON

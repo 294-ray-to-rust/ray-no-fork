@@ -7,6 +7,8 @@ srcs:
   - python/deplocks/base_slim/ray_base_slim_py$PYTHON_VERSION.lock
 build_args:
   - APT_PROXY
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
   - PYTHON_VERSION
   - BASE_IMAGE=nvidia/cuda:$CUDA_VERSION-runtime-ubuntu22.04
 tags:

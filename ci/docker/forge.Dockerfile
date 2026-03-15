@@ -2,6 +2,12 @@
 
 FROM ubuntu:22.04
 
+# Ensure Bazel repo cache directory exists for --repository_cache=/bazel-repo-cache.
+# When a host volume is mounted over this path (builder/tester containers), it provides
+# a persistent cache. When no volume is mounted (lint steps via Docker plugin), Bazel
+# uses this empty directory as a fresh cache without crashing.
+RUN mkdir -p /bazel-repo-cache && chmod 777 /bazel-repo-cache
+
 ARG APT_PROXY=""
 RUN if [ -n "$APT_PROXY" ]; then \
       echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \

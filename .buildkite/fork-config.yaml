@@ -60,6 +60,8 @@ docker_plugin:
   allow_mount_buildkite_agent: true
   add-host:
     - "rayci.localhost:host-gateway"
+  volumes:
+    - "/scratch/bazel-repo-cache:/bazel-repo-cache"
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

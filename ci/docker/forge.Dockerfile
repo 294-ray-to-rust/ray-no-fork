@@ -85,6 +85,12 @@ usermod -a -G docker forge
 mkdir /rayci
 chown forge:users /rayci
 
+# Ensure Bazel repo cache directory exists for --repository_cache=/bazel-repo-cache.
+# When a host volume is mounted over this path (builder/tester containers), it provides
+# a persistent cache. When no volume is mounted (lint steps via Docker plugin), Bazel
+# uses this empty directory as a fresh cache without crashing.
+mkdir -p /bazel-repo-cache && chmod 777 /bazel-repo-cache
+
 if [[ "$(uname -i)" == "x86_64" ]]; then
   bash install-k8s-tools.sh
 fi

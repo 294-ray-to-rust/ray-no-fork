@@ -3,7 +3,7 @@ import ray
 
 ray.init(
     _system_config={
-        "memory_usage_threshold": 0.4,
+        "memory_usage_threshold": 0.55,
     },
 )
 # fmt: off
@@ -67,8 +67,10 @@ second_actor = MemoryHogger.options(
     max_restarts=0, max_task_retries=0, name="second_actor"
 ).remote()
 
-# each task requests 0.3 of the system memory when the memory threshold is 0.4.
-allocate_bytes = get_additional_bytes_to_reach_memory_usage_pct(0.3)
+# each task requests 0.4 of the system memory when the memory threshold is 0.55.
+# Two actors combined (~0.8 of total minus baseline) will exceed the 0.55 threshold,
+# but one actor alone (~0.4 minus baseline) will stay safely below it.
+allocate_bytes = get_additional_bytes_to_reach_memory_usage_pct(0.4)
 
 first_actor_task = first_actor.allocate.remote(allocate_bytes)
 second_actor_task = second_actor.allocate.remote(allocate_bytes)

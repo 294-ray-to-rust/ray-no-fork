@@ -61,9 +61,7 @@ def docker_login(registry: str) -> None:
     elif "ghcr.io" in registry:
         _ghcr_docker_login(registry)
     else:
-        logger.warning(
-            "Unknown registry type: %s, skipping docker login", registry
-        )
+        logger.warning("Unknown registry type: %s, skipping docker login", registry)
 
 
 def _ecr_docker_login(docker_ecr: str) -> None:

@@ -1120,8 +1120,8 @@ py_test(
     srcs = ["aws/test_autoscaler_aws.py"],
     tags = [
         "exclusive",
-        "no_windows",
         "medium_size_python_tests",
+        "no_windows",
         "team:core",
     ],
     deps = [

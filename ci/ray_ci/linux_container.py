@@ -123,7 +123,7 @@ class LinuxContainer(Container):
         extra_args += [
             "--workdir",
             "/rayci",
-            "--shm-size=2.5gb",
+            "--shm-size=10gb",
         ]
         return extra_args
 

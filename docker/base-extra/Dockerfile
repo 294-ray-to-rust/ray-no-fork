@@ -4,6 +4,11 @@ ARG BASE_IMAGE="rayproject/ray:latest"
 
 FROM "$BASE_IMAGE"
 
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 ENV TERM=xterm
 
 ARG SSH_PORT=5020

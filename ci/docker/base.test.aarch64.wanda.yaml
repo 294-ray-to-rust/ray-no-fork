@@ -7,6 +7,7 @@ srcs:
   - ci/suppress_output
   - .bazelversion
 build_args:
+  - APT_PROXY
   - BUILDKITE_BAZEL_CACHE_URL
   - PYTHON=3.10
 tags:

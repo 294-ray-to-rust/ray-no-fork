@@ -5,6 +5,12 @@
 
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS main-build
+
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 ARG PYTHON_VERSION="3.10"
 ARG PYTHON_DEPSET="python/deplocks/base_slim/ray_base_slim_py${PYTHON_VERSION}.lock"
 ARG CONSTRAINTS_FILE="python/requirements_compiled_py${PYTHON_VERSION}.txt"
@@ -139,6 +145,11 @@ ENV PATH="/home/ray/.local/bin:/home/ray/anaconda3/bin:$PATH"
 
 # --- HAProxy Build Stage ---
 FROM $BASE_IMAGE AS haproxy-builder
+
+ARG APT_PROXY=""
+RUN if [ -n "$APT_PROXY" ]; then \
+      echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
 
 RUN <<EOF
 #!/bin/bash

@@ -9,23 +9,25 @@
 # remain on the node when a Buildkite runner is re-used.
 set -ex
 
+ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
+
 echo "Creating artifact directory..."
 if [[ "${OSTYPE}" == linux* ]]; then
-  if [[ -d "/tmp/artifacts" ]]; then
+  if [[ -d "$ARTIFACT_DIR" ]]; then
       echo "Cleaning up old artifacts before command."
       echo "Artifact directory contents before cleanup:"
-      find /tmp/artifacts -print || true
+      find "$ARTIFACT_DIR" -print || true
 
-      if [[ "$(ls -A /tmp/artifacts)" ]]; then
+      if [[ "$(ls -A "$ARTIFACT_DIR")" ]]; then
         echo "Directory not empty, cleaning up..."
         # Need to run in docker to avoid permission issues
-        docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c 'rm -rf /artifact-mount/*; rm -rf /artifact-mount/.[!.]*' || true
+        docker run --rm -v "$ARTIFACT_DIR":/artifact-mount alpine:latest /bin/sh -c 'rm -rf /artifact-mount/*; rm -rf /artifact-mount/.[!.]*' || true
       else
         echo "Directory already empty, no need to clean up."
       fi
   fi
 
-  docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
+  docker run --rm -v "$ARTIFACT_DIR":/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
 
   # Ensure Bazel repository cache directory structure exists on the host.
   # Containers mount /scratch/bazel-repo-cache:/bazel-repo-cache and Bazel's

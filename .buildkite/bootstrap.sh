@@ -11,6 +11,10 @@ set -euo pipefail
 echo "--- :buildkite: Agent info"
 buildkite-agent --version
 
+# Use per-slot artifact directory if configured (avoids cross-slot
+# collisions when multiple agent slots share a host).
+ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
+mkdir -p "$ARTIFACT_DIR"
 mkdir -p /tmp/artifacts
 
 echo "--- :gear: Generating pipeline"
@@ -133,6 +137,13 @@ else
     cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
     FLAT_STEP_COUNT=$STEP_COUNT
   fi
+fi
+
+# Rewrite artifact paths in the generated pipeline if using a custom directory.
+# This updates Docker volume mounts and artifact_paths inside the YAML.
+if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
+  echo "--- :pencil2: Rewriting artifact paths to $ARTIFACT_DIR"
+  sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" /tmp/artifacts/pipeline_flat.yaml
 fi
 
 echo "--- :buildkite: Uploading pipeline"

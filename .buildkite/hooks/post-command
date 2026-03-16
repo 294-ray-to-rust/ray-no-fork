@@ -12,25 +12,27 @@
 # upload them as artifacts and delete them afterwards.
 set -ex
 
-if [ -d "/tmp/artifacts/test-summaries" ] && [ "$(ls -A /tmp/artifacts/test-summaries)" ]; then
+ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
+
+if [ -d "$ARTIFACT_DIR/test-summaries" ] && [ "$(ls -A "$ARTIFACT_DIR/test-summaries")" ]; then
     # Only upload annotations if there are at least 2 files in the directory:
     # 1 header and 1 failed test.
-    if [ "$(find /tmp/artifacts/test-summaries -maxdepth 1 -name '*.txt' | wc -l)" -ge 2 ]; then
+    if [ "$(find "$ARTIFACT_DIR/test-summaries" -maxdepth 1 -name '*.txt' | wc -l)" -ge 2 ]; then
       echo "Test summaries for ${BUILDKITE_JOB_ID} ${BUILDKITE_LABEL}" | buildkite-agent annotate --job "${BUILDKITE_JOB_ID}" --style error --context "${BUILDKITE_JOB_ID}"
-      cat /tmp/artifacts/test-summaries/*.txt | head -n 20 | buildkite-agent annotate --job "${BUILDKITE_JOB_ID}" --append --style error --context "${BUILDKITE_JOB_ID}"
+      cat "$ARTIFACT_DIR/test-summaries"/*.txt | head -n 20 | buildkite-agent annotate --job "${BUILDKITE_JOB_ID}" --append --style error --context "${BUILDKITE_JOB_ID}"
     fi
 
     # Remove test summaries files (don't actually upload as artifacts)
     # This has to be done with docker to avoid permission issues
     echo "--- Cleaning up"
-    docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c 'rm -rf /artifact-mount/test-summaries' || true
+    docker run --rm -v "$ARTIFACT_DIR":/artifact-mount alpine:latest /bin/sh -c 'rm -rf /artifact-mount/test-summaries' || true
 fi
 
 # clean up bazel logs if any, this only has effect when the bazel test runs in the same
 # environment as the buildkite job commands, and has no effect when the tests run
 # inside another test container
 rm -rf /tmp/bazel_event_logs
-rm -rf /tmp/artifacts/test-summaries
+rm -rf "$ARTIFACT_DIR/test-summaries"
 
 # Remove build artifacts that Docker creates as root.
 # These block the agent's git checkout on subsequent builds (see builds 75-80, 178).

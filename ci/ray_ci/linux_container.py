@@ -108,9 +108,10 @@ class LinuxContainer(Container):
         self,
         gpu_ids: Optional[List[int]] = None,
     ) -> List[str]:
+        cache_host = os.environ.get("RAYCI_CACHE_HOST", "rayrust")
         extra_args = [
             "--add-host",
-            "rayci.localhost:host-gateway",
+            f"{cache_host}:host-gateway",
         ]
         if self.tmp_filesystem:
             extra_args += [

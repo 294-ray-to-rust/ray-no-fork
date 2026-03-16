@@ -15,7 +15,6 @@ buildkite-agent --version
 # collisions when multiple agent slots share a host).
 ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
 mkdir -p "$ARTIFACT_DIR"
-mkdir -p /tmp/artifacts
 
 echo "--- :gear: Generating pipeline"
 
@@ -144,6 +143,12 @@ fi
 if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
   echo "--- :pencil2: Rewriting artifact paths to $ARTIFACT_DIR"
   sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" /tmp/artifacts/pipeline_flat.yaml
+fi
+
+# Rewrite bazel-repo-cache host paths if using a custom location.
+if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/scratch/bazel-repo-cache" ]]; then
+  echo "--- :pencil2: Rewriting bazel-repo-cache paths to $RAYCI_BAZEL_REPO_CACHE"
+  sed -i "s|/scratch/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" /tmp/artifacts/pipeline_flat.yaml
 fi
 
 echo "--- :buildkite: Uploading pipeline"

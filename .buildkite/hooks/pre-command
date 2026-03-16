@@ -34,7 +34,8 @@ if [[ "${OSTYPE}" == linux* ]]; then
   # --repository_cache=/bazel-repo-cache (from .bazelrc build:ci) expects the
   # content_addressable/sha256 subtree to be present.  Without this, Bazel
   # throws FileNotFoundException inside both build and test containers.
-  mkdir -p /scratch/bazel-repo-cache/content_addressable/sha256 2>/dev/null || true
+  BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/scratch/bazel-repo-cache}"
+  mkdir -p "$BAZEL_REPO_CACHE/content_addressable/sha256" 2>/dev/null || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then
     rm -rf /c/tmp/artifacts/*

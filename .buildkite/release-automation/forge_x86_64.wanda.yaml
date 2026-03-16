@@ -1,4 +1,7 @@
 name: "forge"
 froms:
   - ubuntu:20.04
+build_args:
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 dockerfile: .buildkite/release-automation/forge_x86_64.Dockerfile

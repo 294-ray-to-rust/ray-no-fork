@@ -4,6 +4,9 @@ ARG BASE_IMAGE
 ARG FULL_BASE_IMAGE=rayproject/ray:nightly"$BASE_IMAGE"
 FROM "$FULL_BASE_IMAGE"
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 COPY python/*requirements.txt \
      python/requirements/ml/*requirements.txt  \
      python/requirements/docker/*requirements.txt ./

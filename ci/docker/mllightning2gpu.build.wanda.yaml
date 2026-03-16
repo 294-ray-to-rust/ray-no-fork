@@ -23,5 +23,7 @@ build_args:
   - DOCKER_IMAGE_BASE_BUILD=cr.ray.io/rayproject/oss-ci-base_gpu-py3.10
   - RAYCI_IS_GPU_BUILD=true
   - RAYCI_LIGHTNING_2=true
+  - PIP_INDEX_URL
+  - PIP_TRUSTED_HOST
 tags:
   - cr.ray.io/rayproject/mllightning2gpubuild

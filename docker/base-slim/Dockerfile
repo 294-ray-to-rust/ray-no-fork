@@ -11,6 +11,9 @@ RUN if [ -n "$APT_PROXY" ]; then \
       echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
     fi
 
+ARG PIP_INDEX_URL=""
+ARG PIP_TRUSTED_HOST=""
+
 ARG PYTHON_VERSION="3.10"
 ARG PYTHON_DEPSET="python/deplocks/base_slim/ray_base_slim_py${PYTHON_VERSION}.lock"
 ARG CONSTRAINTS_FILE="python/requirements_compiled_py${PYTHON_VERSION}.txt"

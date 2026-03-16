@@ -140,10 +140,16 @@ else
 fi
 
 # Rewrite artifact paths in the generated pipeline if using a custom directory.
-# This updates Docker volume mounts and artifact_paths inside the YAML.
+# Docker volume mounts use the per-slot ARTIFACT_DIR so each slot writes to its
+# own directory.  artifact_paths globs must use a wildcard so Buildkite uploads
+# artifacts regardless of which slot runs the job (the bootstrap slot that ran
+# the sed is not necessarily the slot that runs the downstream job).
 if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
   echo "--- :pencil2: Rewriting artifact paths to $ARTIFACT_DIR"
-  sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" /tmp/artifacts/pipeline_flat.yaml
+  # 1. Rewrite Docker volume mounts (lines containing -v or --volume)
+  sed -i "/-v \|--volume/s|/tmp/artifacts|${ARTIFACT_DIR}|g" /tmp/artifacts/pipeline_flat.yaml
+  # 2. Rewrite artifact_paths to glob across all slots
+  sed -i "s|artifact_paths:\(.*\)/tmp/artifacts|artifact_paths:\1/scratch/artifacts/*|g" /tmp/artifacts/pipeline_flat.yaml
 fi
 
 echo "--- :buildkite: Uploading pipeline"

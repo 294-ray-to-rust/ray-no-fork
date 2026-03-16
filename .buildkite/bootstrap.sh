@@ -33,6 +33,12 @@ case "${BUILDKITE_BRANCH:-}" in
     ;;
 esac
 
+# Override ci_work_repo if RAYCI_CI_WORK_REPO is set (e.g., local registry)
+if [[ -n "${RAYCI_CI_WORK_REPO:-}" ]]; then
+  echo "Overriding ci_work_repo to: ${RAYCI_CI_WORK_REPO}"
+  sed -i "s|ci_work_repo:.*|ci_work_repo: \"${RAYCI_CI_WORK_REPO}\"|" .buildkite/fork-config.yaml
+fi
+
 rayci -output /tmp/artifacts/pipeline.yaml \
   -config .buildkite/fork-config.yaml \
   -buildkite-dir "$PIPELINE_DIR"

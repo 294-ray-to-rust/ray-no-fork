@@ -27,6 +27,12 @@ if [[ "${OSTYPE}" == linux* ]]; then
 
   docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
 
+  # Make any leftover artifacts from concurrent slots readable to prevent
+  # "permission denied" failures during artifact upload.
+  # Docker containers create files as root; the agent (non-root) needs read access.
+  docker run --rm -v /tmp/artifacts:/artifact-mount alpine:latest \
+    /bin/sh -c 'chmod -R a+rX /artifact-mount/' 2>/dev/null || true
+
   # Ensure Bazel repository cache directory structure exists on the host.
   # Containers mount /scratch/bazel-repo-cache:/bazel-repo-cache and Bazel's
   # --repository_cache=/bazel-repo-cache (from .bazelrc build:ci) expects the

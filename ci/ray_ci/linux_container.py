@@ -132,4 +132,7 @@ class LinuxContainer(Container):
         return extra_args
 
     def get_artifact_mount(self) -> Tuple[str, str]:
-        return ("/tmp/artifacts", "/artifact-mount")
+        return (
+            os.environ.get("RAYCI_ARTIFACT_DIR", "/tmp/artifacts"),
+            "/artifact-mount",
+        )

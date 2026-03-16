@@ -110,7 +110,7 @@ class LinuxContainer(Container):
     ) -> List[str]:
         extra_args = [
             "--add-host",
-            "rayci.localhost:host-gateway",
+            "rayrust:host-gateway",
         ]
         if self.tmp_filesystem:
             extra_args += [

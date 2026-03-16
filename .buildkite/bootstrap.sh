@@ -15,16 +15,19 @@ mkdir -p /tmp/artifacts
 
 echo "--- :gear: Generating pipeline"
 
-# Select pipeline directory based on branch type:
-# - Merge queue branches (gh-readonly-queue/*) and main get the full test suite
-# - All other branches (PRs, feature branches) get only forge + lint
-if [[ "${BUILDKITE_BRANCH:-}" == gh-readonly-queue/* ]] || [[ "${BUILDKITE_BRANCH:-}" == "main" ]]; then
-  PIPELINE_DIR=".buildkite/fork-pipeline/"
-else
-  PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
-fi
-echo "Branch: ${BUILDKITE_BRANCH:-unknown} -> Pipeline dir: $PIPELINE_DIR"
-echo "Pipeline mode: $(if [[ \"$PIPELINE_DIR\" == *fork-pipeline-pr* ]]; then echo 'PR (forge+lint only)'; else echo 'Full suite'; fi)"
+# Select pipeline directory based on branch type.
+# PRs get lightweight forge + lint only.
+# Merge queue and main get the full test suite.
+case "${BUILDKITE_BRANCH:-}" in
+  main|gh-readonly-queue/*)
+    PIPELINE_DIR=".buildkite/fork-pipeline/"
+    echo "Branch '${BUILDKITE_BRANCH}': using FULL pipeline"
+    ;;
+  *)
+    PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
+    echo "Branch '${BUILDKITE_BRANCH:-unknown}': using PR pipeline (forge + lint only)"
+    ;;
+esac
 
 rayci -output /tmp/artifacts/pipeline.yaml \
   -config .buildkite/fork-config.yaml \

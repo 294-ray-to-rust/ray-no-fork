@@ -61,7 +61,7 @@ docker_plugin:
   add-host:
     - "build-host:172.17.0.1"
   volumes:
-    - "${RAYCI_BAZEL_REPO_CACHE:-/scratch/bazel-repo-cache}:/bazel-repo-cache"
+    - "${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}:/bazel-repo-cache"
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

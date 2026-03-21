@@ -16,7 +16,7 @@ class BuilderContainer(LinuxContainer):
             f"manylinux-{architecture}",
             volumes=[
                 f"{os.environ.get('RAYCI_CHECKOUT_DIR')}:/rayci",
-                f"{os.environ.get('RAYCI_BAZEL_REPO_CACHE', '/scratch/bazel-repo-cache')}:/bazel-repo-cache",
+                f"{os.environ.get('RAYCI_BAZEL_REPO_CACHE', '/var/lib/cache/bazel-repo-cache')}:/bazel-repo-cache",
             ],
         )
         python_version_info = PYTHON_VERSIONS.get(python_version)

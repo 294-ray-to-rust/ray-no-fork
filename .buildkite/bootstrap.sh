@@ -146,9 +146,10 @@ if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
 fi
 
 # Rewrite bazel-repo-cache host paths if using a custom location.
-if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/scratch/bazel-repo-cache" ]]; then
+if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/var/lib/cache/bazel-repo-cache" ]]; then
   echo "--- :pencil2: Rewriting bazel-repo-cache paths to $RAYCI_BAZEL_REPO_CACHE"
   sed -i "s|/scratch/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" /tmp/artifacts/pipeline_flat.yaml
+  sed -i "s|/var/lib/cache/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" /tmp/artifacts/pipeline_flat.yaml
 fi
 
 echo "--- :buildkite: Uploading pipeline"

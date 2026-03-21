@@ -30,11 +30,11 @@ if [[ "${OSTYPE}" == linux* ]]; then
   docker run --rm -v "$ARTIFACT_DIR":/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
 
   # Ensure Bazel repository cache directory structure exists on the host.
-  # Containers mount /scratch/bazel-repo-cache:/bazel-repo-cache and Bazel's
+  # Containers mount /var/lib/cache/bazel-repo-cache:/bazel-repo-cache and Bazel's
   # --repository_cache=/bazel-repo-cache (from .bazelrc build:ci) expects the
   # content_addressable/sha256 subtree to be present.  Without this, Bazel
   # throws FileNotFoundException inside both build and test containers.
-  BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/scratch/bazel-repo-cache}"
+  BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   mkdir -p "$BAZEL_REPO_CACHE/content_addressable/sha256" 2>/dev/null || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then

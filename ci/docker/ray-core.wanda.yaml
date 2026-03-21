@@ -1,5 +1,5 @@
 name: "ray-core-py$PYTHON_VERSION$ARCH_SUFFIX"
-froms: ["rayrust.ej2.org:5010/dockerhub/rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"]
+froms: ["rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"]
 dockerfile: ci/docker/ray-core.Dockerfile
 srcs:
   - .bazelversion

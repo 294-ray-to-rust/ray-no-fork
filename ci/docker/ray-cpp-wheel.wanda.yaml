@@ -3,7 +3,7 @@
 # that works with any Python 3. PYTHON_VERSION is set at buildkite level.
 name: "ray-cpp-wheel$ARCH_SUFFIX"
 froms:
-  - "rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"
+  - "192.168.7.176:5010/dockerhub/rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"
   - "cr.ray.io/rayproject/ray-core-py$PYTHON_VERSION$ARCH_SUFFIX"       # C++ binaries (ray_pkg.zip)
   - "cr.ray.io/rayproject/ray-cpp-core$ARCH_SUFFIX"                     # C++ headers/libs (ray_cpp_pkg.zip)
   - "cr.ray.io/rayproject/ray-java-build$ARCH_SUFFIX"                   # Java JARs

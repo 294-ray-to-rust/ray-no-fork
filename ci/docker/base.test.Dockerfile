@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.3-labs
 
+# See forge.Dockerfile for why hostname here, IP in wanda froms.
 FROM rayrust.ej2.org:5010/dockerhub/library/ubuntu:focal
 
 ARG APT_PROXY=""

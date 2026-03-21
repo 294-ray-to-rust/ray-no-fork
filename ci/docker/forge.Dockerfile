@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1.3-labs
 
+# Pull from shared registry on rayrust via hostname. Docker build respects
+# insecure-registries so the hostname works here. Wanda froms use the LAN IP
+# instead because go-containerregistry only falls back to HTTP for IPs.
 FROM rayrust.ej2.org:5010/dockerhub/library/ubuntu:22.04
 
 # Ensure Bazel repo cache tree exists for --repository_cache=/bazel-repo-cache.

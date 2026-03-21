@@ -1,5 +1,5 @@
 name: ray-java-build$ARCH_SUFFIX
-froms: ["rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"]
+froms: ["192.168.7.176:5010/dockerhub/rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"]
 dockerfile: ci/docker/ray-java.Dockerfile
 srcs:
   - .bazelversion

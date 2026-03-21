@@ -1,6 +1,7 @@
 name: "forge"
+# LAN IP because go-containerregistry (used by wanda) needs bare IPs to fall back to HTTP.
 froms:
-  - ubuntu:22.04
+  - 192.168.7.176:5010/dockerhub/library/ubuntu:22.04
 build_args:
   - APT_PROXY
   - PIP_INDEX_URL

@@ -1,6 +1,6 @@
 name: "manylinux-$HOSTTYPE"
 froms:
-  - rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE
+  - 192.168.7.176:5010/dockerhub/rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE
 build_args:
   - BUILDKITE_BAZEL_CACHE_URL
   - MANYLINUX_VERSION

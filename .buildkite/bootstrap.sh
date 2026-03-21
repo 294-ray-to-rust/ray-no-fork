@@ -22,7 +22,7 @@ echo "--- :gear: Generating pipeline"
 # PRs get lightweight forge + lint only.
 # Merge queue and main get the full test suite.
 case "${BUILDKITE_BRANCH:-}" in
-  main|gh-readonly-queue/*)
+  main|gh-readonly-queue/*|get-the-build-working)
     PIPELINE_DIR=".buildkite/fork-pipeline/"
     echo "Branch '${BUILDKITE_BRANCH}': using FULL pipeline"
     ;;

@@ -5,7 +5,7 @@
 #
 # Container registry for Wanda-built CI images (required).
 # Wanda pushes/pulls images here during the build.
-ci_work_repo: "build-host:5010/ci"
+ci_work_repo: "172.17.0.1:5010/ci"
 
 # S3/GCS path for temp files shared across build steps (required).
 ci_temp: "/tmp/ci-temp/"
@@ -42,7 +42,7 @@ runner_queues:
 env:
   RAYCI_CHECKOUT_DIR: "set-by-pre-command-hook"
   RAYCI_GLOBAL_CONFIG: "ci/ray_ci/fork_config.yaml"
-  BUILDKITE_BAZEL_CACHE_URL: "http://build-host:9090"
+  BUILDKITE_BAZEL_CACHE_URL: "http://172.17.0.1:9090"
   RAYCI_STAGE: "premerge"
   RAYCI_DISABLE_TEST_DB: "1"
   GHCR_TOKEN: ""
@@ -59,7 +59,7 @@ hook_env_keys:
 docker_plugin:
   allow_mount_buildkite_agent: true
   add-host:
-    - "build-host:host-gateway"
+    - "build-host:172.17.0.1"
   volumes:
     - "${RAYCI_BAZEL_REPO_CACHE:-/scratch/bazel-repo-cache}:/bazel-repo-cache"
 

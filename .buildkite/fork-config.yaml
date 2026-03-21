@@ -5,7 +5,9 @@
 #
 # Container registry for Wanda-built CI images (required).
 # Wanda pushes/pulls images here during the build.
-ci_work_repo: "rayrust.ej2.org:5010/ci"
+# Use LAN IP because wanda (go-containerregistry) enforces HTTPS for hostnames.
+# IP addresses fall back to HTTP, which is what our insecure registry needs.
+ci_work_repo: "192.168.7.176:5010/ci"
 
 # S3/GCS path for temp files shared across build steps (required).
 ci_temp: "/tmp/ci-temp/"
@@ -61,7 +63,8 @@ docker_plugin:
   add-host:
     - "build-host:172.17.0.1"
   volumes:
-    - "${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}:/bazel-repo-cache"
+    # Literal path — shell variable syntax is not expanded by rayci/Docker plugin.
+    - "/var/lib/cache/bazel-repo-cache:/bazel-repo-cache"
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

@@ -36,6 +36,10 @@ if [[ "${OSTYPE}" == linux* ]]; then
   # throws FileNotFoundException inside both build and test containers.
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   mkdir -p "$BAZEL_REPO_CACHE/content_addressable/sha256" 2>/dev/null || true
+  # Make cache world-writable so all container users (forge=2000, root, etc.) can
+  # read and write. Without this, files cached by one UID cause Permission Denied
+  # for the next job running as a different UID.
+  chmod -R a+rwX "$BAZEL_REPO_CACHE" 2>/dev/null || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then
     rm -rf /c/tmp/artifacts/*

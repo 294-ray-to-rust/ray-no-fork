@@ -46,6 +46,10 @@ if [[ -z "${BUILDKITE_BAZEL_CACHE_URL:-}" ]]; then
 elif [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
   # Read-only mode: disable uploads only
   BAZEL_CACHE_ARGS="--remote_upload_local_results=false"
+else
+  # Override any remote_cache baked into the base image's ~/.bazelrc
+  # (upstream manylinux images have the S3 URL which we can't access).
+  BAZEL_CACHE_ARGS="--remote_cache=${BUILDKITE_BAZEL_CACHE_URL}"
 fi
 
 BAZEL_RESOURCE_FLAGS=""

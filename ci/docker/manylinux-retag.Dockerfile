@@ -9,7 +9,7 @@
 ARG MANYLINUX_VERSION
 ARG HOSTTYPE
 ARG BUILDKITE_BAZEL_CACHE_URL
-FROM rayproject/manylinux2014:${MANYLINUX_VERSION}-jdk-${HOSTTYPE}
+FROM rayrust.ej2.org:5010/dockerhub/rayproject/manylinux2014:${MANYLINUX_VERSION}-jdk-${HOSTTYPE}
 
 # Re-declare after FROM — Docker resets all ARGs at each build stage.
 ARG BUILDKITE_BAZEL_CACHE_URL

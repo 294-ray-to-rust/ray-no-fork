@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3-labs
 
-FROM ubuntu:focal
+FROM rayrust.ej2.org:5010/dockerhub/library/ubuntu:focal
 
 ARG APT_PROXY=""
 RUN if [ -n "$APT_PROXY" ]; then \

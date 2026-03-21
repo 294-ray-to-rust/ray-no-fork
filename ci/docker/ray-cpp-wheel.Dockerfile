@@ -20,7 +20,7 @@ FROM ${RAY_JAVA_IMAGE} AS ray-java
 FROM ${RAY_DASHBOARD_IMAGE} AS ray-dashboard
 
 # Main build stage - manylinux2014 provides GLIBC 2.17
-FROM rayproject/manylinux2014:${MANYLINUX_VERSION}-jdk-${HOSTTYPE} AS builder
+FROM rayrust.ej2.org:5010/dockerhub/rayproject/manylinux2014:${MANYLINUX_VERSION}-jdk-${HOSTTYPE} AS builder
 
 ARG BUILDKITE_COMMIT
 

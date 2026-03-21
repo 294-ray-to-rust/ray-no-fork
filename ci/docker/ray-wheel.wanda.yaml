@@ -1,7 +1,7 @@
 name: "ray-wheel-py$PYTHON_VERSION$ARCH_SUFFIX"
 disable_caching: true
 froms:
-  - "rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"
+  - "rayrust.ej2.org:5010/dockerhub/rayproject/manylinux2014:$MANYLINUX_VERSION-jdk-$HOSTTYPE"
   - "cr.ray.io/rayproject/ray-core-py$PYTHON_VERSION$ARCH_SUFFIX"     # C++ binaries (ray_pkg.zip)
   - "cr.ray.io/rayproject/ray-java-build$ARCH_SUFFIX"                 # Java JARs
   - "cr.ray.io/rayproject/ray-dashboard$ARCH_SUFFIX"                  # Dashboard

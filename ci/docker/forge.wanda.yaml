@@ -1,6 +1,6 @@
 name: "forge"
 froms:
-  - ubuntu:22.04
+  - rayrust.ej2.org:5010/dockerhub/library/ubuntu:22.04
 build_args:
   - APT_PROXY
   - PIP_INDEX_URL

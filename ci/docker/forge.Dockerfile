@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3-labs
 
-FROM ubuntu:22.04
+FROM rayrust.ej2.org:5010/dockerhub/library/ubuntu:22.04
 
 # Ensure Bazel repo cache tree exists for --repository_cache=/bazel-repo-cache.
 # When a host volume is mounted over this path (builder/tester containers), it provides

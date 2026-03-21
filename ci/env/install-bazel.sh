@@ -115,6 +115,7 @@ if [[ "${CI-}" == "true" && "${BUILDKITE-}" != "" ]]; then
     echo "build --disk_cache=/tmp/bazel-cache" >> ~/.bazelrc
     echo "build --repository_cache=/tmp/bazel-repo-cache" >> ~/.bazelrc
   elif [[ "${platform}" == linux ]]; then
+    mkdir -p /bazel-repo-cache/content_addressable/sha256 || true
     echo "build --repository_cache=/bazel-repo-cache" >> ~/.bazelrc
     if [[ "${BUILDKITE_BAZEL_CACHE_URL:-}" != "" ]]; then
       if [[ "${BUILDKITE_BAZEL_CACHE_URL}" == http://* ]] || [[ "${BUILDKITE_BAZEL_CACHE_URL}" == https://* ]]; then

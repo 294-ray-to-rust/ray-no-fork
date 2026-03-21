@@ -36,6 +36,10 @@ COPY ci/build/build-manylinux-forge.sh /tmp/build-manylinux-forge.sh
 
 RUN ./tmp/build-manylinux-forge.sh
 
+# Ensure Bazel repo cache tree exists for --repository_cache=/bazel-repo-cache in CI
+# job-env containers that do not bind-mount the host cache path.
+RUN mkdir -p /bazel-repo-cache/content_addressable/sha256 && chmod -R 777 /bazel-repo-cache
+
 USER forge
 ENV HOME=/home/forge
 

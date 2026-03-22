@@ -357,49 +357,57 @@ steps:
       - corebuild-multipy
       - forge
 
-  - label: ":ray: core: cpp asan tests"
-    tags: core_cpp
-    instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
-        --build-type asan-clang --cache-test-results --parallelism-per-worker 2
-        --python-version 3.10 --build-name corebuild-py3.10
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # ---------------------------------------------------------------
+  # C++ sanitizer tests: DISABLED on the fork.
+  #
+  # ASan (memory errors), TSan (data races), and UBSan (undefined
+  # behavior) recompile Ray's C++ with instrumentation and run the
+  # full test suite — each taking 1-2+ hours.
+  #
+  # These are critical for projects that modify C++ code, but this
+  # fork (294-ray-to-rust) is porting Ray to Rust, not changing the
+  # C++ implementation. Memory safety and thread safety are enforced
+  # by Rust's type system at compile time, so the C++ sanitizers
+  # provide no value for our work while consuming the majority of
+  # build time (~3-4 hours combined).
+  #
+  # Re-enable these if C++ code is ever modified directly.
+  # ---------------------------------------------------------------
 
-  - label: ":ray: core: cpp ubsan tests"
-    tags: core_cpp
-    instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
-        --python-version 3.10 --build-name corebuild-py3.10
-        --build-type ubsan --except-tags no_ubsan,cgroup
-        --cache-test-results --parallelism-per-worker 2
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # - label: ":ray: core: cpp asan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
+  #       --build-type asan-clang --cache-test-results --parallelism-per-worker 2
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
 
-  - label: ":ray: core: cpp tsan tests"
-    tags: core_cpp
-    instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
-        --python-version 3.10 --build-name corebuild-py3.10
-        --build-type tsan-clang --except-tags no_tsan,cgroup
-        --cache-test-results --parallelism-per-worker 2
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # - label: ":ray: core: cpp ubsan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type ubsan --except-tags no_ubsan,cgroup
+  #       --cache-test-results --parallelism-per-worker 2
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # - label: ":ray: core: cpp tsan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type tsan-clang --except-tags no_tsan,cgroup
+  #       --cache-test-results --parallelism-per-worker 2
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
 
   - label: ":ray: core: flaky tests"
     key: core_flaky_tests

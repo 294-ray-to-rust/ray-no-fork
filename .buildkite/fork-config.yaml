@@ -27,13 +27,14 @@ builder_queues:
   builder-windows: "ethan-home"
 
 # Buildkite agent queues for test/runner steps.
-# Map rayci instance types to queue names. All steps target the
-# "ethan-home" self-hosted agent queue (see #129).
+# Map rayci instance types to queue names. Most steps target the
+# "ethan-home" light queue; large (CPU-heavy) steps target "heavy"
+# so they spread evenly across builders (1 heavy slot per host).
 runner_queues:
   default: "ethan-home"
   small: "ethan-home"
   medium: "ethan-home"
-  large: "ethan-home"
+  large: "heavy"
   gpu: "ethan-home"
   gpu-large: "ethan-home"
   g6-large: "ethan-home"

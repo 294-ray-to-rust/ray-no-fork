@@ -48,11 +48,29 @@ elif [[ "${OSTYPE}" == msys ]]; then
 fi
 
 
-# Make checkout writable by Docker container users (UID mismatch: host=993, forge=2000).
-# The post-command hook restores ownership via chown after each step.
+# REMOVABLE: With the Buildkite agent UID set to 2000 (matching forge), this
+# chmod should no longer be needed. Remove after deploying the NixOS UID change
+# (builder.nix users.users.buildkite-agent-default.uid = 2000) and verifying
+# a few builds pass without permission errors.
+#
+# Original: Make checkout writable by Docker container users (UID mismatch: host=989, forge=2000).
 if [[ "${OSTYPE}" == linux* ]] && [[ -n "${BUILDKITE_BUILD_CHECKOUT_PATH:-}" ]]; then
   docker run --rm -v "${BUILDKITE_BUILD_CHECKOUT_PATH}:/work" alpine:latest \
     chmod -R a+rwX /work 2>/dev/null || true
+fi
+
+# Inject extra Docker plugin volumes and options that rayci doesn't support.
+# rayci hardcodes volumes at indices 0 (docker.sock) and 1 (artifact-mount).
+# The Docker buildkite plugin reads BUILDKITE_PLUGIN_DOCKER_VOLUMES_N from the
+# environment, so we can append additional mounts here before the plugin's
+# command hook runs.
+if [[ "${OSTYPE}" == linux* ]]; then
+  BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
+  export BUILDKITE_PLUGIN_DOCKER_VOLUMES_2="${BAZEL_REPO_CACHE}:/bazel-repo-cache"
+  export BUILDKITE_PLUGIN_DOCKER_VOLUMES_3="/var/lib/cache/bazel-bin:/opt/bazel:ro"
+  export BUILDKITE_PLUGIN_DOCKER_ADD_HOST_0="build-host:172.17.0.1"
+  # Tell bazelisk to use the pre-cached Bazel binary instead of downloading.
+  export BUILDKITE_PLUGIN_DOCKER_ENVIRONMENT_0="USE_BAZEL_VERSION=/opt/bazel/bazel"
 fi
 
 RAYCI_CHECKOUT_DIR="$(pwd)"

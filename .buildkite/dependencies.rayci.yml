@@ -26,10 +26,7 @@ steps:
     tags: always
     instance_type: small
     commands:
-      # rayci doesn't merge fork-config docker_plugin.volumes into the
-      # generated pipeline, so /bazel-repo-cache isn't mounted. Override
-      # to a writable container-local path instead of fighting the mount.
-      - bazel run --repository_cache=/tmp/bazel-repo-cache //ci/raydepsets:raydepsets -- build --all-configs --check
+      - bazel run //ci/raydepsets:raydepsets -- build --all-configs --check
     job_env: manylinux-x86_64
     depends_on:
       - manylinux-x86_64

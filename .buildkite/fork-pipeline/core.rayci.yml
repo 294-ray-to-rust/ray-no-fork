@@ -403,6 +403,12 @@ steps:
       - corebuild-multipy
       - forge
 
+  # Fork: switched from system toolchain (clang-12 + libstdc++) to
+  # --build-type clang (LLVM + libc++) so Bazel can reuse cached actions
+  # from the other cpp test jobs. The original used oss-ci-base with a full
+  # ci/ci.sh build (~9500 uncached actions, ~20+ min). Now uses corebuild
+  # + test_in_docker like the other cpp tests. Tests //cpp:all (user-facing
+  # C++ API) rather than //src/... (internals).
   - label: ":ray: core: cpp worker tests"
     tags:
       - core_cpp
@@ -412,14 +418,13 @@ steps:
     concurrency: 4
     concurrency_group: "test-in-docker"
     commands:
-      - if [[ "$${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
-          echo "build --remote_upload_local_results=false" >> ~/.bazelrc;
-        fi
-      # cpp worker tests has one that tests cross-language with Java.
-      - RAY_INSTALL_JAVA=1 ci/ci.sh build
-      - ci/ci.sh test_cpp
-    depends_on: oss-ci-base_build-multipy
-    job_env: oss-ci-base_build-py3.10
+      - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
+        //cpp:all core --build-type clang
+        --python-version 3.10 --build-name corebuild-py3.10
+        --cache-test-results --parallelism-per-worker 2
+    depends_on:
+      - corebuild-multipy
+      - forge
 
   - label: ":ray: core: java worker tests"
     tags:

@@ -262,7 +262,7 @@ steps:
       - dashboard
       - oss
       - min_build
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -344,7 +344,7 @@ steps:
   - label: ":ray: core: cpp tests"
     tags: core_cpp
 
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -359,7 +359,7 @@ steps:
 
   - label: ":ray: core: cpp asan tests"
     tags: core_cpp
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -388,7 +388,7 @@ steps:
 
   - label: ":ray: core: cpp tsan tests"
     tags: core_cpp
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -433,7 +433,7 @@ steps:
       - core_cpp
       - cpp
       - oss
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -468,7 +468,7 @@ steps:
     # avoid running them for every C++ code change.
     tags:
       - spark_on_ray
-    instance_type: medium
+    instance_type: large
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.

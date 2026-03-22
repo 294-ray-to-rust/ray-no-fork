@@ -65,6 +65,13 @@ docker_plugin:
   volumes:
     # Literal path — shell variable syntax is not expanded by rayci/Docker plugin.
     - "/var/lib/cache/bazel-repo-cache:/bazel-repo-cache"
+  environment:
+    # Pass cache-related env vars from the Buildkite agent into Docker
+    # containers so that pip install, bazel, etc. use local caches
+    # instead of hitting the internet directly.
+    - "PIP_INDEX_URL"
+    - "PIP_TRUSTED_HOST"
+    - "BUILDKITE_BAZEL_CACHE_URL"
 
 # Tags that cause steps to be unconditionally skipped.
 skip_tags:

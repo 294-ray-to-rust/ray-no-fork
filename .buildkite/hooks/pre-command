@@ -27,6 +27,16 @@ if [[ "${OSTYPE}" == linux* ]]; then
 
   mkdir -p "$ARTIFACT_DIR"
 
+  # Ensure /tmp/artifacts is writable.  rayci bakes this path into the
+  # pipeline YAML docker volumes (/tmp/artifacts:/artifact-mount).
+  # With PrivateTmp, each agent has its own /tmp (no cross-slot conflict),
+  # but it's owned by root.  Containers running as forge (UID 2000) need
+  # write access.
+  if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
+    mkdir -p /tmp/artifacts
+    chmod 1777 /tmp/artifacts
+  fi
+
   # Ensure Bazel repository cache directory structure exists on the host.
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   mkdir -p "$BAZEL_REPO_CACHE/content_addressable/sha256" 2>/dev/null || true

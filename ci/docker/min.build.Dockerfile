@@ -12,24 +12,34 @@ ARG EXTRA_DEPENDENCY
 
 SHELL ["/bin/bash", "-ice"]
 
-# Copy dependency-defining files first — setup.py and requirements rarely
-# change, so pip-compile + pip install cache across commits.
-COPY python/setup.py python/setup.py
-COPY python/requirements.txt python/requirements.txt
-COPY python/requirements_compiled.txt python/requirements_compiled.txt
-COPY python/LICENSE.txt python/LICENSE.txt
-COPY python/ray/_version.py python/ray/_version.py
-COPY README.rst README.rst
+COPY . .
 
 RUN <<EOF
 #!/bin/bash
 
 set -euo pipefail
 
+# minimal dependencies
+BUILD=1 MINIMAL_INSTALL=1 PYTHON=${PYTHON_VERSION} ./ci/ci.sh init
+rm -rf python/ray/thirdparty_files
+
+# Re-activate conda environment (ci.sh runs in a subprocess so PATH changes are lost)
+# For Python 3.14+, a separate conda env is created and symlinked to /opt/miniforge/bin
+# We can't use `conda activate` because the conda command itself breaks after symlinking
+# (it tries to use the new Python which doesn't have conda installed)
+if [[ -d /opt/miniforge/envs/py${PYTHON_VERSION} ]]; then
+  export PATH="/opt/miniforge/envs/py${PYTHON_VERSION}/bin:/opt/miniforge/bin:$PATH"
+else
+  export PATH="/opt/miniforge/bin:$PATH"
+fi
+
 # install test requirements
 python -m pip install -U pytest==8.3.3 pip-tools==7.4.1
 
-# install extra dependencies via pip-compile + pip install
+# Verify pytest was installed and is accessible
+python -m pytest --version || echo "WARNING: pytest not found in PATH"
+
+# install extra dependencies
 if [[ "${EXTRA_DEPENDENCY}" == "core" ]]; then
   pip-compile -o min_requirements.txt python/setup.py
 elif [[ "${EXTRA_DEPENDENCY}" == "ml" ]]; then
@@ -44,28 +54,6 @@ elif [[ "${EXTRA_DEPENDENCY}" == "serve" ]]; then
 fi
 
 pip install -r min_requirements.txt
-
-EOF
-
-# Now copy everything else (scripts, etc.)
-COPY . .
-
-RUN <<EOF
-#!/bin/bash
-
-set -euo pipefail
-
-# minimal dependencies — ci.sh init handles non-pip setup (miniforge, bazel, etc.).
-# pip packages are already installed from the cached layer above.
-BUILD=1 MINIMAL_INSTALL=1 PYTHON=${PYTHON_VERSION} ./ci/ci.sh init
-rm -rf python/ray/thirdparty_files
-
-# Re-activate conda environment (ci.sh runs in a subprocess so PATH changes are lost)
-if [[ -d /opt/miniforge/envs/py${PYTHON_VERSION} ]]; then
-  export PATH="/opt/miniforge/envs/py${PYTHON_VERSION}/bin:/opt/miniforge/bin:$PATH"
-else
-  export PATH="/opt/miniforge/bin:$PATH"
-fi
 
 # Core wants to eagerly be tested with some of its prerelease dependencies.
 if [[ "${EXTRA_DEPENDENCY}" == "core" ]]; then

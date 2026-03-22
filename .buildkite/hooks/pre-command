@@ -27,15 +27,13 @@ if [[ "${OSTYPE}" == linux* ]]; then
 
   mkdir -p "$ARTIFACT_DIR"
 
-  # Ensure /tmp/artifacts is writable.  rayci bakes this path into the
-  # pipeline YAML docker volumes (/tmp/artifacts:/artifact-mount).
-  # With PrivateTmp, each agent has its own /tmp (no cross-slot conflict),
-  # but it's owned by root.  Containers running as forge (UID 2000) need
-  # write access.
-  if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
-    mkdir -p /tmp/artifacts
-    chmod 1777 /tmp/artifacts
-  fi
+  # NOTE: rayci hardcodes /tmp/artifacts:/artifact-mount in Docker plugin
+  # volumes.  The VOLUMES_1 env override below does NOT work for YAML-defined
+  # volume indices — the Docker plugin uses the YAML value for index 1.
+  # With PrivateTmp, mkdir/chmod here only affect the agent's private /tmp,
+  # invisible to Docker (which mounts from the real host /tmp).
+  # The fix is a NixOS tmpfiles.d rule that creates /tmp/artifacts with
+  # mode 1777 on the host at boot.  See builder.nix.
 
   # Ensure Bazel repository cache directory structure exists on the host.
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"

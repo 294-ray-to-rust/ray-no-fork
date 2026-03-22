@@ -16,7 +16,7 @@ steps:
     commands:
       - . .buildkite/bootstrap.sh
     artifact_paths:
-      - /tmp/artifacts/pipeline.yaml
-      - /tmp/artifacts/pipeline_flat.yaml
-      - /tmp/artifacts/upload_stderr.txt
-      - /tmp/artifacts/flatten_diff.txt
+      - "${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}/pipeline.yaml"
+      - "${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}/pipeline_flat.yaml"
+      - "${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}/upload_stderr.txt"
+      - "${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}/flatten_diff.txt"

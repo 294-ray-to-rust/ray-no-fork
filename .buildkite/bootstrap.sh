@@ -32,12 +32,12 @@ case "${BUILDKITE_BRANCH:-}" in
     ;;
 esac
 
-rayci -output /tmp/artifacts/pipeline.yaml \
+rayci -output "$ARTIFACT_DIR/pipeline.yaml" \
   -config .buildkite/fork-config.yaml \
   -buildkite-dir "$PIPELINE_DIR"
 
-STEP_COUNT=$(grep -c "key:" /tmp/artifacts/pipeline.yaml || echo 0)
-GROUP_COUNT=$(grep -c "group:" /tmp/artifacts/pipeline.yaml || echo 0)
+STEP_COUNT=$(grep -c "key:" "$ARTIFACT_DIR/pipeline.yaml" || echo 0)
+GROUP_COUNT=$(grep -c "group:" "$ARTIFACT_DIR/pipeline.yaml" || echo 0)
 echo "Generated pipeline: $STEP_COUNT steps across $GROUP_COUNT groups"
 
 if [ "$STEP_COUNT" -eq 0 ]; then
@@ -46,13 +46,13 @@ if [ "$STEP_COUNT" -eq 0 ]; then
 fi
 
 echo "--- :page_facing_up: Pipeline YAML preview (first 20 lines)"
-head -20 /tmp/artifacts/pipeline.yaml
+head -20 "$ARTIFACT_DIR/pipeline.yaml"
 echo "--- :page_facing_up: Pipeline YAML preview (last 20 lines)"
-tail -20 /tmp/artifacts/pipeline.yaml
+tail -20 "$ARTIFACT_DIR/pipeline.yaml"
 
 if [ "${RAYCI_SKIP_FLATTEN:-0}" = "1" ]; then
   echo "RAYCI_SKIP_FLATTEN=1: Skipping group flattening, uploading original grouped YAML"
-  cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+  cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
   FLAT_STEP_COUNT=$STEP_COUNT
 else
   echo "--- :wrench: Installing yq"
@@ -80,7 +80,7 @@ else
       export PATH="/tmp:$PATH"
     else
       echo "Falling back to uploading original grouped YAML (no flattening)."
-      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
       FLAT_STEP_COUNT=$STEP_COUNT
     fi
   fi
@@ -99,41 +99,41 @@ else
         .steps[] |
         select(has("group")) .steps[] // select(has("group") | not)
       ]
-    ' /tmp/artifacts/pipeline.yaml > /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/yq_stderr.txt; then
+    ' "$ARTIFACT_DIR/pipeline.yaml" > "$ARTIFACT_DIR/pipeline_flat.yaml" 2>"$ARTIFACT_DIR/yq_stderr.txt"; then
       echo "yq flattening succeeded"
     else
       echo "WARNING: yq flattening failed, falling back to original pipeline."
-      if [ -s /tmp/artifacts/yq_stderr.txt ]; then
-        cat /tmp/artifacts/yq_stderr.txt
+      if [ -s "$ARTIFACT_DIR/yq_stderr.txt" ]; then
+        cat "$ARTIFACT_DIR/yq_stderr.txt"
       fi
-      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
     fi
 
     echo "--- :mag: Validating flattened pipeline"
-    yq eval '.' /tmp/artifacts/pipeline_flat.yaml > /dev/null 2>&1 || {
+    yq eval '.' "$ARTIFACT_DIR/pipeline_flat.yaml" > /dev/null 2>&1 || {
       echo "ERROR: Flattened YAML is not valid! Falling back to original."
-      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
     }
 
-    ORIG_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline.yaml)
-    FLAT_STEP_COUNT=$(yq '.steps | length' /tmp/artifacts/pipeline_flat.yaml)
+    ORIG_STEP_COUNT=$(yq '.steps | length' "$ARTIFACT_DIR/pipeline.yaml")
+    FLAT_STEP_COUNT=$(yq '.steps | length' "$ARTIFACT_DIR/pipeline_flat.yaml")
     echo "Step counts: original=$ORIG_STEP_COUNT, flattened=$FLAT_STEP_COUNT"
 
     if [ "$FLAT_STEP_COUNT" -eq 0 ]; then
       echo "ERROR: Flattened pipeline has 0 steps! Falling back to original."
-      cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+      cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
       FLAT_STEP_COUNT=$ORIG_STEP_COUNT
     fi
 
     DID_FLATTEN=1
 
     echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"
-    diff <(yq '.steps[0]' /tmp/artifacts/pipeline.yaml) \
-         <(yq '.steps[0]' /tmp/artifacts/pipeline_flat.yaml) \
-         > /tmp/artifacts/flatten_diff.txt 2>&1 || true
+    diff <(yq '.steps[0]' "$ARTIFACT_DIR/pipeline.yaml") \
+         <(yq '.steps[0]' "$ARTIFACT_DIR/pipeline_flat.yaml") \
+         > "$ARTIFACT_DIR/flatten_diff.txt" 2>&1 || true
   else
     echo "yq not available, skipping flattening."
-    cp /tmp/artifacts/pipeline.yaml /tmp/artifacts/pipeline_flat.yaml
+    cp "$ARTIFACT_DIR/pipeline.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
     FLAT_STEP_COUNT=$STEP_COUNT
   fi
 fi
@@ -142,14 +142,14 @@ fi
 # This updates Docker volume mounts and artifact_paths inside the YAML.
 if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
   echo "--- :pencil2: Rewriting artifact paths to $ARTIFACT_DIR"
-  sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" /tmp/artifacts/pipeline_flat.yaml
+  sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
 fi
 
 # Rewrite bazel-repo-cache host paths if using a custom location.
 if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/var/lib/cache/bazel-repo-cache" ]]; then
   echo "--- :pencil2: Rewriting bazel-repo-cache paths to $RAYCI_BAZEL_REPO_CACHE"
-  sed -i "s|/scratch/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" /tmp/artifacts/pipeline_flat.yaml
-  sed -i "s|/var/lib/cache/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" /tmp/artifacts/pipeline_flat.yaml
+  sed -i "s|/scratch/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
+  sed -i "s|/var/lib/cache/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
 fi
 
 echo "--- :buildkite: Uploading pipeline"
@@ -160,19 +160,19 @@ echo "--- :buildkite: Uploading pipeline"
 # interpolation converts ${ } at upload time so the shell can
 # evaluate them when the step runs.
 # See: https://github.com/294-ray-to-rust/ray-no-fork/issues/149
-buildkite-agent pipeline upload /tmp/artifacts/pipeline_flat.yaml 2>/tmp/artifacts/upload_stderr.txt
-if [ -s /tmp/artifacts/upload_stderr.txt ]; then
+buildkite-agent pipeline upload "$ARTIFACT_DIR/pipeline_flat.yaml" 2>"$ARTIFACT_DIR/upload_stderr.txt"
+if [ -s "$ARTIFACT_DIR/upload_stderr.txt" ]; then
   echo "--- :warning: pipeline upload stderr"
-  cat /tmp/artifacts/upload_stderr.txt
+  cat "$ARTIFACT_DIR/upload_stderr.txt"
 fi
 
 if [ "${DID_FLATTEN:-0}" = "1" ]; then
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps flattened from $GROUP_COUNT groups ($(wc -l < "$ARTIFACT_DIR/pipeline_flat.yaml") lines of YAML)." \
     --style success --context pipeline-info
 else
   buildkite-agent annotate \
-    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps (no flattening, $(wc -l < /tmp/artifacts/pipeline_flat.yaml) lines of YAML)." \
+    "Pipeline bootstrap: uploaded $FLAT_STEP_COUNT steps (no flattening, $(wc -l < "$ARTIFACT_DIR/pipeline_flat.yaml") lines of YAML)." \
     --style success --context pipeline-info
 fi
 

@@ -65,6 +65,11 @@ fi
 # environment, so we can append additional mounts here before the plugin's
 # command hook runs.
 if [[ "${OSTYPE}" == linux* ]]; then
+  # Override artifact-mount (index 1) to use per-slot directory.
+  # rayci bakes /tmp/artifacts into the pipeline YAML at generation time, but
+  # each agent slot needs its own artifact dir to avoid cross-slot contamination.
+  export BUILDKITE_PLUGIN_DOCKER_VOLUMES_1="${ARTIFACT_DIR}:/artifact-mount"
+
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_2="${BAZEL_REPO_CACHE}:/bazel-repo-cache"
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_3="/var/lib/cache/bazel-bin:/opt/bazel:ro"

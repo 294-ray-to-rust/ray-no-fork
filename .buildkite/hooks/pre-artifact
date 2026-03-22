@@ -1,0 +1,14 @@
+#!/bin/bash
+# Override artifact upload paths to use per-slot directory.
+# The pipeline YAML has artifact_paths: "/tmp/artifacts/**/*" baked at
+# generation time by the bootstrap agent.  Each executing agent needs to
+# upload from its own slot directory instead.
+#
+# From Buildkite docs: "A pre-artifact hook runs just before artifacts
+# are uploaded [...] It can modify the value of BUILDKITE_ARTIFACT_PATHS
+# to change the paths that are uploaded as artifacts."
+set -e
+
+ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
+export BUILDKITE_ARTIFACT_PATHS="${ARTIFACT_DIR}/**/*"
+echo "Artifact upload path set to: ${BUILDKITE_ARTIFACT_PATHS}"

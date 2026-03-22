@@ -138,12 +138,13 @@ else
   fi
 fi
 
-# Rewrite artifact paths in the generated pipeline if using a custom directory.
-# This updates Docker volume mounts and artifact_paths inside the YAML.
-if [[ "$ARTIFACT_DIR" != "/tmp/artifacts" ]]; then
-  echo "--- :pencil2: Rewriting artifact paths to $ARTIFACT_DIR"
-  sed -i "s|/tmp/artifacts|${ARTIFACT_DIR}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
-fi
+# Rewrite wanda bootstrap script path to per-agent to avoid race condition.
+# Multiple agent slots share /tmp on the host; concurrent wanda jobs all write
+# to /tmp/run_wanda.sh causing Permission Denied.  $$BUILDKITE_AGENT_NAME is
+# escaped for Buildkite upload interpolation: $$ → $ at upload time, then
+# $BUILDKITE_AGENT_NAME expands at step execution time via the shell.
+echo "--- :pencil2: Rewriting wanda script paths to per-agent"
+sed -i "s|/tmp/run_wanda\.sh|/tmp/run_wanda_\$\$BUILDKITE_AGENT_NAME.sh|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
 
 # Rewrite bazel-repo-cache host paths if using a custom location.
 if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/var/lib/cache/bazel-repo-cache" ]]; then

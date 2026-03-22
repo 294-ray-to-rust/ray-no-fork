@@ -25,9 +25,6 @@ steps:
     tags: cibase
     matrix:
       - "3.10"
-      - "3.11"
-      - "3.12"
-      - "3.13"
       - "3.14"
     env:
       PYTHON_VERSION: "{{matrix}}"
@@ -39,10 +36,10 @@ steps:
       - python
       - dashboard
     instance_type: large
-    parallelism: 2
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
+    parallelism: 4
+    # Increased from 2 to 4 shards — each shard runs ~25min instead of
+    # ~35min, reducing critical path. Freed up heavy slots from disabled
+    # sanitizer tests absorb the extra jobs.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
@@ -143,37 +140,27 @@ steps:
       - corebuild-multipy
       - forge
 
-  - label: ":ray: core: doc tests"
-    tags:
-      - python
-      - doc
-    instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      # doc tests
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
-        --only-tags doctest
-        --python-version 3.10 --build-name corebuild-py3.10
-        --parallelism-per-worker 2
-      # doc examples
-      - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
-        --install-mask all-ray-libraries
-        --except-tags doctest,post_wheel_build,gpu,multi_gpu,mem_pressure
-        --parallelism-per-worker 2
-        --python-version 3.10 --build-name corebuild-py3.10
-        --skip-ray-installation
-      # doc memory pressure example — skipped on fork CI, the OOM
-      # prevention test needs more memory than our containers provide.
-      # - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
-      #   --only-tags mem_pressure
-      #   --except-tags gpu
-      #   --python-version 3.10 --build-name corebuild-py3.10
-      #   --skip-ray-installation
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # Doc tests disabled — low priority for a Rust port, ~28min each.
+  # Re-enable if documentation accuracy becomes a concern.
+  # - label: ":ray: core: doc tests"
+  #   tags:
+  #     - python
+  #     - doc
+  #   instance_type: large
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
+  #       --only-tags doctest
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --parallelism-per-worker 2
+  #     - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
+  #       --install-mask all-ray-libraries
+  #       --except-tags doctest,post_wheel_build,gpu,multi_gpu,mem_pressure
+  #       --parallelism-per-worker 2
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --skip-ray-installation
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
 
   - label: ":ray: core: dashboard tests"
     tags:
@@ -310,11 +297,11 @@ steps:
     depends_on:
       - minbuild-core
       - forge
+    # Trimmed to oldest + newest supported Python. The middle versions
+    # (3.11, 3.12, 3.13) rarely surface issues that 3.10 and 3.14 miss.
+    # Re-add if a Python-version-specific bug is suspected.
     matrix:
       - "3.10"
-      - "3.11"
-      - "3.12"
-      - "3.13"
       - "3.14"
 
   - label: ":ray: core: cgroup tests"

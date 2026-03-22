@@ -25,7 +25,6 @@ steps:
     tags: cibase
     matrix:
       - "3.10"
-      - "3.14"
     env:
       PYTHON_VERSION: "{{matrix}}"
       EXTRA_DEPENDENCY: core
@@ -297,12 +296,10 @@ steps:
     depends_on:
       - minbuild-core
       - forge
-    # Trimmed to oldest + newest supported Python. The middle versions
-    # (3.11, 3.12, 3.13) rarely surface issues that 3.10 and 3.14 miss.
-    # Re-add if a Python-version-specific bug is suspected.
+    # Trimmed to 3.10 only. The Rust port targets one Python version;
+    # add others back if a version-specific bug is suspected.
     matrix:
       - "3.10"
-      - "3.14"
 
   - label: ":ray: core: cgroup tests"
     tags:

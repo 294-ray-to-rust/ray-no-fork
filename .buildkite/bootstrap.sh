@@ -138,21 +138,6 @@ else
   fi
 fi
 
-# Rewrite wanda bootstrap script path to per-agent to avoid race condition.
-# Multiple agent slots share /tmp on the host; concurrent wanda jobs all write
-# to /tmp/run_wanda.sh causing Permission Denied.  $$BUILDKITE_AGENT_NAME is
-# escaped for Buildkite upload interpolation: $$ → $ at upload time, then
-# $BUILDKITE_AGENT_NAME expands at step execution time via the shell.
-echo "--- :pencil2: Rewriting wanda script paths to per-agent"
-sed -i "s|/tmp/run_wanda\.sh|/tmp/run_wanda_\$\$BUILDKITE_AGENT_NAME.sh|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
-
-# Rewrite bazel-repo-cache host paths if using a custom location.
-if [[ "${RAYCI_BAZEL_REPO_CACHE:-}" != "" && "$RAYCI_BAZEL_REPO_CACHE" != "/var/lib/cache/bazel-repo-cache" ]]; then
-  echo "--- :pencil2: Rewriting bazel-repo-cache paths to $RAYCI_BAZEL_REPO_CACHE"
-  sed -i "s|/scratch/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
-  sed -i "s|/var/lib/cache/bazel-repo-cache|${RAYCI_BAZEL_REPO_CACHE}|g" "$ARTIFACT_DIR/pipeline_flat.yaml"
-fi
-
 echo "--- :buildkite: Uploading pipeline"
 # Do NOT use --no-interpolation here. The rayci-generated YAML (from
 # fork-pipeline/*.rayci.yml) uses Buildkite's ${ } escape syntax for

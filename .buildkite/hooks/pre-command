@@ -1,12 +1,10 @@
 #!/bin/bash
-# This script is executed by Buildkite on the host machine.
-# In contrast, our build jobs are run in Docker containers.
-# This means that even though our build jobs write to
-# `/artifact-mount`, the directory on the host machine is
-# actually `/tmp/artifacts`.
-# We clean up the artifacts directory before any command and
-# after uploading artifacts to make sure no stale artifacts
-# remain on the node when a Buildkite runner is re-used.
+# Pre-command hook — runs on the HOST before each Buildkite step.
+#
+# Responsibilities:
+# 1. Clean and prepare the per-slot artifact directory
+# 2. Ensure Bazel repo cache is writable
+# 3. Inject Docker plugin volumes/options that rayci doesn't support
 set -ex
 
 ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
@@ -27,18 +25,11 @@ if [[ "${OSTYPE}" == linux* ]]; then
       fi
   fi
 
-  docker run --rm -v "$ARTIFACT_DIR":/artifact-mount alpine:latest /bin/sh -c "chown $(id -u) /artifact-mount/ && chmod 1777 /artifact-mount/" || true
+  mkdir -p "$ARTIFACT_DIR"
 
   # Ensure Bazel repository cache directory structure exists on the host.
-  # Containers mount /var/lib/cache/bazel-repo-cache:/bazel-repo-cache and Bazel's
-  # --repository_cache=/bazel-repo-cache (from .bazelrc build:ci) expects the
-  # content_addressable/sha256 subtree to be present.  Without this, Bazel
-  # throws FileNotFoundException inside both build and test containers.
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   mkdir -p "$BAZEL_REPO_CACHE/content_addressable/sha256" 2>/dev/null || true
-  # Make cache world-writable so all container users (forge=2000, root, etc.) can
-  # read and write. Without this, files cached by one UID cause Permission Denied
-  # for the next job running as a different UID.
   chmod -R a+rwX "$BAZEL_REPO_CACHE" 2>/dev/null || true
 elif [[ "${OSTYPE}" == msys ]]; then
   if [[ -d "/c/tmp/artifacts" ]]; then
@@ -47,34 +38,21 @@ elif [[ "${OSTYPE}" == msys ]]; then
   mkdir -p /c/tmp/artifacts
 fi
 
-
-# REMOVABLE: With the Buildkite agent UID set to 2000 (matching forge), this
-# chmod should no longer be needed. Remove after deploying the NixOS UID change
-# (builder.nix users.users.buildkite-agent-default.uid = 2000) and verifying
-# a few builds pass without permission errors.
-#
-# Original: Make checkout writable by Docker container users (UID mismatch: host=989, forge=2000).
-if [[ "${OSTYPE}" == linux* ]] && [[ -n "${BUILDKITE_BUILD_CHECKOUT_PATH:-}" ]]; then
-  docker run --rm -v "${BUILDKITE_BUILD_CHECKOUT_PATH}:/work" alpine:latest \
-    chmod -R a+rwX /work 2>/dev/null || true
-fi
-
-# Inject extra Docker plugin volumes and options that rayci doesn't support.
+# Inject Docker plugin volumes and options that rayci doesn't support.
 # rayci hardcodes volumes at indices 0 (docker.sock) and 1 (artifact-mount).
-# The Docker buildkite plugin reads BUILDKITE_PLUGIN_DOCKER_VOLUMES_N from the
-# environment, so we can append additional mounts here before the plugin's
+# The Docker Buildkite plugin reads BUILDKITE_PLUGIN_DOCKER_VOLUMES_N from
+# the environment, so we can override/append mounts here before the plugin's
 # command hook runs.
 if [[ "${OSTYPE}" == linux* ]]; then
   # Override artifact-mount (index 1) to use per-slot directory.
-  # rayci bakes /tmp/artifacts into the pipeline YAML at generation time, but
-  # each agent slot needs its own artifact dir to avoid cross-slot contamination.
+  # rayci bakes /tmp/artifacts into the pipeline YAML at generation time,
+  # but each agent needs its own artifact dir.
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_1="${ARTIFACT_DIR}:/artifact-mount"
 
   BAZEL_REPO_CACHE="${RAYCI_BAZEL_REPO_CACHE:-/var/lib/cache/bazel-repo-cache}"
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_2="${BAZEL_REPO_CACHE}:/bazel-repo-cache"
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_3="/var/lib/cache/bazel-bin:/opt/bazel:ro"
   export BUILDKITE_PLUGIN_DOCKER_ADD_HOST_0="build-host:172.17.0.1"
-  # Tell bazelisk to use the pre-cached Bazel binary instead of downloading.
   export BUILDKITE_PLUGIN_DOCKER_ENVIRONMENT_0="USE_BAZEL_VERSION=/opt/bazel/bazel"
 fi
 

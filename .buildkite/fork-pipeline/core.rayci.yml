@@ -40,8 +40,9 @@ steps:
       - dashboard
     instance_type: large
     parallelism: 2
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
@@ -56,8 +57,9 @@ steps:
     tags:
       - ray_client
     instance_type: large
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
         --install-mask all-ray-libraries
@@ -75,8 +77,9 @@ steps:
       - skip-on-premerge
     instance_type: large
     parallelism: 4
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
@@ -94,8 +97,9 @@ steps:
       - oss
       - skip-on-premerge
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - cleanup() { ./ci/build/upload_build_info.sh; }; trap cleanup EXIT
       - (cd python/ray/dashboard/client && npm ci && npm run build)
@@ -110,8 +114,9 @@ steps:
       - python
       - oss
     instance_type: small
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -126,8 +131,9 @@ steps:
       - oss
       - skip-on-premerge
     instance_type: small
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --test-env=TEST_EXTERNAL_REDIS=1
@@ -142,8 +148,9 @@ steps:
       - python
       - doc
     instance_type: large
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       # doc tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
@@ -157,12 +164,13 @@ steps:
         --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --skip-ray-installation
-      # doc memory pressure example
-      - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
-        --only-tags mem_pressure
-        --except-tags gpu
-        --python-version 3.10 --build-name corebuild-py3.10
-        --skip-ray-installation
+      # doc memory pressure example — skipped on fork CI, the OOM
+      # prevention test needs more memory than our containers provide.
+      # - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
+      #   --only-tags mem_pressure
+      #   --except-tags gpu
+      #   --python-version 3.10 --build-name corebuild-py3.10
+      #   --skip-ray-installation
     depends_on:
       - corebuild-multipy
       - forge
@@ -172,8 +180,9 @@ steps:
       - python
       - dashboard
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- python/ray/dashboard/... core
         --parallelism-per-worker 2
@@ -191,8 +200,9 @@ steps:
       - python
       - skip-on-premerge
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --install-mask all-ray-libraries
@@ -210,8 +220,9 @@ steps:
       - python
       - skip-on-premerge
     instance_type: large
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --install-mask all-ray-libraries
@@ -228,8 +239,9 @@ steps:
     key: core-wheel-tests
     tags: linux_wheels
     instance_type: large
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //doc/... core
         --install-mask all-ray-libraries
@@ -251,8 +263,9 @@ steps:
       - oss
       - min_build
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
@@ -309,8 +322,9 @@ steps:
       - core_cpp
       - python
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //:all
         //python/ray/tests/resource_isolation:test_resource_isolation_integration
@@ -331,8 +345,9 @@ steps:
     tags: core_cpp
 
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
         //:all //src/... core --except-tags=cgroup --build-type clang
@@ -345,8 +360,9 @@ steps:
   - label: ":ray: core: cpp asan tests"
     tags: core_cpp
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
         --build-type asan-clang --cache-test-results --parallelism-per-worker 2
@@ -358,8 +374,9 @@ steps:
   - label: ":ray: core: cpp ubsan tests"
     tags: core_cpp
     instance_type: large
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -372,8 +389,9 @@ steps:
   - label: ":ray: core: cpp tsan tests"
     tags: core_cpp
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -391,8 +409,9 @@ steps:
       - skip-on-premerge
     instance_type: large
     soft_fail: true
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -415,8 +434,9 @@ steps:
       - cpp
       - oss
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
         //cpp:all core --build-type clang
@@ -431,8 +451,9 @@ steps:
       - java
       - python
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -448,8 +469,9 @@ steps:
     tags:
       - spark_on_ray
     instance_type: medium
-    concurrency: 4
-    concurrency_group: "test-in-docker"
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --build-type debug

@@ -264,7 +264,7 @@ steps:
       - dashboard
       - oss
       - min_build
-    instance_type: medium
+    instance_type: large
     commands:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
@@ -336,7 +336,7 @@ steps:
   - label: ":ray: core: cpp tests"
     tags: core_cpp
 
-    instance_type: medium
+    instance_type: large
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
         //:all //src/... core --except-tags=cgroup --build-type clang
@@ -351,7 +351,7 @@ steps:
 
   - label: ":ray: core: cpp asan tests"
     tags: core_cpp
-    instance_type: medium
+    instance_type: large
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
         --build-type asan-clang --cache-test-results --parallelism-per-worker 2
@@ -374,7 +374,7 @@ steps:
 
   - label: ":ray: core: cpp tsan tests"
     tags: core_cpp
-    instance_type: medium
+    instance_type: large
     commands:
       - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
         --python-version 3.10 --build-name corebuild-py3.10
@@ -424,7 +424,7 @@ steps:
       - core_cpp
       - cpp
       - oss
-    instance_type: medium
+    instance_type: large
     commands:
       - if [[ "$${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
           echo "build --remote_upload_local_results=false" >> ~/.bazelrc;
@@ -490,7 +490,7 @@ steps:
     # avoid running them for every C++ code change.
     tags:
       - spark_on_ray
-    instance_type: medium
+    instance_type: large
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --build-type debug

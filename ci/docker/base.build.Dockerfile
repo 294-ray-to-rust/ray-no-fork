@@ -11,11 +11,10 @@ ARG PIP_TRUSTED_HOST=""
 
 ARG RAYCI_DISABLE_JAVA=false
 
-# Stage 1: install scripts and dependency specs (rarely change).
-# Copying these before the full source lets Docker cache the expensive
-# installs (miniforge, LLVM, bazel, pip packages) across code commits.
+# Stage 1: dependency specs from wanda srcs (rarely change).
+# Files not in wanda srcs (e.g. .bazelversion) persist from the base
+# image, so we only COPY what's explicitly in the build context.
 COPY ci/ ci/
-COPY .bazelversion .bazelversion
 COPY .bazelrc .bazelrc
 COPY python/requirements.txt python/requirements.txt
 COPY python/requirements_compiled.txt python/requirements_compiled.txt

@@ -6,9 +6,8 @@ FROM $DOCKER_IMAGE_BASE_TEST
 ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 
-# Stage 1: install scripts and dependency specs.
+# Stage 1: dependency specs from wanda srcs (rarely change).
 COPY ci/ ci/
-COPY .bazelversion .bazelversion
 COPY .bazelrc .bazelrc
 COPY python/requirements.txt python/requirements.txt
 COPY python/requirements_compiled.txt python/requirements_compiled.txt

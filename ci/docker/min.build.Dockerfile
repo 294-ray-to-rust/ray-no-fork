@@ -12,9 +12,8 @@ ARG EXTRA_DEPENDENCY
 
 SHELL ["/bin/bash", "-ice"]
 
-# Stage 1: install scripts + files needed by pip-compile (rarely change).
+# Stage 1: dependency specs from wanda srcs + files for pip-compile.
 COPY ci/ ci/
-COPY .bazelversion .bazelversion
 COPY .bazelrc .bazelrc
 COPY python/setup.py python/setup.py
 COPY python/requirements.txt python/requirements.txt

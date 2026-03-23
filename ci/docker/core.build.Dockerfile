@@ -8,10 +8,9 @@ ARG RAYCI_IS_GPU_BUILD=false
 
 SHELL ["/bin/bash", "-ice"]
 
-# Stage 1: install scripts and DL requirements (base_build already has pip).
+# Stage 1: dependency specs from wanda srcs (base_build already has pip).
+# .bazelrc persists from the base_build image; not in core.build srcs.
 COPY ci/ ci/
-COPY .bazelversion .bazelversion
-COPY .bazelrc .bazelrc
 COPY python/requirements.txt python/requirements.txt
 COPY python/requirements_compiled.txt python/requirements_compiled.txt
 COPY python/requirements/test-requirements.txt python/requirements/test-requirements.txt

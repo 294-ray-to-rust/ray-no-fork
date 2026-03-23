@@ -99,6 +99,7 @@ py_test_module_list(
         ":conftest",
         "//:ray_lib",
     ],
+)
 
 # Fork: excluded — distributed GC timing test, 30s timeout too short
 # under CPU contention (fails 3/3 on dense CI hardware). Known flaky

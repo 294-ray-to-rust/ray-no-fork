@@ -35,10 +35,7 @@ steps:
       - python
       - dashboard
     instance_type: large
-    parallelism: 4
-    # Increased from 2 to 4 shards — each shard runs ~25min instead of
-    # ~35min, reducing critical path. Freed up heavy slots from disabled
-    # sanitizer tests absorb the extra jobs.
+    parallelism: 8
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries
@@ -447,39 +444,47 @@ steps:
   #     - corebuild-multipy
   #     - forge
 
-  - label: ":ray: core: java worker tests"
-    tags:
-      - java
-      - python
-    instance_type: medium
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
-        --python-version 3.10 --build-name corebuild-py3.10
-        --build-type java
-        --only-tags needs_java
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # ---------------------------------------------------------------
+  # Java worker tests: DISABLED on the fork.
+  #
+  # Java ↔ Python interop tests. Not relevant to the Rust port.
+  # Re-enable if Java worker support is ever needed.
+  # ---------------------------------------------------------------
 
-  - label: ":core: core: spark-on-ray tests"
-    # NOTE: The Spark-on-Ray tests intentionally aren't triggered by the `java` tag to
-    # avoid running them for every C++ code change.
-    tags:
-      - spark_on_ray
-    instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
-    commands:
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
-        --build-type debug
-        --test-env=RAY_ON_SPARK_BACKGROUND_JOB_STARTUP_WAIT=1
-        --test-env=RAY_ON_SPARK_RAY_WORKER_NODE_STARTUP_INTERVAL=5
-        --only-tags spark_on_ray
-        --python-version 3.10 --build-name corebuild-py3.10
-    depends_on:
-      - corebuild-multipy
-      - forge
+  # - label: ":ray: core: java worker tests"
+  #   tags:
+  #     - java
+  #     - python
+  #   instance_type: medium
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type java
+  #       --only-tags needs_java
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # ---------------------------------------------------------------
+  # Spark-on-ray tests: DISABLED on the fork.
+  #
+  # Integration glue for launching Ray clusters from Spark. Only
+  # exercises GCS superficially (node registration, trivial ray.get).
+  # Core python tests cover all the same GCS paths. ~60 min runtime.
+  # Re-enable if Spark integration is ever needed.
+  # ---------------------------------------------------------------
+
+  # - label: ":core: core: spark-on-ray tests"
+  #   tags:
+  #     - spark_on_ray
+  #   instance_type: large
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+  #       --build-type debug
+  #       --test-env=RAY_ON_SPARK_BACKGROUND_JOB_STARTUP_WAIT=1
+  #       --test-env=RAY_ON_SPARK_RAY_WORKER_NODE_STARTUP_INTERVAL=5
+  #       --only-tags spark_on_ray
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge

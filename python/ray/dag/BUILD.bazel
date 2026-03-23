@@ -119,6 +119,9 @@ py_test_module_list(
     deps = ["//:ray_lib"],
 )
 
+# Fork: excluded — takes >1 hour under CPU contention on dense CI hardware
+# (3600s Bazel timeout). Compiled graphs are Python DAG orchestration,
+# not relevant to the Rust port of core Ray.
 py_test_module_list(
     size = "enormous",
     files = [
@@ -126,6 +129,7 @@ py_test_module_list(
     ],
     tags = [
         "compiled_graphs",
+        "custom_setup",
         "exclusive",
         "no_windows",
         "team:core",

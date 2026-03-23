@@ -34,7 +34,10 @@ steps:
     tags:
       - python
       - dashboard
-    instance_type: large
+    # Remaining shards are mostly 10-30 minutes once custom_setup
+    # outliers are excluded, so run them on the light queue and leave
+    # heavy slots for true long-tail jobs.
+    instance_type: medium
     parallelism: 20
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core

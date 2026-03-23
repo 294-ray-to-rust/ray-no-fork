@@ -568,14 +568,12 @@ py_test_module_list(
         "test_multinode_failures_2.py",
         "test_node_death.py",
         "test_numba.py",
-        "test_object_spilling_no_asan.py",
         "test_open_telemetry_metric_recorder.py",
         "test_placement_group_metrics.py",
         "test_protobuf_compatibility.py",
         "test_queue.py",
         "test_raylet_output.py",
         "test_reconstruction_stress.py",
-        "test_reconstruction_stress_spill.py",
         "test_reference_counting.py",
         "test_runtime_env_fork_process.py",
         "test_runtime_env_get_wheel_names.py",
@@ -593,6 +591,27 @@ py_test_module_list(
         "test_worker_graceful_shutdown.py",
     ],
     tags = [
+        "exclusive",
+        "small_size_python_tests",
+        "team:core",
+    ],
+    deps = [
+        ":conftest",
+        "//:ray_lib",
+    ],
+)
+
+# Fork: excluded — spill-heavy tests that cause OutOfDiskError when 14+
+# heavy containers share /tmp on dense CI hardware. Object spilling
+# mechanics are not relevant to the Rust port.
+py_test_module_list(
+    size = "small",
+    files = [
+        "test_object_spilling_no_asan.py",
+        "test_reconstruction_stress_spill.py",
+    ],
+    tags = [
+        "custom_setup",
         "exclusive",
         "small_size_python_tests",
         "team:core",

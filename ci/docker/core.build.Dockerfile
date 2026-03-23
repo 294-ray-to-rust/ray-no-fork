@@ -8,7 +8,15 @@ ARG RAYCI_IS_GPU_BUILD=false
 
 SHELL ["/bin/bash", "-ice"]
 
-COPY . .
+# Stage 1: install scripts and DL requirements (base_build already has pip).
+COPY ci/ ci/
+COPY .bazelversion .bazelversion
+COPY .bazelrc .bazelrc
+COPY python/requirements.txt python/requirements.txt
+COPY python/requirements_compiled.txt python/requirements_compiled.txt
+COPY python/requirements/test-requirements.txt python/requirements/test-requirements.txt
+COPY python/requirements/ml/dl-cpu-requirements.txt python/requirements/ml/dl-cpu-requirements.txt
+COPY python/requirements/ml/dl-gpu-requirements.txt python/requirements/ml/dl-gpu-requirements.txt
 
 RUN <<EOF
 #!/bin/bash
@@ -22,3 +30,6 @@ if [[ "$RAYCI_IS_GPU_BUILD" == "true" ]]; then
 fi
 
 EOF
+
+# Stage 2: full source tree.
+COPY . .

@@ -12,7 +12,16 @@ ARG EXTRA_DEPENDENCY
 
 SHELL ["/bin/bash", "-ice"]
 
-COPY . .
+# Stage 1: install scripts + files needed by pip-compile (rarely change).
+COPY ci/ ci/
+COPY .bazelversion .bazelversion
+COPY .bazelrc .bazelrc
+COPY python/setup.py python/setup.py
+COPY python/requirements.txt python/requirements.txt
+COPY python/requirements_compiled.txt python/requirements_compiled.txt
+COPY python/LICENSE.txt python/LICENSE.txt
+COPY python/ray/_version.py python/ray/_version.py
+COPY README.rst README.rst
 
 RUN <<EOF
 #!/bin/bash
@@ -64,6 +73,9 @@ fi
 python -m pytest --version
 
 EOF
+
+# Stage 2: full source tree.
+COPY . .
 
 # For Python 3.14+, the PATH needs to include the conda environment directory
 # Create a symlink from the env-specific python to a standard location

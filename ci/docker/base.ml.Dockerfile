@@ -6,7 +6,14 @@ FROM $DOCKER_IMAGE_BASE_TEST
 ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 
-COPY . .
+# Stage 1: install scripts and dependency specs.
+COPY ci/ ci/
+COPY .bazelversion .bazelversion
+COPY .bazelrc .bazelrc
+COPY python/requirements.txt python/requirements.txt
+COPY python/requirements_compiled.txt python/requirements_compiled.txt
+COPY python/requirements/test-requirements.txt python/requirements/test-requirements.txt
+COPY python/requirements/ml/ python/requirements/ml/
 
 RUN <<EOF
 #!/bin/bash -i
@@ -19,3 +26,6 @@ RLLIB_TESTING=1 TRAIN_TESTING=1 TUNE_TESTING=1 bash --login -i ./ci/env/install-
 pip uninstall -y ray
 
 EOF
+
+# Stage 2: full source tree.
+COPY . .

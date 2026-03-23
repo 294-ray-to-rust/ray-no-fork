@@ -35,7 +35,7 @@ steps:
       - python
       - dashboard
     instance_type: large
-    parallelism: 16
+    parallelism: 20
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries

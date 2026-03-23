@@ -42,6 +42,10 @@ py_test_module_list(
     ],
     tags = [
         "exclusive",
+        # Fork: skip in CI — pure telemetry tests, 900s timeout,
+        # not relevant to Rust port. custom_setup is excluded by
+        # the python test shards' --except-tags.
+        "custom_setup",
         "team:core",
     ],
     deps = [

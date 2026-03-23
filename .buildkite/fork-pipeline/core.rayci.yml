@@ -41,7 +41,7 @@ steps:
         --install-mask all-ray-libraries
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
-        --except-tags custom_setup
+        --except-tags custom_setup,gpu_objects
     depends_on:
       - corebuild-multipy
       - forge

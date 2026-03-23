@@ -6,7 +6,9 @@ FROM $DOCKER_IMAGE_BASE_TEST
 ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 
-# Stage 1: dependency specs from wanda srcs (rarely change).
+ENV PATH="/opt/miniforge/bin:${PATH}"
+
+# --- Dependency files (wanda srcs) ---
 COPY ci/ ci/
 COPY .bazelrc .bazelrc
 COPY python/requirements.txt python/requirements.txt
@@ -14,17 +16,32 @@ COPY python/requirements_compiled.txt python/requirements_compiled.txt
 COPY python/requirements/test-requirements.txt python/requirements/test-requirements.txt
 COPY python/requirements/ml/ python/requirements/ml/
 
-RUN <<EOF
-#!/bin/bash -i
+# Base deps.
+RUN pip install -U -c python/requirements_compiled.txt \
+    -r python/requirements.txt
 
-set -e
+# Test deps.
+RUN pip install -U -c python/requirements_compiled.txt \
+    -r python/requirements/test-requirements.txt
 
-BUILD=1 ./ci/ci.sh init
-RLLIB_TESTING=1 TRAIN_TESTING=1 TUNE_TESTING=1 bash --login -i ./ci/env/install-dependencies.sh
+# ML deps (rllib, train, tune, dl-cpu, core).
+RUN pip install -U -c python/requirements_compiled.txt \
+    -r python/requirements/ml/rllib-requirements.txt \
+    -r python/requirements/ml/rllib-test-requirements.txt \
+    -r python/requirements/ml/train-requirements.txt \
+    -r python/requirements/ml/train-test-requirements.txt \
+    -r python/requirements/ml/tune-requirements.txt \
+    -r python/requirements/ml/tune-test-requirements.txt \
+    -r python/requirements/ml/dl-cpu-requirements.txt \
+    -r python/requirements/ml/core-requirements.txt
 
-pip uninstall -y ray
+# Remaining setup: LLVM, node, bazel config, thirdparty_files.
+RUN bash -ic 'BUILD=1 ./ci/ci.sh init'
 
-EOF
+# Second pass with ML flags for any ML-specific non-pip setup.
+RUN bash --login -ic 'RLLIB_TESTING=1 TRAIN_TESTING=1 TUNE_TESTING=1 ./ci/env/install-dependencies.sh'
 
-# Stage 2: full source tree.
+RUN pip uninstall -y ray
+
+# Full source tree.
 COPY . .

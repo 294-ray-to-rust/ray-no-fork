@@ -8,8 +8,7 @@ ARG RAYCI_IS_GPU_BUILD=false
 
 SHELL ["/bin/bash", "-ice"]
 
-# Stage 1: dependency specs from wanda srcs (base_build already has pip).
-# .bazelrc persists from the base_build image; not in core.build srcs.
+# --- Dependency files (wanda srcs) ---
 COPY ci/ ci/
 COPY python/requirements.txt python/requirements.txt
 COPY python/requirements_compiled.txt python/requirements_compiled.txt
@@ -17,18 +16,22 @@ COPY python/requirements/test-requirements.txt python/requirements/test-requirem
 COPY python/requirements/ml/dl-cpu-requirements.txt python/requirements/ml/dl-cpu-requirements.txt
 COPY python/requirements/ml/dl-gpu-requirements.txt python/requirements/ml/dl-gpu-requirements.txt
 
+# DL CPU deps (cached unless dl-cpu-requirements.txt changes).
+RUN pip install -U -c python/requirements_compiled.txt \
+    -r python/requirements/ml/dl-cpu-requirements.txt
+
+# DL GPU deps (only when building GPU variant).
 RUN <<EOF
 #!/bin/bash
-
 set -euo pipefail
-
-DL=1 ./ci/env/install-dependencies.sh
-
 if [[ "$RAYCI_IS_GPU_BUILD" == "true" ]]; then
   pip install -Ur ./python/requirements/ml/dl-gpu-requirements.txt
 fi
-
 EOF
 
-# Stage 2: full source tree.
+# Remaining install-dependencies.sh setup (mostly no-ops since
+# base_build already has everything; DL packages already installed).
+RUN bash -ic 'DL=1 ./ci/env/install-dependencies.sh'
+
+# Full source tree.
 COPY . .

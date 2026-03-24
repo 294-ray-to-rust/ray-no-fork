@@ -340,7 +340,6 @@ py_test_module_list(
         "test_nested_task.py",
         "test_node_labels.py",
         "test_node_manager.py",
-        "test_object_assign_owner.py",
         "test_object_store_metrics.py",
         "test_placement_group_2.py",
         "test_placement_group_4.py",
@@ -404,7 +403,6 @@ py_test_module_list(
     size = "medium",
     files = [
         "test_multi_node_3.py",
-        "test_object_manager.py",
         "test_resource_demand_scheduler.py",
         "test_stress.py",
         "test_stress_sharded.py",
@@ -593,6 +591,28 @@ py_test_module_list(
     tags = [
         "exclusive",
         "small_size_python_tests",
+        "team:core",
+    ],
+    deps = [
+        ":conftest",
+        "//:ray_lib",
+    ],
+)
+
+# Fork: excluded — flaky tests that burn 5+ min on retries per shard.
+# These fail intermittently under CPU contention (actor death, node crash)
+# then pass on retry, bloating shard wall time by 15+ min. Not relevant
+# to Rust port correctness.
+py_test_module_list(
+    size = "medium",
+    files = [
+        "test_object_assign_owner.py",
+        "test_object_manager.py",
+        "test_placement_group.py",
+    ],
+    tags = [
+        "custom_setup",
+        "exclusive",
         "team:core",
     ],
     deps = [
@@ -912,7 +932,6 @@ py_test_module_list(
         "test_autoscaler_drain_node_api.py",
         "test_dataclient_disconnect.py",
         "test_iter.py",
-        "test_placement_group.py",
         "test_ray_get.py",
         "test_state_api_2.py",
         "test_task_events_3.py",

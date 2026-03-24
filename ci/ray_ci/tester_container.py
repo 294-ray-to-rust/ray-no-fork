@@ -240,9 +240,10 @@ class TesterContainer(Container):
             # clang currently runs into problems with ubsan builds, this will revert to
             # using GCC instead.
             commands.append("unset CC CXX")
-        # note that we run tests serially within each docker, since we already use
-        # multiple dockers to shard tests
-        test_cmd = "bazel test --jobs=1 --config=ci $(./ci/run/bazel_export_options) "
+        # Run up to 2 tests concurrently within each docker container.
+        # Combined with parallelism-per-worker sharding, this lets small tests
+        # overlap while heavy tests still get full resources.
+        test_cmd = "bazel test --jobs=2 --config=ci $(./ci/run/bazel_export_options) "
         if self.build_type == "debug":
             test_cmd += "--config=ci-debug "
         if self.build_type == "asan":

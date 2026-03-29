@@ -55,13 +55,13 @@ steps:
   - label: ":ray: core: ray client tests"
     tags:
       - ray_client
-    instance_type: large
+    instance_type: medium
     concurrency: 4
     concurrency_group: "test-in-docker"
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
         --install-mask all-ray-libraries
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags ray_client
     depends_on:
@@ -264,7 +264,6 @@ steps:
         --test-env=RAY_MINIMAL=1
         --test-env=EXPECTED_PYTHON_VERSION={{matrix}}
         --only-tags minimal
-        --python-version {{matrix}}
         --except-tags basic_test,manual,cgroup
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
         --parallelism-per-worker 2

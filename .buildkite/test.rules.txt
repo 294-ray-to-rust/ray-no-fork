@@ -135,12 +135,10 @@ java/
 ;
 
 cpp/
-.buildkite/pipeline.build_cpp.yml
 @ cpp
 ;
 
 docker/
-.buildkite/pipeline.build_cpp.yml
 .buildkite/_images.rayci.yml
 .buildkite/release/_images.rayci.yml
 @ docker linux_wheels
@@ -197,7 +195,6 @@ bazel/tests/
 ;
 
 .buildkite/macos.rayci.yml
-.buildkite/pipeline.macos.yml
 ci/ray_ci/macos/macos_ci.sh
 ci/ray_ci/macos/macos_ci_build.sh
 @ macos_wheels
@@ -207,10 +204,8 @@ ci/pipeline/
 ci/build/
 ci/ray_ci/
 .buildkite/_forge.rayci.yml
-.buildkite/_forge.aarch64.rayci.yml
 ci/docker/forge.wanda.yaml
 ci/docker/forge.aarch64.wanda.yaml
-.buildkite/pipeline.build.yml
 .buildkite/hooks/post-command
 .buildkite/release/
 .buildkite/release-automation/
@@ -219,7 +214,6 @@ ci/docker/forge.aarch64.wanda.yaml
 
 .buildkite/base.rayci.yml
 .buildkite/build.rayci.yml
-.buildkite/pipeline.arm64.yml
 ci/docker/manylinux.Dockerfile
 ci/docker/manylinux.wanda.yaml
 ci/docker/manylinux.aarch64.wanda.yaml

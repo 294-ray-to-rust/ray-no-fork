@@ -103,7 +103,7 @@ def test_run_tests_in_docker() -> None:
         assert "--volume /tmp:/tmp/bazel_event_logs" in input_str
         assert "--volume /var/lib/cache/bazel-repo-cache:/bazel-repo-cache" in input_str
         assert (
-            "bazel test --jobs=2 --config=ci $(./ci/run/bazel_export_options) "
+            "bazel test --jobs=1 --config=ci $(./ci/run/bazel_export_options) "
             "--config=ci-debug --test_env v=k --test_arg flag t1 t2" in input_str
         )
         if RUN_PER_FLAKY_TEST > 1:

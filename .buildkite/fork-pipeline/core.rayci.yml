@@ -34,11 +34,11 @@ steps:
     tags:
       - python
       - dashboard
-    # Remaining shards are mostly 10-20 minutes once custom_setup
-    # outliers are excluded. 30 shards keeps each shard short and
-    # fits within the 90 light slots across the fleet.
+    # Remaining shards are mostly 10-30 minutes once custom_setup
+    # outliers are excluded, so run them on the light queue and leave
+    # heavy slots for true long-tail jobs.
     instance_type: medium
-    parallelism: 30
+    parallelism: 20
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
         --install-mask all-ray-libraries

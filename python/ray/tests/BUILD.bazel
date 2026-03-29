@@ -621,46 +621,6 @@ py_test_module_list(
     ],
 )
 
-# Fork: excluded — state API observability test, 14 min and not relevant
-# to Rust port.
-py_test_module_list(
-    size = "enormous",
-    files = [
-        "test_state_api.py",
-    ],
-    tags = [
-        "custom_setup",
-        "exclusive",
-        "large_size_python_tests_shard_0",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
-# Fork: promote to enormous so the sharding algorithm isolates these
-# instead of stacking them with other large tests. Each takes 6-8 min
-# (actual) vs the 900s large estimate.
-py_test_module_list(
-    size = "enormous",
-    files = [
-        "test_ray_init_2.py",
-        "test_reconstruction.py",
-        "test_reconstruction_2.py",
-    ],
-    tags = [
-        "exclusive",
-        "large_size_python_tests_shard_0",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
 # Fork: excluded — spill-heavy tests that cause OutOfDiskError when 14+
 # heavy containers share /tmp on dense CI hardware. Object spilling
 # mechanics are not relevant to the Rust port.
@@ -988,25 +948,6 @@ py_test_module_list(
     ],
 )
 
-# Fork: excluded — test_remote_function_isolation flaky under CPU
-# contention (fails 3/3 retries, ~6 min each). Not relevant to Rust port.
-py_test_module_list(
-    size = "large",
-    files = [
-        "test_multi_node.py",
-    ],
-    tags = [
-        "custom_setup",
-        "exclusive",
-        "large_size_python_tests_shard_0",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
 py_test_module_list(
     size = "large",
     files = [
@@ -1018,12 +959,17 @@ py_test_module_list(
         "test_failure_2.py",
         "test_generators.py",
         "test_global_state.py",
+        "test_multi_node.py",
         "test_object_manager_fault_tolerance.py",
         "test_placement_group_3.py",
         "test_placement_group_5.py",
+        "test_ray_init_2.py",
         "test_raylet_fault_tolerance.py",
+        "test_reconstruction.py",
+        "test_reconstruction_2.py",
         "test_runtime_env_working_dir_uri.py",
         "test_serialization.py",
+        "test_state_api.py",
         "test_task_events.py",
         "test_task_events_2.py",
     ],
@@ -1042,23 +988,6 @@ py_test_module_list(
     size = "large",
     files = [
         "test_actor_advanced.py",
-    ],
-    tags = [
-        "exclusive",
-        "large_size_python_tests_shard_0",
-        "no_windows",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
-# Fork: enormous — 7m49s actual, sharding underestimates at 900s.
-py_test_module_list(
-    size = "enormous",
-    files = [
         "test_gcs_fault_tolerance.py",
     ],
     tags = [
@@ -1115,26 +1044,10 @@ py_test_module_list(
     files = [
         "test_failure_4.py",
         "test_implicit_resource.py",
+        "test_object_spilling.py",
         "test_object_spilling_3.py",
         "test_placement_group_mini_integration.py",
         "test_scheduling_2.py",
-    ],
-    tags = [
-        "exclusive",
-        "large_size_python_tests_shard_1",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
-# Fork: enormous — 8m actual, sharding underestimates at 900s.
-py_test_module_list(
-    size = "enormous",
-    files = [
-        "test_object_spilling.py",
     ],
     tags = [
         "exclusive",

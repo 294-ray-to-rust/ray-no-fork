@@ -988,25 +988,6 @@ py_test_module_list(
     ],
 )
 
-# Fork: excluded — test_remote_function_isolation flaky under CPU
-# contention (fails 3/3 retries, ~6 min each). Not relevant to Rust port.
-py_test_module_list(
-    size = "large",
-    files = [
-        "test_multi_node.py",
-    ],
-    tags = [
-        "custom_setup",
-        "exclusive",
-        "large_size_python_tests_shard_0",
-        "team:core",
-    ],
-    deps = [
-        ":conftest",
-        "//:ray_lib",
-    ],
-)
-
 py_test_module_list(
     size = "large",
     files = [
@@ -1018,6 +999,7 @@ py_test_module_list(
         "test_failure_2.py",
         "test_generators.py",
         "test_global_state.py",
+        "test_multi_node.py",
         "test_object_manager_fault_tolerance.py",
         "test_placement_group_3.py",
         "test_placement_group_5.py",

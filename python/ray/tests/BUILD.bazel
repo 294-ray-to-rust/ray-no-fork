@@ -606,6 +606,7 @@ py_test_module_list(
 py_test_module_list(
     size = "medium",
     files = [
+        "test_actor_resources.py",
         "test_object_assign_owner.py",
         "test_object_manager.py",
         "test_placement_group.py",
@@ -928,7 +929,6 @@ py_test(
 py_test_module_list(
     size = "medium",
     files = [
-        "test_actor_resources.py",
         "test_autoscaler_drain_node_api.py",
         "test_dataclient_disconnect.py",
         "test_iter.py",

@@ -52,7 +52,7 @@ steps:
   - label: ":ray: core: ray client tests"
     tags:
       - ray_client
-    instance_type: large
+    instance_type: medium
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.
@@ -231,7 +231,7 @@ steps:
   - label: ":ray: core: wheel tests"
     key: core-wheel-tests
     tags: linux_wheels
-    instance_type: large
+    instance_type: medium
     # concurrency group removed — agent spawn count is the only
     # throughput lever.  Upstream Ray used concurrency: 4 for their
     # cloud CI; we don't need it on dedicated hardware.

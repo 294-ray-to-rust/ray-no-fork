@@ -87,6 +87,7 @@ steps:
     tags:
       - ray_client
     instance_type: large
+    parallelism: 4
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
         --install-mask all-ray-libraries

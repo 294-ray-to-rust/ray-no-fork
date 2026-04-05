@@ -53,9 +53,7 @@ steps:
     tags:
       - ray_client
     instance_type: medium
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
+    parallelism: 4
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
         --install-mask all-ray-libraries
@@ -256,15 +254,13 @@ steps:
       - oss
       - min_build
     instance_type: large
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
+    parallelism: 2
     commands:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
       # core tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -273,7 +269,7 @@ steps:
         --python-version {{matrix}}
         --except-tags basic_test,manual,cgroup
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -283,7 +279,7 @@ steps:
         --skip-ray-installation
       # core redis tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1
@@ -294,7 +290,7 @@ steps:
         --skip-ray-installation
       # serve tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... serve
-        --parallelism-per-worker 2
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version {{matrix}}
         --build-name minbuild-core-py{{matrix}}
         --test-env=RAY_MINIMAL=1

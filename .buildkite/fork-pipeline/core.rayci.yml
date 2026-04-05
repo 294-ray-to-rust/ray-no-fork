@@ -247,61 +247,57 @@ steps:
       - forge
       - ray-wheel-build
 
-  - label: ":ray: core: minimal tests {{matrix}}"
+  - label: ":ray: core: minimal tests"
     tags:
       - python
       - dashboard
       - oss
       - min_build
     instance_type: large
+    parallelism: 4
     commands:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
       # core tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
-        --python-version {{matrix}}
-        --build-name minbuild-core-py{{matrix}}
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
-        --test-env=EXPECTED_PYTHON_VERSION={{matrix}}
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
         --only-tags minimal
-        --python-version {{matrix}}
         --except-tags basic_test,manual,cgroup
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
-        --python-version {{matrix}}
-        --build-name minbuild-core-py{{matrix}}
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
-        --test-env=EXPECTED_PYTHON_VERSION={{matrix}}
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
         --only-tags minimal
         --except-tags no_basic_test,manual
         --skip-ray-installation
       # core redis tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --parallelism-per-worker 2
-        --python-version {{matrix}}
-        --build-name minbuild-core-py{{matrix}}
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
         --test-env=TEST_EXTERNAL_REDIS=1
-        --test-env=EXPECTED_PYTHON_VERSION={{matrix}}
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
         --only-tags minimal
         --except-tags no_basic_test,manual
         --skip-ray-installation
       # serve tests
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... serve
-        --parallelism-per-worker 2
-        --python-version {{matrix}}
-        --build-name minbuild-core-py{{matrix}}
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
         --only-tags minimal
         --skip-ray-installation
     depends_on:
       - minbuild-core
       - forge
-    # Trimmed to 3.10 only. The Rust port targets one Python version;
-    # add others back if a version-specific bug is suspected.
-    matrix:
-      - "3.10"
 
   - label: ":ray: core: cgroup tests"
     tags:

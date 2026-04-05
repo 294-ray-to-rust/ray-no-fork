@@ -230,14 +230,12 @@ steps:
     key: core-wheel-tests
     tags: linux_wheels
     instance_type: medium
-    # concurrency group removed — agent spawn count is the only
-    # throughput lever.  Upstream Ray used concurrency: 4 for their
-    # cloud CI; we don't need it on dedicated hardware.
+    parallelism: 2
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //doc/... core
         --install-mask all-ray-libraries
         --build-type wheel
-        --parallelism-per-worker 2
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags post_wheel_build
         --test-env=RAY_CI_POST_WHEEL_TESTS=True

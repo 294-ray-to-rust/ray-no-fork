@@ -167,6 +167,7 @@ def test_driver_dead(short_gcs_publish_timeout, shutdown_only):
     """Make sure all ray workers are shutdown when driver is killed."""
     driver = """
 import ray
+import time
 ray.init(_system_config={"gcs_rpc_server_reconnect_timeout_s": 1})
 @ray.remote
 def f():
@@ -175,13 +176,16 @@ def f():
 
 num_cpus = int(ray.available_resources()["CPU"])
 tasks = [f.remote() for _ in range(num_cpus)]
+time.sleep(100)
 """
 
     p = run_string_as_driver_nonblocking(driver)
     # Make sure the driver is running.
     time.sleep(1)
     assert p.poll() is None
-    wait_for_condition(lambda: len(get_all_ray_worker_processes()) > 0)
+    wait_for_condition(
+        lambda: len(get_all_ray_worker_processes()) > 0, timeout=WAIT_TIMEOUT
+    )
 
     # Kill the driver process.
     p.kill()

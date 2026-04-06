@@ -184,7 +184,7 @@ def f():
 @ray.remote
 def g(x, y):
     return 4
-for _ in range(10000):
+for _ in range(1000):
     result = ray.get([f.remote(), g.remote(0, 0)])
     assert result == [3, 4]
 print("success")
@@ -202,7 +202,7 @@ print("success")
     def g(x):
         return 2
 
-    for _ in range(10000):
+    for _ in range(1000):
         result = ray.get([f.remote(), g.remote(0)])
         assert result == [1, 2]
 

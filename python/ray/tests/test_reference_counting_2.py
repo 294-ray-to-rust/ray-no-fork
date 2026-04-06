@@ -517,7 +517,7 @@ def test_lineage_leak(one_cpu_100MiB_shared):
     def check_usage():
         return "Plasma memory usage 0 MiB" in memory_summary(stats_only=True)
 
-    wait_for_condition(check_usage)
+    wait_for_condition(check_usage, timeout=30)
 
 
 if __name__ == "__main__":

@@ -62,6 +62,9 @@ if [[ "${OSTYPE}" == linux* ]]; then
   export BUILDKITE_PLUGIN_DOCKER_VOLUMES_3="/var/lib/cache/bazel-bin:/opt/bazel:ro"
   export BUILDKITE_PLUGIN_DOCKER_ADD_HOST_0="build-host:172.17.0.1"
   export BUILDKITE_PLUGIN_DOCKER_ENVIRONMENT_0="USE_BAZEL_VERSION=/opt/bazel/bazel"
+  # Buildkite runs CI steps inside the Docker plugin container; forward the
+  # host policy so nested docker builds use the legacy builder too.
+  export BUILDKITE_PLUGIN_DOCKER_ENVIRONMENT_1="DOCKER_BUILDKIT"
 fi
 
 RAYCI_CHECKOUT_DIR="$(pwd)"

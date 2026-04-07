@@ -126,7 +126,7 @@ case "$BUILD_TYPE" in
     # The wheel doesn't ship test files, but some test conftest.py files
     # import from ray.tests.conftest. Symlink the source tree's tests dir
     # into site-packages so these imports resolve.
-    ln -sf /rayci/python/ray/tests "${RAY_SITE_DIR}/tests"
+    ln -sfn /rayci/python/ray/tests "${RAY_SITE_DIR}/tests"
 
     apply_install_mask "${RAY_SITE_DIR}"
 

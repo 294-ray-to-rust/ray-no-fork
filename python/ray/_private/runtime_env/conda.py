@@ -6,6 +6,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -125,12 +126,27 @@ def current_ray_pip_specifier(
             if running a stable release, a nightly or a specific commit
     """
     if os.environ.get("RAY_CI_POST_WHEEL_TESTS"):
-        # Running in Buildkite CI after the wheel has been built.
-        # Wheels are at in the ray/.whl directory, but use relative path to
-        # allow for testing locally if needed.
-        return os.path.join(
-            Path(ray.__file__).resolve().parents[2], ".whl", get_wheel_filename()
-        )
+        # Post-wheel CI can import Ray either from the source checkout (/rayci)
+        # or from the installed site-packages tree, depending on how the test is
+        # launched. Prefer the source-tree wheel path when it exists, but fall
+        # back to the installed-site path prepared by the test image.
+        wheel_filename = get_wheel_filename()
+        wheel_paths = [
+            Path(ray.__file__).resolve().parents[2] / ".whl" / wheel_filename,
+            Path(sysconfig.get_paths()["purelib"]).resolve().parent
+            / ".whl"
+            / wheel_filename,
+        ]
+        seen = set()
+        for wheel_path in wheel_paths:
+            wheel_path_str = str(wheel_path)
+            if wheel_path_str in seen:
+                continue
+            seen.add(wheel_path_str)
+            if wheel_path.exists():
+                return wheel_path_str
+
+        return str(wheel_paths[0])
     elif ray.__commit__ == "{{RAY_COMMIT_SHA}}":
         # Running on a version built from source locally.
         if os.environ.get("RAY_RUNTIME_ENV_LOCAL_DEV_MODE") != "1":

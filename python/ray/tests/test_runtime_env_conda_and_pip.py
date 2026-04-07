@@ -9,6 +9,7 @@ import yaml
 
 import ray
 from ray._common.test_utils import wait_for_condition
+from ray._private.runtime_env import conda as runtime_env_conda
 from ray._private.runtime_env import dependency_utils
 from ray._private.runtime_env.dependency_utils import (
     INTERNAL_PIP_FILENAME,
@@ -242,6 +243,27 @@ def test_get_requirements_file():
                 ],
             )
         assert "Could not find a valid filename for the internal " in str(excinfo.value)
+
+
+def test_current_ray_pip_specifier_post_wheel_uses_installed_fallback(monkeypatch):
+    repo_wheel = Path("/rayci/.whl/ray.whl")
+    installed_wheel = Path("/opt/miniforge/lib/python3.10/.whl/ray.whl")
+
+    monkeypatch.setenv("RAY_CI_POST_WHEEL_TESTS", "1")
+    monkeypatch.setattr(ray, "__file__", "/rayci/python/ray/__init__.py")
+    monkeypatch.setattr(runtime_env_conda, "get_wheel_filename", lambda: "ray.whl")
+    monkeypatch.setattr(
+        runtime_env_conda.sysconfig,
+        "get_paths",
+        lambda: {"purelib": "/opt/miniforge/lib/python3.10/site-packages"},
+    )
+    monkeypatch.setattr(
+        Path,
+        "exists",
+        lambda self: self == installed_wheel and self != repo_wheel,
+    )
+
+    assert runtime_env_conda.current_ray_pip_specifier() == str(installed_wheel)
 
 
 def test_working_dir_applies_for_pip_creation(start_cluster, tmp_working_dir):

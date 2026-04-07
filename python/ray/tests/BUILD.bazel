@@ -278,6 +278,31 @@ py_test_module_list(
     },
     files = [
         "test_runtime_env_conda_and_pip.py",
+    ],
+    name_suffix = "_client_mode",
+    tags = [
+        "custom_setup",
+        "exclusive",
+        "isolated_post_wheel_build",
+        "post_wheel_build",
+        "ray_client",
+        "team:core",
+    ],
+    deps = [
+        ":conftest",
+        "//:ray_lib",
+    ],
+)
+
+py_test_module_list(
+    size = "large",
+    data = [
+        "pip_install_test-0.5-py3-none-any.whl",
+    ],
+    env = {
+        "RAY_CLIENT_MODE": "1",
+    },
+    files = [
         "test_runtime_env_uv_run.py",
     ],
     name_suffix = "_client_mode",

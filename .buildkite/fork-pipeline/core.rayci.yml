@@ -238,6 +238,23 @@ steps:
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags post_wheel_build
+        --except-tags isolated_post_wheel_build
+        --test-env=RAY_CI_POST_WHEEL_TESTS=True
+    depends_on:
+      - manylinux-x86_64
+      - corebuild-multipy
+      - forge
+      - ray-wheel-build
+
+  - label: ":ray: core: wheel client-mode conda test"
+    key: core-wheel-client-mode-conda-test
+    tags: linux_wheels
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_runtime_env_conda_and_pip_client_mode core
+        --install-mask all-ray-libraries
+        --build-type wheel
+        --python-version 3.10 --build-name corebuild-py3.10
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
       - manylinux-x86_64

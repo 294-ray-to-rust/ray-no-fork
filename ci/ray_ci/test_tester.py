@@ -88,7 +88,7 @@ def test_get_container() -> None:
         assert isinstance(container, LinuxTesterContainer)
         assert container.docker_tag == "corebuild"
         assert container.shard_count == 6
-        assert container.shard_ids == [2, 3]
+        assert container.shard_ids == [1, 4]
 
         container = _get_container(
             team="serve",

@@ -311,8 +311,7 @@ def _get_container(
     privileged: bool = False,
 ) -> TesterContainer:
     shard_count = workers * parallelism_per_worker
-    shard_start = worker_id * parallelism_per_worker
-    shard_end = (worker_id + 1) * parallelism_per_worker
+    shard_ids = list(range(worker_id, shard_count, workers))
     if not build_name:
         build_name = (
             f"{team}build-py{python_version}" if python_version else f"{team}build"
@@ -323,7 +322,7 @@ def _get_container(
             build_name,
             test_envs=test_env,
             shard_count=shard_count,
-            shard_ids=list(range(shard_start, shard_end)),
+            shard_ids=shard_ids,
             gpus=gpus,
             network=network,
             skip_ray_installation=skip_ray_installation,
@@ -340,7 +339,7 @@ def _get_container(
             network=network,
             test_envs=test_env,
             shard_count=shard_count,
-            shard_ids=list(range(shard_start, shard_end)),
+            shard_ids=shard_ids,
             skip_ray_installation=skip_ray_installation,
         )
 

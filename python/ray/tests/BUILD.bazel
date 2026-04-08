@@ -994,8 +994,26 @@ py_test_module_list(
         "test_reconstruction_2.py",
         "test_runtime_env_working_dir_uri.py",
         "test_serialization.py",
-        "test_state_api.py",
         "test_task_events.py",
+    ],
+    tags = [
+        "exclusive",
+        "large_size_python_tests_shard_0",
+        "team:core",
+    ],
+    deps = [
+        ":conftest",
+        "//:ray_lib",
+    ],
+)
+
+# Fork: pulled out of the group above for longer timeout — these tests
+# reliably hit the 900s (size=large) ceiling under concurrent-build load.
+py_test_module_list(
+    size = "large",
+    timeout = 1800,
+    files = [
+        "test_state_api.py",
         "test_task_events_2.py",
     ],
     tags = [

@@ -72,7 +72,7 @@ def test_ray_init_existing_instance(call_ray_start, address):
 
     # Start a second local Ray instance.
     try:
-        subprocess.check_output("ray start --head", shell=True)
+        subprocess.check_output("ray start --head --dashboard-port 0", shell=True)
         # If there are multiple local instances, connect to the latest.
         res = ray.init(address=address)
         assert res.address_info["gcs_address"] != ray_address
@@ -95,7 +95,16 @@ def test_ray_init_existing_instance(call_ray_start, address):
 def test_ray_init_existing_instance_via_blocked_ray_start():
     """Run a blocked ray start command and check that ray.init() connects to it."""
     blocked_start_cmd = subprocess.Popen(
-        ["ray", "start", "--head", "--block", "--num-cpus", "1999"],
+        [
+            "ray",
+            "start",
+            "--head",
+            "--block",
+            "--num-cpus",
+            "1999",
+            "--dashboard-port",
+            "0",
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -202,7 +211,7 @@ def test_auto_init_non_client(call_ray_start):
 
 @pytest.mark.parametrize(
     "call_ray_start",
-    ["ray start --head --ray-client-server-port 25036 --port 0"],
+    ["ray start --head --ray-client-server-port 25036 --port 0 --dashboard-port 0"],
     indirect=True,
 )
 @pytest.mark.parametrize(

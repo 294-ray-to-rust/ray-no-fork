@@ -9,8 +9,7 @@ import yaml
 
 import ray
 from ray._common.test_utils import wait_for_condition
-from ray._private.runtime_env import conda as runtime_env_conda
-from ray._private.runtime_env import dependency_utils
+from ray._private.runtime_env import conda as runtime_env_conda, dependency_utils
 from ray._private.runtime_env.dependency_utils import (
     INTERNAL_PIP_FILENAME,
     MAX_INTERNAL_PIP_FILENAME_TRIES,

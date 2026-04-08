@@ -784,7 +784,7 @@ def call_ray_start(request):
 def call_ray_start_context(request):
     default_cmd = (
         "ray start --head --num-cpus=1 --min-worker-port=0 "
-        "--max-worker-port=0 --port 0"
+        "--max-worker-port=0 --port 0 --dashboard-port 0"
     )
     parameter = getattr(request, "param", default_cmd)
     env = None

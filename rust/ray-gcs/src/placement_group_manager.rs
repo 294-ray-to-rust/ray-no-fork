@@ -1,0 +1,521 @@
+// Copyright 2024 The Ray Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+
+//! GCS Placement Group Manager — manages placement group lifecycle.
+//!
+//! Replaces `src/ray/gcs/gcs_placement_group_manager.h/cc`.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+use ray_common::id::{NodeID, PlacementGroupID};
+
+use crate::table_storage::GcsTableStorage;
+
+/// Placement group states matching the protobuf enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum PlacementGroupState {
+    Pending = 0,
+    Created = 1,
+    Removed = 2,
+    Rescheduling = 3,
+}
+
+impl From<i32> for PlacementGroupState {
+    fn from(v: i32) -> Self {
+        match v {
+            0 => PlacementGroupState::Pending,
+            1 => PlacementGroupState::Created,
+            2 => PlacementGroupState::Removed,
+            3 => PlacementGroupState::Rescheduling,
+            _ => PlacementGroupState::Removed,
+        }
+    }
+}
+
+/// The GCS placement group manager.
+pub struct GcsPlacementGroupManager {
+    /// All registered placement groups.
+    placement_groups:
+        RwLock<HashMap<PlacementGroupID, ray_proto::ray::rpc::PlacementGroupTableData>>,
+    /// Named placement groups: (namespace, name) → PlacementGroupID.
+    named_placement_groups: RwLock<HashMap<(String, String), PlacementGroupID>>,
+    /// State counts for metrics.
+    state_counts: RwLock<HashMap<PlacementGroupState, usize>>,
+    /// Persistence.
+    table_storage: Arc<GcsTableStorage>,
+}
+
+impl GcsPlacementGroupManager {
+    pub fn new(table_storage: Arc<GcsTableStorage>) -> Self {
+        Self {
+            placement_groups: RwLock::new(HashMap::new()),
+            named_placement_groups: RwLock::new(HashMap::new()),
+            state_counts: RwLock::new(HashMap::new()),
+            table_storage,
+        }
+    }
+
+    /// Initialize from persisted data.
+    pub async fn initialize(&self) -> anyhow::Result<()> {
+        let all_pgs = self
+            .table_storage
+            .placement_group_table()
+            .get_all()
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        let mut pgs = self.placement_groups.write();
+        let mut named = self.named_placement_groups.write();
+        let mut counts = self.state_counts.write();
+
+        for (key, pg) in all_pgs {
+            let pg_id = PlacementGroupID::from_hex(&key);
+            let state = PlacementGroupState::from(pg.state);
+            *counts.entry(state).or_insert(0) += 1;
+
+            if !pg.name.is_empty() {
+                let ns = pg.ray_namespace.clone();
+                named.insert((ns, pg.name.clone()), pg_id);
+            }
+            pgs.insert(pg_id, pg);
+        }
+        Ok(())
+    }
+
+    /// Handle CreatePlacementGroup RPC.
+    pub async fn handle_create_placement_group(
+        &self,
+        pg_data: ray_proto::ray::rpc::PlacementGroupTableData,
+    ) -> Result<(), tonic::Status> {
+        let pg_id = PlacementGroupID::from_binary(
+            pg_data
+                .placement_group_id
+                .as_slice()
+                .try_into()
+                .unwrap_or(&[0u8; 18]),
+        );
+        let key = hex::encode(&pg_data.placement_group_id);
+
+        // Check name conflict
+        if !pg_data.name.is_empty() {
+            let ns = pg_data.ray_namespace.clone();
+            let named = self.named_placement_groups.read();
+            if named.contains_key(&(ns.clone(), pg_data.name.clone())) {
+                return Err(tonic::Status::already_exists(format!(
+                    "placement group '{}' already exists in namespace '{}'",
+                    pg_data.name, ns
+                )));
+            }
+        }
+
+        // Persist
+        self.table_storage
+            .placement_group_table()
+            .put(&key, &pg_data)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        // Register name
+        if !pg_data.name.is_empty() {
+            let ns = pg_data.ray_namespace.clone();
+            self.named_placement_groups
+                .write()
+                .insert((ns, pg_data.name.clone()), pg_id);
+        }
+
+        let state = PlacementGroupState::from(pg_data.state);
+        *self.state_counts.write().entry(state).or_insert(0) += 1;
+        self.placement_groups.write().insert(pg_id, pg_data);
+
+        tracing::info!(?pg_id, "Placement group created");
+        Ok(())
+    }
+
+    /// Handle RemovePlacementGroup RPC.
+    pub async fn handle_remove_placement_group(
+        &self,
+        pg_id_bytes: &[u8],
+    ) -> Result<(), tonic::Status> {
+        let pg_id = PlacementGroupID::from_binary(pg_id_bytes.try_into().unwrap_or(&[0u8; 18]));
+
+        // Remove from in-memory state (drop lock before await)
+        let removed = {
+            let pg = self.placement_groups.write().remove(&pg_id);
+            if let Some(ref pg) = pg {
+                if !pg.name.is_empty() {
+                    self.named_placement_groups
+                        .write()
+                        .remove(&(pg.ray_namespace.clone(), pg.name.clone()));
+                }
+
+                let old_state = PlacementGroupState::from(pg.state);
+                if let Some(c) = self.state_counts.write().get_mut(&old_state) {
+                    *c = c.saturating_sub(1);
+                }
+            }
+            pg.is_some()
+        };
+
+        if removed {
+            let key = hex::encode(pg_id_bytes);
+            let _ = self
+                .table_storage
+                .placement_group_table()
+                .delete(&key)
+                .await;
+
+            tracing::info!(?pg_id, "Placement group removed");
+        }
+        Ok(())
+    }
+
+    /// Handle GetPlacementGroup RPC.
+    pub fn handle_get_placement_group(
+        &self,
+        pg_id_bytes: &[u8],
+    ) -> Option<ray_proto::ray::rpc::PlacementGroupTableData> {
+        let pg_id = PlacementGroupID::from_binary(pg_id_bytes.try_into().unwrap_or(&[0u8; 18]));
+        self.placement_groups.read().get(&pg_id).cloned()
+    }
+
+    /// Handle GetNamedPlacementGroup RPC.
+    pub fn handle_get_named_placement_group(
+        &self,
+        name: &str,
+        namespace: &str,
+    ) -> Option<ray_proto::ray::rpc::PlacementGroupTableData> {
+        let named = self.named_placement_groups.read();
+        let pg_id = named.get(&(namespace.to_string(), name.to_string()))?;
+        self.placement_groups.read().get(pg_id).cloned()
+    }
+
+    /// Handle GetAllPlacementGroup RPC.
+    pub fn handle_get_all_placement_groups(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<ray_proto::ray::rpc::PlacementGroupTableData> {
+        let pgs = self.placement_groups.read();
+        if let Some(limit) = limit {
+            pgs.values().take(limit).cloned().collect()
+        } else {
+            pgs.values().cloned().collect()
+        }
+    }
+
+    /// Handle node death — mark placement groups with bundles on the dead node
+    /// as needing rescheduling.
+    pub fn on_node_dead(&self, node_id: &NodeID) {
+        let node_id_bytes = node_id.binary().to_vec();
+        let mut pgs = self.placement_groups.write();
+        let mut counts = self.state_counts.write();
+
+        for pg in pgs.values_mut() {
+            let state = PlacementGroupState::from(pg.state);
+            if state == PlacementGroupState::Removed {
+                continue;
+            }
+
+            // Check if any bundle in this PG was placed on the dead node
+            let affected = pg.bundles.iter().any(|b| b.node_id == node_id_bytes);
+            if affected {
+                let old_state = PlacementGroupState::from(pg.state);
+                pg.state = PlacementGroupState::Rescheduling as i32;
+
+                // Clear node assignments for bundles on the dead node
+                for bundle in pg.bundles.iter_mut() {
+                    if bundle.node_id == node_id_bytes {
+                        bundle.node_id.clear();
+                    }
+                }
+
+                if let Some(c) = counts.get_mut(&old_state) {
+                    *c = c.saturating_sub(1);
+                }
+                *counts.entry(PlacementGroupState::Rescheduling).or_insert(0) += 1;
+
+                tracing::info!(
+                    pg_name = %pg.name,
+                    "Placement group affected by node death, rescheduling"
+                );
+            }
+        }
+    }
+
+    pub fn num_placement_groups(&self) -> usize {
+        self.placement_groups.read().len()
+    }
+
+    pub fn state_counts(&self) -> HashMap<PlacementGroupState, usize> {
+        self.state_counts.read().clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store_client::InMemoryStoreClient;
+
+    fn make_pg(id: u8, name: &str) -> ray_proto::ray::rpc::PlacementGroupTableData {
+        let mut pg_id = vec![0u8; 18];
+        pg_id[0] = id;
+        ray_proto::ray::rpc::PlacementGroupTableData {
+            placement_group_id: pg_id,
+            name: name.to_string(),
+            ray_namespace: "default".to_string(),
+            state: PlacementGroupState::Pending as i32,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_placement_group() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        mgr.handle_create_placement_group(make_pg(1, "pg1"))
+            .await
+            .unwrap();
+        assert_eq!(mgr.num_placement_groups(), 1);
+
+        // Get by name and verify fields match what was created
+        let pg = mgr
+            .handle_get_named_placement_group("pg1", "default")
+            .expect("placement group should be found by name");
+        assert_eq!(pg.name, "pg1");
+        assert_eq!(pg.ray_namespace, "default");
+        assert_eq!(pg.placement_group_id[0], 1);
+    }
+
+    #[tokio::test]
+    async fn test_remove_placement_group() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        mgr.handle_create_placement_group(make_pg(1, "pg1"))
+            .await
+            .unwrap();
+
+        let mut pg_id = [0u8; 18];
+        pg_id[0] = 1;
+        mgr.handle_remove_placement_group(&pg_id).await.unwrap();
+        assert_eq!(mgr.num_placement_groups(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_on_node_dead_reschedules_affected_pgs() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        // Create a PG with bundles on node 1
+        let mut node_id = vec![0u8; 28];
+        node_id[0] = 1;
+        let mut pg = make_pg(1, "affected_pg");
+        pg.state = PlacementGroupState::Created as i32;
+        pg.bundles = vec![ray_proto::ray::rpc::Bundle {
+            node_id: node_id.clone(),
+            ..Default::default()
+        }];
+        mgr.handle_create_placement_group(pg).await.unwrap();
+
+        // Create another PG on node 2 (should NOT be affected)
+        let mut node2_id = vec![0u8; 28];
+        node2_id[0] = 2;
+        let mut pg2 = make_pg(2, "unaffected_pg");
+        pg2.state = PlacementGroupState::Created as i32;
+        pg2.bundles = vec![ray_proto::ray::rpc::Bundle {
+            node_id: node2_id.clone(),
+            ..Default::default()
+        }];
+        mgr.handle_create_placement_group(pg2).await.unwrap();
+
+        // Kill node 1
+        let dead_node = NodeID::from_binary(node_id.as_slice().try_into().unwrap());
+        mgr.on_node_dead(&dead_node);
+
+        // Affected PG should be Rescheduling
+        let mut pg_id = [0u8; 18];
+        pg_id[0] = 1;
+        let pg = mgr.handle_get_placement_group(&pg_id).unwrap();
+        assert_eq!(
+            PlacementGroupState::from(pg.state),
+            PlacementGroupState::Rescheduling
+        );
+        // Bundle node_id should be cleared
+        assert!(pg.bundles[0].node_id.is_empty());
+
+        // Unaffected PG should still be Created
+        let mut pg_id2 = [0u8; 18];
+        pg_id2[0] = 2;
+        let pg2 = mgr.handle_get_placement_group(&pg_id2).unwrap();
+        assert_eq!(
+            PlacementGroupState::from(pg2.state),
+            PlacementGroupState::Created
+        );
+    }
+
+    #[tokio::test]
+    async fn test_on_node_dead_no_effect_on_removed_pgs() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        let mut node_id = vec![0u8; 28];
+        node_id[0] = 1;
+        let mut pg = make_pg(1, "removed_pg");
+        pg.state = PlacementGroupState::Removed as i32;
+        pg.bundles = vec![ray_proto::ray::rpc::Bundle {
+            node_id: node_id.clone(),
+            ..Default::default()
+        }];
+        mgr.handle_create_placement_group(pg).await.unwrap();
+
+        let dead_node = NodeID::from_binary(node_id.as_slice().try_into().unwrap());
+        mgr.on_node_dead(&dead_node);
+
+        // Should still be Removed, not Rescheduling
+        let mut pg_id = [0u8; 18];
+        pg_id[0] = 1;
+        let pg = mgr.handle_get_placement_group(&pg_id).unwrap();
+        assert_eq!(
+            PlacementGroupState::from(pg.state),
+            PlacementGroupState::Removed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_named_placement_group() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        mgr.handle_create_placement_group(make_pg(1, "dup_pg"))
+            .await
+            .unwrap();
+        let result = mgr.handle_create_placement_group(make_pg(2, "dup_pg")).await;
+        assert!(result.is_err()); // AlreadyExists
+    }
+
+    #[tokio::test]
+    async fn test_same_name_different_namespace_allowed() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        let mut pg1 = make_pg(1, "shared_name");
+        pg1.ray_namespace = "ns1".to_string();
+        mgr.handle_create_placement_group(pg1).await.unwrap();
+
+        let mut pg2 = make_pg(2, "shared_name");
+        pg2.ray_namespace = "ns2".to_string();
+        mgr.handle_create_placement_group(pg2).await.unwrap();
+
+        assert_eq!(mgr.num_placement_groups(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_placement_groups_with_limit() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        for i in 1..=5u8 {
+            mgr.handle_create_placement_group(make_pg(i, &format!("pg_{}", i)))
+                .await
+                .unwrap();
+        }
+
+        let all = mgr.handle_get_all_placement_groups(None);
+        assert_eq!(all.len(), 5);
+
+        let limited = mgr.handle_get_all_placement_groups(Some(3));
+        assert_eq!(limited.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_state_counts_tracking() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        // Create pending PG
+        mgr.handle_create_placement_group(make_pg(1, "pg1"))
+            .await
+            .unwrap();
+        let counts = mgr.state_counts();
+        assert_eq!(*counts.get(&PlacementGroupState::Pending).unwrap_or(&0), 1);
+
+        // Create a "Created" PG
+        let mut pg2 = make_pg(2, "pg2");
+        pg2.state = PlacementGroupState::Created as i32;
+        mgr.handle_create_placement_group(pg2).await.unwrap();
+
+        let counts = mgr.state_counts();
+        assert_eq!(*counts.get(&PlacementGroupState::Created).unwrap_or(&0), 1);
+
+        // Remove pg1 — Pending count should decrement
+        let mut pg_id = [0u8; 18];
+        pg_id[0] = 1;
+        mgr.handle_remove_placement_group(&pg_id).await.unwrap();
+
+        let counts = mgr.state_counts();
+        assert_eq!(*counts.get(&PlacementGroupState::Pending).unwrap_or(&0), 0);
+    }
+
+    #[tokio::test]
+    async fn test_unnamed_placement_group() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        // Unnamed PGs should not be findable by name
+        let pg = make_pg(1, "");
+        mgr.handle_create_placement_group(pg).await.unwrap();
+        assert_eq!(mgr.num_placement_groups(), 1);
+
+        assert!(mgr
+            .handle_get_named_placement_group("", "default")
+            .is_none());
+
+        // But should be findable by ID
+        let mut pg_id = [0u8; 18];
+        pg_id[0] = 1;
+        assert!(mgr.handle_get_placement_group(&pg_id).is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_placement_group() {
+        let store = Arc::new(InMemoryStoreClient::new());
+        let storage = Arc::new(GcsTableStorage::new(store));
+        let mgr = GcsPlacementGroupManager::new(storage);
+
+        let pg_id = [0u8; 18];
+        assert!(mgr.handle_get_placement_group(&pg_id).is_none());
+        assert!(mgr
+            .handle_get_named_placement_group("nope", "default")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_placement_group_state_conversion() {
+        assert_eq!(PlacementGroupState::from(0), PlacementGroupState::Pending);
+        assert_eq!(PlacementGroupState::from(1), PlacementGroupState::Created);
+        assert_eq!(PlacementGroupState::from(2), PlacementGroupState::Removed);
+        assert_eq!(
+            PlacementGroupState::from(3),
+            PlacementGroupState::Rescheduling
+        );
+        // Unknown values default to Removed
+        assert_eq!(PlacementGroupState::from(99), PlacementGroupState::Removed);
+    }
+}

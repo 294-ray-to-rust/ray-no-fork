@@ -39,7 +39,7 @@ ray.get(all_refs)
 # Verify final counts
 finals = [ray.get(a.get.remote()) for a in actors]
 if all(f == 100 for f in finals):
-    print(f"  PASS  10 actors x 100 increments: all counts = 100")
+    print("  PASS  10 actors x 100 increments: all counts = 100")
     passed += 1
 else:
     print(f"  FAIL  10 actors: counts = {finals}")
@@ -62,7 +62,7 @@ for i in range(50):
         success_count += 1
 
 if success_count == 50:
-    print(f"  PASS  50 actor create cycles: all identified correctly")
+    print("  PASS  50 actor create cycles: all identified correctly")
     passed += 1
 else:
     print(f"  FAIL  Actor churn: {success_count}/50 succeeded")

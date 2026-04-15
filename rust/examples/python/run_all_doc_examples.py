@@ -10,15 +10,15 @@ For each example in ray/doc/source/ray-core/doc_code/:
     compiled graphs, GPUs, etc.), it is classified as SKIPPED with a reason.
 """
 
-import time
 import json
 import math
-import random
 import os
+import pickle
+import random
 import sys
 import tempfile
+import time
 import traceback
-import pickle
 
 import ray
 
@@ -894,7 +894,7 @@ def test_get_or_create():
         def say_hello(self):
             return self.greeting
 
-    g = Greeter.options(name="Greeter_g1").remote("Old Greeting")
+    _g = Greeter.options(name="Greeter_g1").remote("Old Greeting")
 
     # Look up named actor via GCS.
     found = ray.get_actor("Greeter_g1")
@@ -1235,8 +1235,8 @@ def test_pattern_async_actor():
 
     Tests max_concurrency which is a low-level PyCoreWorker feature.
     """
-    import threading
     import struct
+    import threading
 
     cluster = ray._runtime.cluster
     PyCoreWorker = ray.PyCoreWorker
@@ -1710,7 +1710,7 @@ def test_namespaces():
     orange_c = NamedActor.options(
         name="orange", namespace="colors"
     ).remote("orange_colors")
-    purple_c = NamedActor.options(
+    _purple_c = NamedActor.options(
         name="purple", namespace="colors"
     ).remote("purple_colors")
 
@@ -1729,7 +1729,7 @@ def test_namespaces():
     orange_f = NamedActor.options(
         name="orange", namespace="fruits"
     ).remote("orange_fruits")
-    watermelon_f = NamedActor.options(
+    _watermelon_f = NamedActor.options(
         name="watermelon", namespace="fruits"
     ).remote("watermelon_fruits")
 
@@ -1783,14 +1783,13 @@ def test_out_of_band_object_ref_serialization():
     restored_oid = pickle.loads(pickled_oid)
     assert restored_oid == oid_bytes
 
-    object_was_freed = False
     try:
         restored_ref = ray.ObjectRef(restored_oid, driver)
         val = ray.get(restored_ref, timeout=1.0)
         if val != 42:
-            object_was_freed = True
+            pass  # object was freed or value changed
     except Exception:
-        object_was_freed = True
+        pass  # object was freed
 
     assert restored_oid == oid_bytes, "OOB serialization preserved the raw OID bytes"
 

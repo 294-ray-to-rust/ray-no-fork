@@ -9,8 +9,9 @@ Tests:
   5. Actor method that raises, verify error propagation
 """
 
-import ray
 import time
+
+import ray
 
 ray.init(num_task_workers=4)
 
@@ -94,7 +95,7 @@ total += 1
 ref = outer_call.remote()
 try:
     ray.get([ref])
-    print(f"  FAIL  Cascading error: no exception raised")
+    print("  FAIL  Cascading error: no exception raised")
 except Exception as e:
     error_msg = str(e)
     if "inner task exploded" in error_msg or "RayTaskError" in error_msg:

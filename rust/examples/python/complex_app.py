@@ -48,8 +48,12 @@ def compute_stats(partition):
     for t in partition:
         cat_totals[t["category"]] = cat_totals.get(t["category"], 0) + t["amount"]
     return {
-        "total": total, "count": count, "min": mn, "max": mx,
-        "fraud_count": fraud, "category_totals": cat_totals,
+        "total": total,
+        "count": count,
+        "min": mn,
+        "max": mx,
+        "fraud_count": fraud,
+        "category_totals": cat_totals,
     }
 
 
@@ -185,12 +189,14 @@ CATEGORIES = ["food", "transport", "housing", "entertainment", "utilities"]
 
 transactions = []
 for i in range(NUM_TRANSACTIONS):
-    transactions.append({
-        "id": i,
-        "amount": ((i * 37 + 13) % 1000) + 1,
-        "category": CATEGORIES[i % len(CATEGORIES)],
-        "is_fraud": (i % 47 == 0),
-    })
+    transactions.append(
+        {
+            "id": i,
+            "amount": ((i * 37 + 13) % 1000) + 1,
+            "category": CATEGORIES[i % len(CATEGORIES)],
+            "is_fraud": (i % 47 == 0),
+        }
+    )
 
 # Sequential reference
 ref_total = sum(t["amount"] for t in transactions)
@@ -213,8 +219,10 @@ for i in range(NUM_PARTITIONS):
     partitions.append(transactions[start:end])
 
 print(f"Dataset: {NUM_TRANSACTIONS} transactions, {NUM_PARTITIONS} partitions")
-print(f"  Reference: total={ref_total}, mean={ref_mean:.2f}, "
-      f"min={ref_min}, max={ref_max}")
+print(
+    f"  Reference: total={ref_total}, mean={ref_mean:.2f}, "
+    f"min={ref_min}, max={ref_max}"
+)
 print(f"  Fraud: {ref_fraud_count}, Categories: {ref_category_totals}")
 print()
 
@@ -270,8 +278,10 @@ while pending:
     wave += 1
     result = ray.get(ready[0])
     completed_stats.append(result)
-    print(f"  [wave {wave}] count={result['count']}, total={result['total']}, "
-          f"fraud={result['fraud_count']}")
+    print(
+        f"  [wave {wave}] count={result['count']}, total={result['total']}, "
+        f"fraud={result['fraud_count']}"
+    )
 
 assert len(completed_stats) == NUM_PARTITIONS
 ray.get(monitor.record_stage.remote("compute_stats", "complete"))
@@ -294,10 +304,14 @@ for i, stat in enumerate(completed_stats):
 final_result = ray.get(reducer.get_result.remote())
 ray.get(monitor.record_stage.remote("reduce", "complete"))
 
-print(f"  Final: total={final_result['total']}, count={final_result['count']}, "
-      f"mean={final_result['mean']:.2f}")
-print(f"  Min={final_result['min']}, Max={final_result['max']}, "
-      f"Fraud={final_result['fraud_count']}")
+print(
+    f"  Final: total={final_result['total']}, count={final_result['count']}, "
+    f"mean={final_result['mean']:.2f}"
+)
+print(
+    f"  Min={final_result['min']}, Max={final_result['max']}, "
+    f"Fraud={final_result['fraud_count']}"
+)
 print(f"  Categories: {final_result['category_totals']}")
 print()
 
@@ -312,13 +326,17 @@ print("-" * 70)
 scan_refs = [fraud_detector.scan.remote(part) for part in partitions]
 for i, ref in enumerate(scan_refs):
     result = ray.get(ref)
-    print(f"  Partition {i}: scanned={result['scanned']}, "
-          f"flagged={len(result['flagged_ids'])}")
+    print(
+        f"  Partition {i}: scanned={result['scanned']}, "
+        f"flagged={len(result['flagged_ids'])}"
+    )
 
 fraud_summary = ray.get(fraud_detector.get_summary.remote())
 ray.get(monitor.record_stage.remote("fraud_scan", "complete"))
-print(f"  Total flagged: {fraud_summary['total_flagged']} "
-      f"(scanned {fraud_summary['total_scanned']})")
+print(
+    f"  Total flagged: {fraud_summary['total_flagged']} "
+    f"(scanned {fraud_summary['total_scanned']})"
+)
 print()
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -342,9 +360,11 @@ print(f"  Validated 10 transactions: {valid_count}/10 valid")
 
 normalized = ray.get(transform.remote(partitions[0], ref_max))
 print(f"  Transformed partition 0: {len(normalized)} normalized transactions")
-print(f"  Sample: id={normalized[0]['id']}, "
-      f"normalized={normalized[0]['normalized_amount']}%, "
-      f"category={normalized[0]['category']}")
+print(
+    f"  Sample: id={normalized[0]['id']}, "
+    f"normalized={normalized[0]['normalized_amount']}%, "
+    f"category={normalized[0]['category']}"
+)
 
 ray.get(monitor.record_stage.remote("validation", "complete"))
 print()
@@ -418,9 +438,11 @@ check("Fraud count", final_result["fraud_count"], ref_fraud_count)
 check("Partitions merged", final_result["partitions_merged"], NUM_PARTITIONS)
 
 for cat in CATEGORIES:
-    check(f"Category '{cat}'",
-          final_result["category_totals"].get(cat, 0),
-          ref_category_totals.get(cat, 0))
+    check(
+        f"Category '{cat}'",
+        final_result["category_totals"].get(cat, 0),
+        ref_category_totals.get(cat, 0),
+    )
 
 check("Pipeline stages", len(report["stages"]), 6)
 check("All validations passed", valid_count, 10)

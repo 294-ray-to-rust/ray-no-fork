@@ -19,6 +19,7 @@ total = 0
 
 # ── Helper ────────────────────────────────────────────────────────────
 
+
 def fib(n):
     a, b = 0, 1
     for _ in range(n):
@@ -30,12 +31,14 @@ EXPECTED_FIBS = {i: fib(i % 20) for i in range(5000)}
 
 # ── Test 1: 5,000 task submissions ────────────────────────────────────
 
+
 @ray.remote
 def compute_fib(i):
     a, b = 0, 1
     for _ in range(i % 20):
         a, b = b, a + b
     return (i, a)
+
 
 total += 1
 t0 = time.time()
@@ -50,16 +53,20 @@ for idx, val in results:
 
 if len(results) == 5000 and len(errors) == 0:
     throughput = 5000 / elapsed
-    print(f"  PASS  5,000 tasks: all correct, {throughput:.0f} tasks/sec ({elapsed:.2f}s)")
+    print(
+        f"  PASS  5,000 tasks: all correct, {throughput:.0f} tasks/sec ({elapsed:.2f}s)"
+    )
     passed += 1
 else:
     print(f"  FAIL  5,000 tasks: {len(results)} results, {len(errors)} errors")
 
 # ── Test 2: ray.wait batch collection ─────────────────────────────────
 
+
 @ray.remote
 def square(x):
     return x * x
+
 
 total += 1
 refs = [square.remote(i) for i in range(1000)]
@@ -78,17 +85,22 @@ if actual == expected:
     print(f"  PASS  ray.wait batch collection: 1,000 results in {waves} waves")
     passed += 1
 else:
-    print(f"  FAIL  ray.wait batch: expected {len(expected)} results, got {len(actual)}")
+    print(
+        f"  FAIL  ray.wait batch: expected {len(expected)} results, got {len(actual)}"
+    )
 
 # ── Test 3: 500 rapid actor method calls ──────────────────────────────
+
 
 @ray.remote
 class Counter:
     def __init__(self):
         self.n = 0
+
     def incr(self):
         self.n += 1
         return self.n
+
 
 total += 1
 c = Counter.remote()
@@ -97,22 +109,29 @@ results = ray.get(refs)
 # Since actor methods are sequential, results should be 1..500 in order.
 expected_seq = list(range(1, 501))
 if results == expected_seq:
-    print(f"  PASS  500 actor method calls: sequential consistency verified (final={results[-1]})")
+    print(
+        f"  PASS  500 actor method calls: sequential consistency verified (final={results[-1]})"
+    )
     passed += 1
 else:
     # Check at least the final value
     final = ray.get(refs[-1])
-    print(f"  FAIL  500 actor calls: expected [1..500], got final={final}, len={len(results)}")
+    print(
+        f"  FAIL  500 actor calls: expected [1..500], got final={final}, len={len(results)}"
+    )
 
 # ── Test 4: Multiple actors under load ────────────────────────────────
+
 
 @ray.remote
 class Accumulator:
     def __init__(self):
         self.total = 0
+
     def add(self, v):
         self.total += v
         return self.total
+
 
 total += 1
 actors = [Accumulator.remote() for _ in range(4)]
@@ -138,4 +157,6 @@ else:
 # ── Summary ───────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

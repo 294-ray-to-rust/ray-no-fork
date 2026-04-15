@@ -30,17 +30,21 @@ if actual_hash == expected_hash and len(result) == len(data_10mb):
     print(f"  PASS  10MB round-trip: {len(data_10mb):,} bytes, SHA256 match")
     passed += 1
 else:
-    print(f"  FAIL  10MB round-trip: len={len(result)}, hash match={actual_hash == expected_hash}")
+    print(
+        f"  FAIL  10MB round-trip: len={len(result)}, hash match={actual_hash == expected_hash}"
+    )
 
 # ── Test 2: 3MB task argument ─────────────────────────────────────────
+
 
 @ray.remote
 def process_large(data):
     # Return length and hash of the data
     return (len(data), hashlib.sha256(data).hexdigest())
 
+
 total += 1
-data_3mb = b"\xAB" * (3 * 1024 * 1024)
+data_3mb = b"\xab" * (3 * 1024 * 1024)
 expected_3_hash = hashlib.sha256(data_3mb).hexdigest()
 ref = process_large.remote(data_3mb)
 length, actual_hash = ray.get(ref)
@@ -48,7 +52,9 @@ if length == len(data_3mb) and actual_hash == expected_3_hash:
     print(f"  PASS  3MB task argument: {length:,} bytes processed, hash verified")
     passed += 1
 else:
-    print(f"  FAIL  3MB task: len={length}, expected={len(data_3mb)}, hash match={actual_hash == expected_3_hash}")
+    print(
+        f"  FAIL  3MB task: len={length}, expected={len(data_3mb)}, hash match={actual_hash == expected_3_hash}"
+    )
 
 # ── Test 3: Batch 100 x 100KB objects ────────────────────────────────
 
@@ -71,9 +77,11 @@ else:
 
 # ── Test 4: Free and verify reclamation ───────────────────────────────
 
+
 @ray.remote
 def identity(x):
     return x
+
 
 total += 1
 big_ref = ray.put(b"\x00" * (5 * 1024 * 1024))
@@ -91,9 +99,11 @@ else:
 
 # ── Test 5: Large object through chained tasks ────────────────────────
 
+
 @ray.remote
 def append_marker(data, marker):
     return data + marker
+
 
 total += 1
 original = b"X" * (1 * 1024 * 1024)  # 1MB
@@ -106,7 +116,9 @@ v3 = ray.get(r3)
 
 expected_len = len(original) + len(b"_A") + len(b"_B") + len(b"_C")
 if len(v3) == expected_len and v3.endswith(b"_A_B_C"):
-    print(f"  PASS  Chained 1MB transforms: 3 stages, {len(v3):,} bytes, suffix verified")
+    print(
+        f"  PASS  Chained 1MB transforms: 3 stages, {len(v3):,} bytes, suffix verified"
+    )
     passed += 1
 else:
     print(f"  FAIL  Chained transforms: len={len(v3)}, expected={expected_len}")
@@ -114,4 +126,6 @@ else:
 # ── Summary ───────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

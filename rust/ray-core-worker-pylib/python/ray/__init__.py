@@ -126,8 +126,10 @@ class RemoteFunction:
         num_returns = self._options.get("num_returns", 1)
         max_retries = self._options.get("max_retries", 0)
         refs = task_driver.submit_task(
-            self._func.__name__, serialized,
-            num_returns=num_returns, max_retries=max_retries,
+            self._func.__name__,
+            serialized,
+            num_returns=num_returns,
+            max_retries=max_retries,
         )
         if num_returns == 1:
             return ObjectRef(refs[0].binary(), task_driver)
@@ -198,8 +200,12 @@ class RemoteClass:
         wid = _PyWorkerID.py_from_random()
         cluster = rt.cluster
         worker = _PyCoreWorker(
-            0, "127.0.0.1", cluster.gcs_address(), 1,
-            worker_id=wid, node_id=cluster.node_id(),
+            0,
+            "127.0.0.1",
+            cluster.gcs_address(),
+            1,
+            worker_id=wid,
+            node_id=cluster.node_id(),
         )
 
         def callback(method, raw_args, num_returns=1):
@@ -212,14 +218,17 @@ class RemoteClass:
 
         RemoteClass._counter += 1
         namespace = self._options.get("namespace", "default")
-        name = self._options.get(
-            "name", f"{self._cls.__name__}_{RemoteClass._counter}"
-        )
+        name = self._options.get("name", f"{self._cls.__name__}_{RemoteClass._counter}")
         actor_id = rt.gcs.register_actor(name, namespace)
 
         rt.driver.setup_actor(
-            actor_id, name, namespace, "127.0.0.1", port,
-            cluster.node_id(), wid,
+            actor_id,
+            name,
+            namespace,
+            "127.0.0.1",
+            port,
+            cluster.node_id(),
+            wid,
         )
 
         rt._actor_workers.append(worker)
@@ -258,7 +267,10 @@ class _RayRuntime:
         self.cluster = _start_cluster()
         self.gcs = _PyGcsClient(self.cluster.gcs_address())
         self.driver = _PyCoreWorker(
-            1, "127.0.0.1", self.cluster.gcs_address(), 1,
+            1,
+            "127.0.0.1",
+            self.cluster.gcs_address(),
+            1,
             node_id=self.cluster.node_id(),
         )
         self._task_call_counts = [0] * num_task_workers
@@ -292,8 +304,12 @@ class _RayRuntime:
         worker_idx = len(self._task_pool)
         wid = _PyWorkerID.py_from_random()
         worker = _PyCoreWorker(
-            0, "127.0.0.1", self.cluster.gcs_address(), 1,
-            worker_id=wid, node_id=self.cluster.node_id(),
+            0,
+            "127.0.0.1",
+            self.cluster.gcs_address(),
+            1,
+            worker_id=wid,
+            node_id=self.cluster.node_id(),
         )
 
         def callback(method, raw_args, num_returns=1):
@@ -309,7 +325,10 @@ class _RayRuntime:
         port = worker.start_grpc_server()
 
         task_driver = _PyCoreWorker(
-            1, "127.0.0.1", self.cluster.gcs_address(), 1,
+            1,
+            "127.0.0.1",
+            self.cluster.gcs_address(),
+            1,
             node_id=self.cluster.node_id(),
         )
         task_driver.setup_task_dispatch("127.0.0.1", port, wid)
@@ -328,6 +347,7 @@ class _RayRuntime:
                 return RemoteClass(target, options)
             self._func_registry[target.__name__] = target
             return RemoteFunction(target, options)
+
         if func_or_class is not None:
             return decorator(func_or_class)
         return decorator

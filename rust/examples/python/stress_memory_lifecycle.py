@@ -70,7 +70,11 @@ a = ray.get(ref_a)
 a2 = ray.get(ref_a)
 d2 = ray.get(ref_d)
 
-if (a, b, c, d) == ("alpha", "beta", "gamma", "delta") and a2 == "alpha" and d2 == "delta":
+if (
+    (a, b, c, d) == ("alpha", "beta", "gamma", "delta")
+    and a2 == "alpha"
+    and d2 == "delta"
+):
     print("  PASS  Overlapping references: reverse order + re-get all correct")
     passed += 1
 else:
@@ -78,24 +82,31 @@ else:
 
 # ── Test 4: Actor state accumulation and clearing ───────────────────
 
+
 @ray.remote
 class StateAccumulator:
     def __init__(self):
         self.items = {}
+
     def add(self, key, value):
         self.items[key] = value
         return len(self.items)
+
     def get_size(self):
         return len(self.items)
+
     def get_item(self, key):
         return self.items.get(key)
+
     def clear(self):
         self.items.clear()
         return 0
+
     def bulk_add(self, pairs):
         for k, v in pairs:
             self.items[k] = v
         return len(self.items)
+
 
 total += 1
 acc = StateAccumulator.remote()
@@ -119,7 +130,9 @@ if size == 500 and v0 == 0 and v99 == 9900 and v499 == 49900:
         ray.get(acc.add.remote("new_key", 42))
         final_size = ray.get(acc.get_size.remote())
         if final_size == 1:
-            print(f"  PASS  Actor state: 500 items, cleared, re-added, size={final_size}")
+            print(
+                f"  PASS  Actor state: 500 items, cleared, re-added, size={final_size}"
+            )
             passed += 1
         else:
             print(f"  FAIL  Actor state after re-add: size={final_size}")
@@ -146,7 +159,9 @@ for i in range(199, -1, -1):
     result = ray.get(batch_refs[i])
     if result != batch_expected[i]:
         all_match = False
-        print(f"  FAIL  Batch item {i}: size mismatch {len(result)} vs {len(batch_expected[i])}")
+        print(
+            f"  FAIL  Batch item {i}: size mismatch {len(result)} vs {len(batch_expected[i])}"
+        )
         break
 
 if all_match:
@@ -178,7 +193,9 @@ refs = [ray.put(obj) for obj in complex_objects]
 results = ray.get(refs)
 
 if results == complex_objects:
-    print(f"  PASS  Complex types: {len(complex_objects)} different types round-tripped")
+    print(
+        f"  PASS  Complex types: {len(complex_objects)} different types round-tripped"
+    )
     passed += 1
 else:
     for i, (r, e) in enumerate(zip(results, complex_objects)):
@@ -188,4 +205,6 @@ else:
 # ── Summary ──────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

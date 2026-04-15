@@ -20,11 +20,13 @@ total = 0
 
 # ── Test 1: Partial batch failures ──────────────────────────────────
 
+
 @ray.remote
 def maybe_fail(i):
     if i in (2, 5, 8):
         raise ValueError(f"intentional failure at index {i}")
     return i * 10
+
 
 total += 1
 refs = [maybe_fail.remote(i) for i in range(10)]
@@ -40,24 +42,31 @@ for i, ref in enumerate(refs):
 if len(successes) == 7 and len(failures) == 3:
     fail_indices = sorted([idx for idx, _ in failures])
     if fail_indices == [2, 5, 8]:
-        print(f"  PASS  Partial failures: 7 successes, 3 failures at indices {fail_indices}")
+        print(
+            f"  PASS  Partial failures: 7 successes, 3 failures at indices {fail_indices}"
+        )
         passed += 1
     else:
         print(f"  FAIL  Wrong failure indices: {fail_indices}")
 else:
-    print(f"  FAIL  Partial failures: {len(successes)} successes, {len(failures)} failures")
+    print(
+        f"  FAIL  Partial failures: {len(successes)} successes, {len(failures)} failures"
+    )
 
 # ── Test 2: Retry behavior ──────────────────────────────────────────
+
 
 @ray.remote
 def flaky_task(fail_message):
     """A task that always fails — used to test that max_retries eventually gives up."""
     raise RuntimeError(fail_message)
 
+
 @ray.remote
 def succeed_after_check(value):
     """A simple task that succeeds — verify retries don't corrupt results."""
     return value * 2
+
 
 total += 1
 # Test that max_retries=0 (no retries) causes immediate failure
@@ -74,22 +83,27 @@ ref2 = succeed_after_check.options(max_retries=3).remote(21)
 result2 = ray.get([ref2])
 
 if got_error and result2 == [42]:
-    print(f"  PASS  Retry behavior: failing task raised error, succeeding task returned {result2[0]}")
+    print(
+        f"  PASS  Retry behavior: failing task raised error, succeeding task returned {result2[0]}"
+    )
     passed += 1
 else:
     print(f"  FAIL  Retry behavior: got_error={got_error}, result2={result2}")
 
 # ── Test 3: Cascading error ─────────────────────────────────────────
 
+
 @ray.remote
 def inner_fail():
     raise ValueError("inner task exploded")
+
 
 @ray.remote
 def outer_call():
     ref = inner_fail.remote()
     # This should propagate the inner error
     return ray.get([ref])[0]
+
 
 total += 1
 ref = outer_call.remote()
@@ -106,14 +120,17 @@ except Exception as e:
 
 # ── Test 4: Timeout via ray.wait ────────────────────────────────────
 
+
 @ray.remote
 def slow_task():
     time.sleep(5)
     return "done"
 
+
 @ray.remote
 def fast_task():
     return "fast"
+
 
 total += 1
 slow_ref = slow_task.remote()
@@ -127,7 +144,9 @@ fast_ready = len(ready) >= 1
 slow_still_pending = len(remaining) >= 1
 
 if fast_ready:
-    print(f"  PASS  Timeout via ray.wait: {len(ready)} ready, {len(remaining)} remaining after 1s")
+    print(
+        f"  PASS  Timeout via ray.wait: {len(ready)} ready, {len(remaining)} remaining after 1s"
+    )
     passed += 1
 else:
     print(f"  FAIL  Timeout: ready={len(ready)}, remaining={len(remaining)}")
@@ -136,6 +155,7 @@ else:
 ray.get([slow_ref])
 
 # ── Test 5: Actor resilience under sustained load ───────────────────
+
 
 @ray.remote
 class ResilientActor:
@@ -154,6 +174,7 @@ class ResilientActor:
     def get_history_len(self):
         return len(self.history)
 
+
 total += 1
 actor = ResilientActor.remote()
 # Make 100 calls rapidly
@@ -167,9 +188,13 @@ if results == expected_results and count == 100 and hist_len == 100:
     print(f"  PASS  Actor resilience: 100 calls, count={count}, history={hist_len}")
     passed += 1
 else:
-    print(f"  FAIL  Actor resilience: results match={results == expected_results}, count={count}, hist={hist_len}")
+    print(
+        f"  FAIL  Actor resilience: results match={results == expected_results}, count={count}, hist={hist_len}"
+    )
 
 # ── Summary ──────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

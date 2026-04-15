@@ -17,9 +17,11 @@ total = 0
 
 # ── Test 1: Chain of 100 tasks ──────────────────────────────────────
 
+
 @ray.remote
 def chain_step(value, step):
     return value + step
+
 
 total += 1
 # Build a chain: each task depends on the previous one's result
@@ -38,13 +40,16 @@ else:
 
 # ── Test 2: Fan-out / fan-in ────────────────────────────────────────
 
+
 @ray.remote
 def compute_square(x):
     return x * x
 
+
 @ray.remote
 def aggregate(values):
     return sum(values)
+
 
 total += 1
 # Fan-out: spawn 50 tasks
@@ -63,9 +68,11 @@ else:
 
 # ── Test 3: Actor spawning remote tasks ─────────────────────────────
 
+
 @ray.remote
 def double(x):
     return x * 2
+
 
 @ray.remote
 class TaskSpawner:
@@ -82,6 +89,7 @@ class TaskSpawner:
     def get_results(self):
         return self.results
 
+
 total += 1
 spawner = TaskSpawner.remote()
 total_sum = ray.get(spawner.spawn_and_collect.remote(10))
@@ -93,9 +101,12 @@ if total_sum == expected_sum and stored_results == expected_results:
     print(f"  PASS  Actor spawning 10 tasks: sum={total_sum}, results={stored_results}")
     passed += 1
 else:
-    print(f"  FAIL  Actor tasks: sum={total_sum} (expected {expected_sum}), results={stored_results}")
+    print(
+        f"  FAIL  Actor tasks: sum={total_sum} (expected {expected_sum}), results={stored_results}"
+    )
 
 # ── Test 4: Map-reduce ──────────────────────────────────────────────
+
 
 @ray.remote
 def map_task(partition_id, data):
@@ -105,6 +116,7 @@ def map_task(partition_id, data):
         counts[word] = counts.get(word, 0) + 1
     return (partition_id, counts)
 
+
 @ray.remote
 def reduce_task(reducer_id, map_results):
     """Reduce phase: merge word counts from multiple mappers."""
@@ -113,6 +125,7 @@ def reduce_task(reducer_id, map_results):
         for word, count in counts.items():
             merged[word] = merged.get(word, 0) + count
     return (reducer_id, merged)
+
 
 total += 1
 # Generate 20 partitions of data
@@ -130,7 +143,7 @@ map_results = ray.get(map_refs)
 # Reduce phase: 4 reducers, each gets 5 map results
 reduce_refs = []
 for r in range(4):
-    chunk = map_results[r * 5:(r + 1) * 5]
+    chunk = map_results[r * 5 : (r + 1) * 5]
     reduce_refs.append(reduce_task.remote(r, chunk))
 reduce_results = ray.get(reduce_refs)
 
@@ -154,20 +167,23 @@ else:
 
 # ── Test 5: Diamond dependency ──────────────────────────────────────
 
+
 @ray.remote
 def add(a, b):
     return a + b
+
 
 @ray.remote
 def multiply(a, b):
     return a * b
 
+
 total += 1
 # Diamond: base -> (left, right) -> join
 base_val = 10
-left = ray.get(add.remote(base_val, 5))       # 15
+left = ray.get(add.remote(base_val, 5))  # 15
 right = ray.get(multiply.remote(base_val, 3))  # 30
-join = ray.get(add.remote(left, right))         # 45
+join = ray.get(add.remote(left, right))  # 45
 
 if join == 45:
     print(f"  PASS  Diamond dependency: {base_val} -> ({left}, {right}) -> {join}")
@@ -178,4 +194,6 @@ else:
 # ── Summary ──────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

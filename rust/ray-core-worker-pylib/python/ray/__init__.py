@@ -46,10 +46,10 @@ import pickle as _pickle
 from typing import Any, List, Optional, Sequence, Union
 
 from ray._raylet import (
-    start_cluster as _start_cluster,
     PyCoreWorker as _PyCoreWorker,
     PyGcsClient as _PyGcsClient,
     PyWorkerID as _PyWorkerID,
+    start_cluster as _start_cluster,
 )
 
 __version__ = "3.0.0.dev0"

@@ -10,7 +10,6 @@ Tests:
 """
 
 import ray
-import hashlib
 
 ray.init(num_task_workers=4)
 
@@ -29,7 +28,7 @@ for i in range(500):
 
 results = ray.get(refs)
 if results == expected:
-    print(f"  PASS  500 objects put/get: all verified")
+    print("  PASS  500 objects put/get: all verified")
     passed += 1
 else:
     mismatches = sum(1 for r, e in zip(results, expected) if r != e)
@@ -49,7 +48,7 @@ for i in range(1000):
         break
 
 if all_ok:
-    print(f"  PASS  1,000 put/get cycles: all correct")
+    print("  PASS  1,000 put/get cycles: all correct")
     passed += 1
 
 # ── Test 3: Overlapping references ──────────────────────────────────
@@ -72,7 +71,7 @@ a2 = ray.get(ref_a)
 d2 = ray.get(ref_d)
 
 if (a, b, c, d) == ("alpha", "beta", "gamma", "delta") and a2 == "alpha" and d2 == "delta":
-    print(f"  PASS  Overlapping references: reverse order + re-get all correct")
+    print("  PASS  Overlapping references: reverse order + re-get all correct")
     passed += 1
 else:
     print(f"  FAIL  Overlapping refs: a={a}, b={b}, c={c}, d={d}, a2={a2}, d2={d2}")
@@ -154,10 +153,10 @@ if all_match:
     # Also verify batch get
     all_results = ray.get(batch_refs)
     if all_results == batch_expected:
-        print(f"  PASS  200 varying-size objects: sequential and batch get verified")
+        print("  PASS  200 varying-size objects: sequential and batch get verified")
         passed += 1
     else:
-        print(f"  FAIL  Batch get mismatch")
+        print("  FAIL  Batch get mismatch")
 
 # ── Test 6: Object store with complex Python types ──────────────────
 

@@ -9,8 +9,9 @@ Tests:
   5. Large object passed through 3 chained tasks by reference
 """
 
-import ray
 import hashlib
+
+import ray
 
 ray.init(num_task_workers=4)
 
@@ -83,7 +84,7 @@ assert len(val) == 5 * 1024 * 1024
 small_refs = [ray.put(i) for i in range(10)]
 small_results = ray.get(small_refs)
 if small_results == list(range(10)):
-    print(f"  PASS  Large object coexistence: 5MB + 10 small objects all accessible")
+    print("  PASS  Large object coexistence: 5MB + 10 small objects all accessible")
     passed += 1
 else:
     print(f"  FAIL  Object coexistence: small results={small_results}")

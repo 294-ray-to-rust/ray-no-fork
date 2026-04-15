@@ -8,6 +8,7 @@ Tests:
 """
 
 import time
+
 import ray
 
 ray.init(num_task_workers=4)

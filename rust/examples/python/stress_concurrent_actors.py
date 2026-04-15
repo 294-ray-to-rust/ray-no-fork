@@ -17,15 +17,19 @@ total = 0
 
 # ── Test 1: 10 actors x 100 increments ───────────────────────────────
 
+
 @ray.remote
 class Counter:
     def __init__(self):
         self.n = 0
+
     def incr(self):
         self.n += 1
         return self.n
+
     def get(self):
         return self.n
+
 
 total += 1
 actors = [Counter.remote() for _ in range(10)]
@@ -46,12 +50,15 @@ else:
 
 # ── Test 2: Rapid actor create/kill cycle ─────────────────────────────
 
+
 @ray.remote
 class Ephemeral:
     def __init__(self, tag):
         self.tag = tag
+
     def identify(self):
         return self.tag
+
 
 total += 1
 success_count = 0
@@ -69,26 +76,33 @@ else:
 
 # ── Test 3: Coordinator pattern ───────────────────────────────────────
 
+
 @ray.remote
 class Coordinator:
     def __init__(self):
         self.total = 0
         self.contributions = {}
+
     def contribute(self, worker_id, amount):
         self.total += amount
         self.contributions[worker_id] = self.contributions.get(worker_id, 0) + amount
         return self.total
+
     def get_total(self):
         return self.total
+
     def get_contributions(self):
         return self.contributions
+
 
 @ray.remote
 class Worker:
     def __init__(self, worker_id):
         self.worker_id = worker_id
+
     def get_id(self):
         return self.worker_id
+
 
 total += 1
 coord = Coordinator.remote()
@@ -108,27 +122,37 @@ contributions = ray.get(coord.get_contributions.remote())
 expected_total = 20 * (0 + 1 + 2 + 3 + 4)
 expected_contribs = {i: i * 20 for i in range(5)}
 if final_total == expected_total and contributions == expected_contribs:
-    print(f"  PASS  5 workers -> coordinator: total={final_total}, contributions={contributions}")
+    print(
+        f"  PASS  5 workers -> coordinator: total={final_total}, contributions={contributions}"
+    )
     passed += 1
 else:
-    print(f"  FAIL  Coordinator: total={final_total} (expected {expected_total}), contribs={contributions}")
+    print(
+        f"  FAIL  Coordinator: total={final_total} (expected {expected_total}), contribs={contributions}"
+    )
 
 # ── Test 4: Actor with large internal state ───────────────────────────
+
 
 @ray.remote
 class BigState:
     def __init__(self):
         self.store = {}
+
     def insert(self, key, value):
         self.store[key] = value
         return len(self.store)
+
     def get_size(self):
         return len(self.store)
+
     def sum_values(self):
         return sum(self.store.values())
+
     def clear(self):
         self.store.clear()
         return 0
+
 
 total += 1
 big = BigState.remote()
@@ -143,7 +167,9 @@ if size == 1000 and total_sum == expected_sum:
     print(f"  PASS  Large actor state: {size} items, sum={total_sum}")
     passed += 1
 else:
-    print(f"  FAIL  Large state: size={size} (expected 1000), sum={total_sum} (expected {expected_sum})")
+    print(
+        f"  FAIL  Large state: size={size} (expected 1000), sum={total_sum} (expected {expected_sum})"
+    )
 
 # After clearing
 cleared = ray.get(big.clear.remote())
@@ -156,4 +182,6 @@ else:
 # ── Summary ───────────────────────────────────────────────────────────
 
 ray.shutdown()
-print(f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})")
+print(
+    f"\n{'ALL' if passed == total else 'SOME'} STRESS TESTS {'PASSED' if passed == total else 'FAILED'} ({passed}/{total})"
+)

@@ -1,0 +1,26 @@
+group: rust tests
+steps:
+  - label: ":rust: rust: cargo test"
+    key: rust-tests
+    tags:
+      - rust
+      - always
+    instance_type: small
+    depends_on:
+      - forge
+    commands:
+      - |
+        set -euo pipefail
+        # Install protoc from pre-built binary (no root needed)
+        PROTOC_VERSION=28.3
+        curl -sSfL "https://github.com/protocolbuffers/protobuf/releases/download/v$${PROTOC_VERSION}/protoc-$${PROTOC_VERSION}-linux-x86_64.zip" -o /tmp/protoc.zip
+        unzip -q -o /tmp/protoc.zip -d "$${HOME}/.local"
+        export PATH="$${HOME}/.local/bin:$${PATH}"
+        protoc --version
+        # Install Rust toolchain (no root needed)
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+        . "$${HOME}/.cargo/env"
+        rustc --version
+        # Run tests
+        cd rust
+        cargo test --workspace

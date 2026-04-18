@@ -312,8 +312,13 @@ install_pip_packages() {
     fi
   fi
 
-  # TODO(ray-ci): pin the dependencies.
-  CC=gcc retry_pip_install pip install -Ur "${WORKSPACE_DIR}/python/requirements.txt"
+  # Use compiled constraints to prevent unconstrained dependency upgrades
+  # from breaking the environment (e.g. opentelemetry version skew).
+  _constraints_args=()
+  if [[ -f "${WORKSPACE_DIR}/python/requirements_compiled.txt" && "${OSTYPE}" != "msys" ]]; then
+    _constraints_args=(-c "${WORKSPACE_DIR}/python/requirements_compiled.txt")
+  fi
+  CC=gcc retry_pip_install pip install -U "${_constraints_args[@]}" -r "${WORKSPACE_DIR}/python/requirements.txt"
 
   # Install deeplearning libraries (Torch + TensorFlow)
   if [[ -n "${TORCH_VERSION-}" || "${DL-}" == "1" || "${RLLIB_TESTING-}" == 1 || "${TRAIN_TESTING-}" == 1 || "${TUNE_TESTING-}" == 1 || "${DOC_TESTING-}" == 1 ]]; then
@@ -383,7 +388,7 @@ install_pip_packages() {
 
   # Install delayed packages
   if [[ "${#delayed_packages[@]}" -gt 0 ]]; then
-    pip install -U -c "${WORKSPACE_DIR}/python/requirements.txt" "${delayed_packages[@]}"
+    pip install -U -c "${WORKSPACE_DIR}/python/requirements.txt" "${_constraints_args[@]}" "${delayed_packages[@]}"
   fi
 
   # Additional Tune dependency for Horovod.

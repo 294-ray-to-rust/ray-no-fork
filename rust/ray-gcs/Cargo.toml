@@ -1,0 +1,45 @@
+[package]
+name = "ray-gcs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Global Control Service (GCS) server for Ray"
+
+[[bin]]
+name = "gcs_server"
+path = "src/main.rs"
+
+[dependencies]
+ray-proto = { workspace = true }
+ray-common = { workspace = true }
+ray-util = { workspace = true }
+ray-rpc = { workspace = true }
+ray-stats = { workspace = true }
+ray-observability = { workspace = true }
+ray-pubsub = { workspace = true }
+ray-gcs-rpc-client = { workspace = true }
+ray-syncer = { workspace = true }
+tonic = { workspace = true }
+tonic-health = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+prost = { workspace = true }
+redis = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+clap = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+ray-test-utils = { workspace = true }
+tonic-health = { workspace = true }

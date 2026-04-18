@@ -1,0 +1,33 @@
+[package]
+name = "ray-core-worker-pylib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PyO3 Python bindings for Ray (_raylet.so replacement)"
+
+[lib]
+name = "_raylet"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["pyo3"]
+
+[dependencies]
+ray-common = { workspace = true }
+ray-core-worker = { workspace = true }
+ray-gcs-rpc-client = { workspace = true }
+ray-gcs = { workspace = true }
+ray-raylet = { workspace = true }
+ray-test-utils = { workspace = true }
+ray-util = { workspace = true }
+ray-rpc = { workspace = true }
+ray-proto = { workspace = true }
+ray-raylet-rpc-client = { workspace = true }
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+bytes = { workspace = true }
+async-trait = { workspace = true }

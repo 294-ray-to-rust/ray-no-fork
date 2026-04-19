@@ -9,6 +9,7 @@ srcs:
   - bazel/
   - thirdparty/
   - src/
+  - rust/
   - gen_ray_pkg.py
   - python/ray/__init__.py
   - python/ray/_raylet.pxd

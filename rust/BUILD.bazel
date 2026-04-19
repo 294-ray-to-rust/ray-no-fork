@@ -23,16 +23,16 @@ genrule(
     outs = ["_raylet.so"],
     cmd = """
         set -euo pipefail
-        
+
         # Save output path before changing directories
         OUTPUT_PATH="$@"
-        
+
         # Build in the rust directory (where Cargo.lock lives)
         cd $$(dirname $(location Cargo.lock))
-        
+
         # Build with the python feature enabled
         cargo build --release --package ray-core-worker-pylib --features python
-        
+
         # Copy the output (on Linux it's lib_raylet.so, we rename to _raylet.so)
         cp target/release/lib_raylet.so "$$OUTPUT_PATH"
     """,

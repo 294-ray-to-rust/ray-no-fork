@@ -24,10 +24,20 @@ genrule(
     cmd = """
         set -euo pipefail
 
+        # Set up Rust environment (paths match ci/docker/ray-core.Dockerfile)
+        export CARGO_HOME=/opt/cache/downloads/cargo
+        export RUSTUP_HOME=/opt/cache/downloads/rustup
+        export PATH="$$CARGO_HOME/bin:$$PATH"
+
+        if [[ ! -x "$$CARGO_HOME/bin/cargo" ]]; then
+            echo "ERROR: cargo not found at $$CARGO_HOME/bin/cargo" >&2
+            echo "Make sure Rust is installed in the Docker image" >&2
+            exit 1
+        fi
+
         # Save output path before changing directories
         OUTPUT_PATH="$@"
 
-        # Build in the rust directory (where Cargo.lock lives)
         cd $$(dirname $(location Cargo.lock))
 
         # Build with the python feature enabled

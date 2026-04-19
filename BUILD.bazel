@@ -149,57 +149,57 @@ alias(
     actual = "@com_github_redis_hiredis//:hiredis",
 )
 
-pyx_library(
-    name = "_raylet",
-    srcs = glob([
-        "python/ray/includes/*.pxd",
-        "python/ray/includes/*.pxi",
-    ]) + [
-        "python/ray/__init__.py",
-        "python/ray/_raylet.pxd",
-        "python/ray/_raylet.pyx",
-    ],
-    # Export ray ABI symbols, which can then be used by _streaming.so.
-    # We need to dlopen this lib with RTLD_GLOBAL to use ABI in this
-    # shared lib, see python/ray/__init__.py.
-    cc_kwargs = dict(
-        srcs = PYX_SRCS,
-        # cython code is auto-generated, which is out of our control.
-        copts = COPTS + PYX_COPTS,
-        # This is needed since Windows has long file path issues and command length limits
-        features = ["compiler_param_file"],
-        # see https://github.com/tensorflow/tensorflow/blob/r2.1/tensorflow/lite/BUILD#L444
-        linkopts = select({
-            "@platforms//os:osx": [
-                "-Wl,-exported_symbols_list,$(location //:src/ray/ray_exported_symbols.lds)",
-            ],
-            "@platforms//os:windows": [],
-            "//conditions:default": [
-                "-Wl,--version-script,$(location //:src/ray/ray_version_script.lds)",
-            ],
-        }),
-        linkstatic = 1,
-    ),
-    deps = [
-        "//:exported_internal",
-        "//:src/ray/ray_exported_symbols.lds",
-        "//:src/ray/ray_version_script.lds",
-        "//src/ray/common:python_callbacks",
-        "//src/ray/core_worker:core_worker_lib",
-        "//src/ray/gcs:gcs_server_lib",
-        "//src/ray/gcs/store_client:redis_store_client",
-        "//src/ray/gcs_rpc_client:global_state_accessor_lib",
-        "//src/ray/protobuf:serialization_cc_proto",
-        "//src/ray/pubsub:python_gcs_subscriber",
-        "//src/ray/raylet_rpc_client:raylet_client_with_io_context_lib",
-        "//src/ray/thirdparty/setproctitle",
-        "//src/ray/util:memory",
-        "//src/ray/util:port_persistence",
-        "//src/ray/util:raii",
-        "//src/ray/util:stream_redirection",
-        "//src/ray/util:stream_redirection_options",
-    ],
-)
+# RUST REPLACEMENT: pyx_library(
+# RUST REPLACEMENT:     name = "_raylet",
+# RUST REPLACEMENT:     srcs = glob([
+# RUST REPLACEMENT:         "python/ray/includes/*.pxd",
+# RUST REPLACEMENT:         "python/ray/includes/*.pxi",
+# RUST REPLACEMENT:     ]) + [
+# RUST REPLACEMENT:         "python/ray/__init__.py",
+# RUST REPLACEMENT:         "python/ray/_raylet.pxd",
+# RUST REPLACEMENT:         "python/ray/_raylet.pyx",
+# RUST REPLACEMENT:     ],
+# RUST REPLACEMENT:     # Export ray ABI symbols, which can then be used by _streaming.so.
+# RUST REPLACEMENT:     # We need to dlopen this lib with RTLD_GLOBAL to use ABI in this
+# RUST REPLACEMENT:     # shared lib, see python/ray/__init__.py.
+# RUST REPLACEMENT:     cc_kwargs = dict(
+# RUST REPLACEMENT:         srcs = PYX_SRCS,
+# RUST REPLACEMENT:         # cython code is auto-generated, which is out of our control.
+# RUST REPLACEMENT:         copts = COPTS + PYX_COPTS,
+# RUST REPLACEMENT:         # This is needed since Windows has long file path issues and command length limits
+# RUST REPLACEMENT:         features = ["compiler_param_file"],
+# RUST REPLACEMENT:         # see https://github.com/tensorflow/tensorflow/blob/r2.1/tensorflow/lite/BUILD#L444
+# RUST REPLACEMENT:         linkopts = select({
+# RUST REPLACEMENT:             "@platforms//os:osx": [
+# RUST REPLACEMENT:                 "-Wl,-exported_symbols_list,$(location //:src/ray/ray_exported_symbols.lds)",
+# RUST REPLACEMENT:             ],
+# RUST REPLACEMENT:             "@platforms//os:windows": [],
+# RUST REPLACEMENT:             "//conditions:default": [
+# RUST REPLACEMENT:                 "-Wl,--version-script,$(location //:src/ray/ray_version_script.lds)",
+# RUST REPLACEMENT:             ],
+# RUST REPLACEMENT:         }),
+# RUST REPLACEMENT:         linkstatic = 1,
+# RUST REPLACEMENT:     ),
+# RUST REPLACEMENT:     deps = [
+# RUST REPLACEMENT:         "//:exported_internal",
+# RUST REPLACEMENT:         "//:src/ray/ray_exported_symbols.lds",
+# RUST REPLACEMENT:         "//:src/ray/ray_version_script.lds",
+# RUST REPLACEMENT:         "//src/ray/common:python_callbacks",
+# RUST REPLACEMENT:         "//src/ray/core_worker:core_worker_lib",
+# RUST REPLACEMENT:         "//src/ray/gcs:gcs_server_lib",
+# RUST REPLACEMENT:         "//src/ray/gcs/store_client:redis_store_client",
+# RUST REPLACEMENT:         "//src/ray/gcs_rpc_client:global_state_accessor_lib",
+# RUST REPLACEMENT:         "//src/ray/protobuf:serialization_cc_proto",
+# RUST REPLACEMENT:         "//src/ray/pubsub:python_gcs_subscriber",
+# RUST REPLACEMENT:         "//src/ray/raylet_rpc_client:raylet_client_with_io_context_lib",
+# RUST REPLACEMENT:         "//src/ray/thirdparty/setproctitle",
+# RUST REPLACEMENT:         "//src/ray/util:memory",
+# RUST REPLACEMENT:         "//src/ray/util:port_persistence",
+# RUST REPLACEMENT:         "//src/ray/util:raii",
+# RUST REPLACEMENT:         "//src/ray/util:stream_redirection",
+# RUST REPLACEMENT:         "//src/ray/util:stream_redirection_options",
+# RUST REPLACEMENT:     ],
+# RUST REPLACEMENT: )
 
 filegroup(
     name = "python_sources",
@@ -265,12 +265,12 @@ py_library(
 
 pkg_files(
     name = "raylet_so_files",
-    srcs = ["python/ray/_raylet.so"],
+    srcs = ["//rust:_raylet"],
     attributes = pkg_attributes(mode = "755"),
     prefix = "ray/",
     renames = select({
         "@platforms//os:windows": {
-            "python/ray/_raylet.so": "_raylet.pyd",
+            "_raylet.so": "_raylet.pyd",
         },
         "//conditions:default": {},
     }),

@@ -1,0 +1,41 @@
+# Rust crates for Ray - built via Cargo, integrated into Bazel packaging
+
+package(default_visibility = ["//visibility:public"])
+
+# Export Cargo workspace files for reference
+exports_files([
+    "Cargo.toml",
+    "Cargo.lock",
+])
+
+# Build the Rust _raylet.so via Cargo
+# Uses local=1 because Cargo needs network access for crates and
+# the proto files at src/ray/protobuf/
+genrule(
+    name = "_raylet",
+    srcs = glob(
+        ["**/*.rs", "**/*.toml"],
+        exclude = ["target/**"],
+    ) + [
+        "Cargo.lock",
+        "//src/ray/protobuf:proto_srcs",
+    ],
+    outs = ["_raylet.so"],
+    cmd = """
+        set -euo pipefail
+        
+        # Save output path before changing directories
+        OUTPUT_PATH="$@"
+        
+        # Build in the rust directory (where Cargo.lock lives)
+        cd $$(dirname $(location Cargo.lock))
+        
+        # Build with the python feature enabled
+        cargo build --release --package ray-core-worker-pylib --features python
+        
+        # Copy the output (on Linux it's lib_raylet.so, we rename to _raylet.so)
+        cp target/release/lib_raylet.so "$$OUTPUT_PATH"
+    """,
+    local = 1,
+    tags = ["no-sandbox"],
+)

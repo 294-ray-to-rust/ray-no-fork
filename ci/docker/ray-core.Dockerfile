@@ -28,6 +28,14 @@ RUN --mount=type=cache,target=${DOWNLOAD_CACHE},uid=2000,gid=100,id=ray-download
 #!/bin/bash
 set -euo pipefail
 
+# Install Rust toolchain for building the Rust backend
+export RUSTUP_HOME=$DOWNLOAD_CACHE/rustup
+export CARGO_HOME=$DOWNLOAD_CACHE/cargo
+if [[ ! -f "$CARGO_HOME/bin/cargo" ]]; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0 --no-modify-path
+fi
+export PATH="$CARGO_HOME/bin:$PATH"
+
 export BAZELISK_HOME=$DOWNLOAD_CACHE/bazelisk
 REPOSITORY_CACHE=$DOWNLOAD_CACHE/repo
 

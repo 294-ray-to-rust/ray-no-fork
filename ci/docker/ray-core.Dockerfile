@@ -24,9 +24,19 @@ COPY . .
 
 RUN --mount=type=cache,target=${DOWNLOAD_CACHE},uid=2000,gid=100,id=ray-downloads-${HOSTTYPE} \
     --mount=type=cache,target=${BAZEL_CACHE},uid=2000,gid=100,id=ray-bazel-${HOSTTYPE}-py${PYTHON_VERSION} \
-    <<'EOF'
+    <<'EOFRUN'
 #!/bin/bash
 set -euo pipefail
+
+# Set up compiler toolchain (manylinux2014 devtoolset)
+# Disable unbound variable check - devtoolset scripts use unset vars
+set +u
+if [[ -d /opt/rh/devtoolset-10 ]]; then
+    source /opt/rh/devtoolset-10/enable
+elif [[ -d /opt/rh/devtoolset-8 ]]; then
+    source /opt/rh/devtoolset-8/enable
+fi
+set -u
 
 # Install Rust toolchain for building the Rust backend
 export RUSTUP_HOME=$DOWNLOAD_CACHE/rustup
@@ -35,6 +45,15 @@ if [[ ! -f "$CARGO_HOME/bin/cargo" ]]; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0 --no-modify-path
 fi
 export PATH="$CARGO_HOME/bin:$PATH"
+
+# Build the Rust backend BEFORE running Bazel
+# This creates rust/_raylet.so which Bazel will package
+echo "Building Rust backend..."
+cd rust
+cargo build --release --package ray-core-worker-pylib --features python
+cp target/release/lib_raylet.so _raylet.so
+cd ..
+echo "Rust backend built: rust/_raylet.so"
 
 export BAZELISK_HOME=$DOWNLOAD_CACHE/bazelisk
 REPOSITORY_CACHE=$DOWNLOAD_CACHE/repo
@@ -74,7 +93,7 @@ bazelisk --output_base=$BAZEL_CACHE build --config=ci \
 cp bazel-bin/ray_pkg.zip /home/forge/ray_pkg.zip
 cp bazel-bin/ray_py_proto.zip /home/forge/ray_py_proto.zip
 
-EOF
+EOFRUN
 
 FROM scratch
 

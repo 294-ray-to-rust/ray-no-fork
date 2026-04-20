@@ -1,69 +1,17 @@
-# Rust crates for Ray - built via Cargo, integrated into Bazel packaging
+# Rust crates for Ray - pre-built by Cargo in the Docker build step
+#
+# The _raylet.so is built by cargo in ci/docker/ray-core.Dockerfile before
+# Bazel runs, then copied here. This avoids fighting with Bazel sandboxed
+# environment for Rust builds.
 
 package(default_visibility = ["//visibility:public"])
 
-# Export Cargo workspace files for reference
-exports_files([
-    "Cargo.toml",
-    "Cargo.lock",
-])
+# Export the pre-built Rust library
+# This file is created by cargo build in the Dockerfile before bazel runs
+exports_files(["_raylet.so"])
 
-# Build the Rust _raylet.so via Cargo
-# Uses local=1 because Cargo needs network access for crates and
-# the proto files at src/ray/protobuf/
-genrule(
+# Alias for compatibility with the rest of the build
+filegroup(
     name = "_raylet",
-    srcs = glob(
-        ["**/*.rs", "**/*.toml"],
-        exclude = ["target/**"],
-    ) + [
-        "Cargo.lock",
-        "//src/ray/protobuf:proto_srcs",
-    ],
-    outs = ["_raylet.so"],
-    cmd = """
-        set -euo pipefail
-
-        # Set up compiler toolchain (manylinux2014 devtoolset)
-        # Try devtoolset-10 first, then fall back to devtoolset-8
-        if [[ -d /opt/rh/devtoolset-10 ]]; then
-            source /opt/rh/devtoolset-10/enable
-        elif [[ -d /opt/rh/devtoolset-8 ]]; then
-            source /opt/rh/devtoolset-8/enable
-        fi
-
-        # Set up Rust environment (paths match ci/docker/ray-core.Dockerfile)
-        export CARGO_HOME=/opt/cache/downloads/cargo
-        export RUSTUP_HOME=/opt/cache/downloads/rustup
-        export PATH="$$CARGO_HOME/bin:$$PATH"
-
-        # Use a writable target directory (source tree may be read-only in Docker)
-        export CARGO_TARGET_DIR=/tmp/cargo-target
-
-        if [[ ! -x "$$CARGO_HOME/bin/cargo" ]]; then
-            echo "ERROR: cargo not found at $$CARGO_HOME/bin/cargo" >&2
-            echo "Make sure Rust is installed in the Docker image" >&2
-            exit 1
-        fi
-
-        # Verify cc is available
-        if ! command -v cc &> /dev/null; then
-            echo "ERROR: cc (C compiler) not found in PATH" >&2
-            echo "PATH=$$PATH" >&2
-            exit 1
-        fi
-
-        # Save output path before changing directories
-        OUTPUT_PATH="$@"
-
-        cd $$(dirname $(location Cargo.lock))
-
-        # Build with the python feature enabled
-        cargo build --release --package ray-core-worker-pylib --features python
-
-        # Copy the output (on Linux it's lib_raylet.so, we rename to _raylet.so)
-        cp "$$CARGO_TARGET_DIR/release/lib_raylet.so" "$$OUTPUT_PATH"
-    """,
-    local = 1,
-    tags = ["no-sandbox"],
+    srcs = ["_raylet.so"],
 )

@@ -24,6 +24,14 @@ genrule(
     cmd = """
         set -euo pipefail
 
+        # Set up compiler toolchain (manylinux2014 devtoolset)
+        # Try devtoolset-10 first, then fall back to devtoolset-8
+        if [[ -d /opt/rh/devtoolset-10 ]]; then
+            source /opt/rh/devtoolset-10/enable
+        elif [[ -d /opt/rh/devtoolset-8 ]]; then
+            source /opt/rh/devtoolset-8/enable
+        fi
+
         # Set up Rust environment (paths match ci/docker/ray-core.Dockerfile)
         export CARGO_HOME=/opt/cache/downloads/cargo
         export RUSTUP_HOME=/opt/cache/downloads/rustup
@@ -35,6 +43,13 @@ genrule(
         if [[ ! -x "$$CARGO_HOME/bin/cargo" ]]; then
             echo "ERROR: cargo not found at $$CARGO_HOME/bin/cargo" >&2
             echo "Make sure Rust is installed in the Docker image" >&2
+            exit 1
+        fi
+
+        # Verify cc is available
+        if ! command -v cc &> /dev/null; then
+            echo "ERROR: cc (C compiler) not found in PATH" >&2
+            echo "PATH=$$PATH" >&2
             exit 1
         fi
 

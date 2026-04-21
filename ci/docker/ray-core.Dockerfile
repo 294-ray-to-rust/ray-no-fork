@@ -78,14 +78,27 @@ mkdir -p "$DOWNLOAD_CACHE"
             -y --default-toolchain 1.85.0 --no-modify-path --profile minimal
     fi
 
-    # Pre-install the toolchain pinned by rust/rust-toolchain.toml under
-    # the lock so the `cargo build` step below is a read-only cache hit.
-    # `rustup show` triggers install of the override toolchain and its
-    # declared components. If a previous partial install left the cache
-    # corrupted, uninstall the override toolchain and retry once.
-    if ! (cd rust && rustup show >/dev/null 2>&1); then
-        rustup toolchain uninstall stable >/dev/null 2>&1 || true
-        (cd rust && rustup show >/dev/null)
+    # Ensure the toolchain pinned by rust/rust-toolchain.toml (stable +
+    # rustfmt + clippy) is fully installed. Probe the actual binaries
+    # in $RUSTUP_HOME — `rustup show` reports a partial install as OK,
+    # which is what let the race in #333 corrupt the cache persistently.
+    #
+    # If any of the binaries is missing or unrunnable we're looking at
+    # either a cold cache or a leftover partial install from a previous
+    # failed concurrent build (manifest-*-preview files left behind).
+    # Wipe the toolchains dir so rustup reinstalls cleanly.
+    tc_dir="$RUSTUP_HOME/toolchains/stable-${HOSTTYPE}-unknown-linux-gnu"
+    toolchain_ok=1
+    for bin in "$tc_dir/bin/rustc" "$tc_dir/bin/cargo-clippy" "$tc_dir/bin/rustfmt"; do
+        if [[ ! -x "$bin" ]] || ! "$bin" --version >/dev/null 2>&1; then
+            toolchain_ok=0
+            break
+        fi
+    done
+    if [[ $toolchain_ok -eq 0 ]]; then
+        rm -rf "$RUSTUP_HOME/toolchains"
+        rustup toolchain install stable \
+            --profile minimal --component rustfmt --component clippy
     fi
 ) 9>"$DOWNLOAD_CACHE/.rustup.lock"
 

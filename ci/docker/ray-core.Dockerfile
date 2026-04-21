@@ -38,13 +38,56 @@ elif [[ -d /opt/rh/devtoolset-8 ]]; then
 fi
 set -u
 
-# Install Rust toolchain for building the Rust backend
+# Install Rust toolchain for building the Rust backend.
+#
+# RUSTUP_HOME and CARGO_HOME live in the shared ray-downloads-${HOSTTYPE}
+# BuildKit cache mount, which is used concurrently by all PYTHON_VERSION
+# variants of this image (py3.10..py3.14) when wanda builds them in
+# parallel. Two failure modes have been observed:
+#
+#   1. The old `[[ ! -f cargo ]]` guard is satisfied after rustup-init
+#      succeeds, but the *real* toolchain install happens implicitly
+#      when `cargo build` reads rust/rust-toolchain.toml (channel=stable,
+#      components=[rustfmt, clippy]). Parallel builds race while rustup
+#      unpacks components into $RUSTUP_HOME and one loses with:
+#
+#        error: failed to install component: 'clippy-preview-...':
+#        detected conflict: 'lib/rustlib/manifest-clippy-preview-...'
+#
+#      The conflicting manifest persists in the cache and every
+#      subsequent build hits the same error on recovery.
+#
+#   2. The guard also can't tell a partially-installed toolchain from a
+#      healthy one, so it never self-heals.
+#
+# Fix: serialize rustup init + toolchain install with a file lock held
+# on a lockfile inside the shared cache, and probe cargo functionally
+# (not just its presence on disk). The first concurrent build populates
+# the cache; the rest see a fast no-op cache hit.
 export RUSTUP_HOME=$DOWNLOAD_CACHE/rustup
 export CARGO_HOME=$DOWNLOAD_CACHE/cargo
-if [[ ! -f "$CARGO_HOME/bin/cargo" ]]; then
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0 --no-modify-path
-fi
 export PATH="$CARGO_HOME/bin:$PATH"
+
+mkdir -p "$DOWNLOAD_CACHE"
+(
+    flock 9
+
+    if ! command -v cargo >/dev/null 2>&1 || ! cargo --version >/dev/null 2>&1; then
+        rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+            -y --default-toolchain 1.85.0 --no-modify-path --profile minimal
+    fi
+
+    # Pre-install the toolchain pinned by rust/rust-toolchain.toml under
+    # the lock so the `cargo build` step below is a read-only cache hit.
+    # `rustup show` triggers install of the override toolchain and its
+    # declared components. If a previous partial install left the cache
+    # corrupted, uninstall the override toolchain and retry once.
+    if ! (cd rust && rustup show >/dev/null 2>&1); then
+        rustup toolchain uninstall stable >/dev/null 2>&1 || true
+        (cd rust && rustup show >/dev/null)
+    fi
+) 9>"$DOWNLOAD_CACHE/.rustup.lock"
 
 # Build the Rust backend BEFORE running Bazel
 # This creates rust/_raylet.so which Bazel will package

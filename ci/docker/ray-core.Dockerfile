@@ -103,11 +103,18 @@ mkdir -p "$DOWNLOAD_CACHE"
 ) 9>"$DOWNLOAD_CACHE/.rustup.lock"
 
 # Build the Rust backend BEFORE running Bazel
-# This creates rust/_raylet.so which Bazel will package
+# This creates rust/_raylet.so which Bazel will package.
+#
+# The RUN step executes as uid 2000 (forge) to match the cache mount
+# ownership, but `COPY . .` leaves the source tree owned by root, so
+# `rust/` is not writable by the build user. Point cargo at a target
+# dir under $DOWNLOAD_CACHE (uid 2000) so it can create its build dir.
 echo "Building Rust backend..."
+export CARGO_TARGET_DIR=$DOWNLOAD_CACHE/cargo-target-py${PYTHON_VERSION}
+mkdir -p "$CARGO_TARGET_DIR"
 cd rust
 cargo build --release --package ray-core-worker-pylib --features python
-cp target/release/lib_raylet.so _raylet.so
+cp "$CARGO_TARGET_DIR/release/lib_raylet.so" _raylet.so
 cd ..
 echo "Rust backend built: rust/_raylet.so"
 

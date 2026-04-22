@@ -32,6 +32,18 @@ pub use object_ref::PyObjectRef;
 use pyo3::prelude::*;
 
 #[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct Config;
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct ObjectRefGenerator;
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct DynamicObjectRefGenerator;
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
@@ -87,6 +99,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ids::PyWorkerID>()?;
     m.add_class::<ids::PyNodeID>()?;
     m.add_class::<ids::PyPlacementGroupID>()?;
+    m.add_class::<ids::PyActorClassID>()?;
+    m.add_class::<ids::PyFunctionID>()?;
+    m.add_class::<ids::PyUniqueID>()?;
+    m.add_class::<ids::PyClusterID>()?;
 
     // ─── Enums ───────────────────────────────────────────────────
     m.add_class::<common::PyLanguage>()?;
@@ -98,11 +114,31 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<gcs_client::PyGcsClient>()?;
     m.add_class::<cluster::PyClusterHandle>()?;
 
+    // ─── Stub classes (incomplete Rust port; unblock ray/__init__.py import) ──
+    m.add_class::<Config>()?;
+    m.add_class::<ObjectRefGenerator>()?;
+    m.add_class::<DynamicObjectRefGenerator>()?;
+
     // ─── Cluster functions ───────────────────────────────────────
     m.add_function(wrap_pyfunction!(cluster::start_cluster, m)?)?;
 
     // ─── Constants ───────────────────────────────────────────────
     m.add("RAY_VERSION", ray_common::constants::RAY_VERSION)?;
+
+    // ─── Name aliases (ray/__init__.py imports without Py prefix) ────────────
+    m.add("ObjectID",         m.getattr("PyObjectID")?)?;
+    m.add("TaskID",           m.getattr("PyTaskID")?)?;
+    m.add("ActorID",          m.getattr("PyActorID")?)?;
+    m.add("JobID",            m.getattr("PyJobID")?)?;
+    m.add("WorkerID",         m.getattr("PyWorkerID")?)?;
+    m.add("NodeID",           m.getattr("PyNodeID")?)?;
+    m.add("PlacementGroupID", m.getattr("PyPlacementGroupID")?)?;
+    m.add("ActorClassID",     m.getattr("PyActorClassID")?)?;
+    m.add("FunctionID",       m.getattr("PyFunctionID")?)?;
+    m.add("UniqueID",         m.getattr("PyUniqueID")?)?;
+    m.add("ClusterID",        m.getattr("PyClusterID")?)?;
+    m.add("Language",         m.getattr("PyLanguage")?)?;
+    m.add("ObjectRef",        m.getattr("PyObjectRef")?)?;
 
     Ok(())
 }

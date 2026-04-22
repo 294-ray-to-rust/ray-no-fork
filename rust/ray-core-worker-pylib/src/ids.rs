@@ -196,6 +196,10 @@ py_id_wrapper!(PyJobID, id::JobID, {
 py_id_wrapper!(PyWorkerID, id::WorkerID);
 py_id_wrapper!(PyNodeID, id::NodeID);
 py_id_wrapper!(PyPlacementGroupID, id::PlacementGroupID);
+py_id_wrapper!(PyActorClassID, id::ActorClassID);
+py_id_wrapper!(PyFunctionID, id::FunctionID);
+py_id_wrapper!(PyUniqueID, id::UniqueID);
+py_id_wrapper!(PyClusterID, id::ClusterID);
 
 // Extra methods for PyJobID (Rust-only).
 impl PyJobID {

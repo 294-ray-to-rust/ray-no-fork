@@ -103,15 +103,20 @@ mkdir -p "$DOWNLOAD_CACHE"
 ) 9>"$DOWNLOAD_CACHE/.rustup.lock"
 
 # Install protoc (required by prost-build/tonic-build for ray-proto codegen).
-# Cached in $DOWNLOAD_CACHE so it is only downloaded once across all builds.
+# Serialized with flock — same shared cache mount as rustup above.
 PROTOC_VERSION=28.3
 PROTOC_BIN="$DOWNLOAD_CACHE/protoc/bin/protoc"
-if [[ ! -x "$PROTOC_BIN" ]]; then
-    mkdir -p "$DOWNLOAD_CACHE/protoc"
-    curl -sSfL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" \
-        -o /tmp/protoc.zip
-    unzip -q -o /tmp/protoc.zip -d "$DOWNLOAD_CACHE/protoc"
-fi
+(
+    flock 8
+    if [[ ! -x "$PROTOC_BIN" ]]; then
+        mkdir -p "$DOWNLOAD_CACHE/protoc"
+        PROTOC_ZIP="$DOWNLOAD_CACHE/protoc-${PROTOC_VERSION}.zip"
+        curl -sSfL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" \
+            -o "$PROTOC_ZIP"
+        unzip -q -o "$PROTOC_ZIP" -d "$DOWNLOAD_CACHE/protoc"
+        rm -f "$PROTOC_ZIP"
+    fi
+) 8>"$DOWNLOAD_CACHE/.protoc.lock"
 export PATH="$DOWNLOAD_CACHE/protoc/bin:$PATH"
 export PROTOC="$DOWNLOAD_CACHE/protoc/bin/protoc"
 

@@ -127,7 +127,7 @@ export CARGO_TARGET_DIR=$DOWNLOAD_CACHE/cargo-target-py${PYTHON_VERSION}
 mkdir -p "$CARGO_TARGET_DIR"
 cd rust
 cargo build --release --package ray-core-worker-pylib --features python
-cp "$CARGO_TARGET_DIR/release/lib_raylet.so" _raylet.so
+sudo cp "$CARGO_TARGET_DIR/release/lib_raylet.so" _raylet.so
 cd ..
 echo "Rust backend built: rust/_raylet.so"
 

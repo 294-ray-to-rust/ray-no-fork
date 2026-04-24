@@ -36,12 +36,33 @@ use pyo3::prelude::*;
 struct Config;
 
 #[cfg(feature = "python")]
+#[pymethods]
+impl Config {
+    #[new]
+    fn new() -> Self { Config }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
 struct ObjectRefGenerator;
 
 #[cfg(feature = "python")]
+#[pymethods]
+impl ObjectRefGenerator {
+    #[new]
+    fn new() -> Self { ObjectRefGenerator }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
 struct DynamicObjectRefGenerator;
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl DynamicObjectRefGenerator {
+    #[new]
+    fn new() -> Self { DynamicObjectRefGenerator }
+}
 
 #[cfg(feature = "python")]
 #[pyfunction]

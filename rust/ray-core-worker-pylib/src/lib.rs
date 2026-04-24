@@ -160,6 +160,35 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("ClusterID",        m.getattr("PyClusterID")?)?;
     m.add("Language",         m.getattr("PyLanguage")?)?;
     m.add("ObjectRef",        m.getattr("PyObjectRef")?)?;
+    // GcsClient: alias to the real implementation
+    m.add("GcsClient",        m.getattr("PyGcsClient")?)?;
+
+    // ─── Module __getattr__ ───────────────────────────────────────────────────
+    // Stubs out any symbol from the original Cython _raylet.pyx that has not
+    // yet been ported to Rust.  Python 3.7+ (PEP 562) calls __getattr__ when
+    // an attribute lookup on the module fails, including `from x import y`.
+    // The returned stub is a class whose instances silently accept any call or
+    // attribute access, so module-level imports succeed without crashing.
+    {
+        use pyo3::types::PyDict;
+        let py = m.py();
+        let locals = PyDict::new_bound(py);
+        py.run_bound(
+            r#"def __getattr__(name):
+    return type(name, (), {
+        '__init__': lambda self, *a, **k: None,
+        '__call__': lambda self, *a, **k: None,
+        '__getattr__': lambda self, n: (lambda *a, **k: None),
+        '__repr__': lambda self: f'<_raylet stub:{name}>',
+    })"#,
+            None,
+            Some(&locals),
+        )?;
+        let getattr_fn = locals
+            .get_item("__getattr__")?
+            .expect("just defined above");
+        m.add("__getattr__", getattr_fn)?;
+    }
 
     Ok(())
 }

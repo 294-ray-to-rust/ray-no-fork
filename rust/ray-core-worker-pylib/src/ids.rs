@@ -114,18 +114,21 @@ macro_rules! py_id_wrapper {
 
             /// Return a nil (all-zeroes) ID.
             #[staticmethod]
+            #[pyo3(name = "nil")]
             fn py_nil() -> Self {
                 Self::nil()
             }
 
             /// Construct from a hex string.
             #[staticmethod]
+            #[pyo3(name = "from_hex")]
             fn py_from_hex(hex_str: &str) -> Self {
                 Self::from_hex(hex_str)
             }
 
             /// Construct a random ID.
             #[staticmethod]
+            #[pyo3(name = "from_random")]
             fn py_from_random() -> Self {
                 Self::from_random()
             }

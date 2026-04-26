@@ -44,7 +44,7 @@ impl Config {
     // Stub: return a callable that returns -1 for any unimplemented config method.
     // -1 is the "unlimited" sentinel for gRPC message sizes and most Ray timeouts.
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
-        py.eval("lambda *a, **kw: -1", None, None).map(|b| b.unbind())
+        py.eval_bound("lambda *a, **kw: -1", None, None).map(|b| b.unbind())
     }
 }
 

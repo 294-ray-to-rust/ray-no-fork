@@ -164,10 +164,39 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FunctionID",       m.getattr("PyFunctionID")?)?;
     m.add("UniqueID",         m.getattr("PyUniqueID")?)?;
     m.add("ClusterID",        m.getattr("PyClusterID")?)?;
-    m.add("Language",         m.getattr("PyLanguage")?)?;
     m.add("ObjectRef",        m.getattr("PyObjectRef")?)?;
     // GcsClient: alias to the real implementation
     m.add("GcsClient",        m.getattr("PyGcsClient")?)?;
+
+    // ─── Enum wrappers with UPPERCASE names ──────────────────────────────────
+    // Python code uses Language.PYTHON / WorkerType.WORKER (all-caps convention
+    // from the original Cython _raylet.pyx). PyO3 exposes variants with their
+    // Rust names (Python/Java/Cpp), so we build thin Python classes here.
+    {
+        use pyo3::types::PyDict;
+        let py = m.py();
+        let locals = PyDict::new_bound(py);
+        locals.set_item("_L", m.getattr("PyLanguage")?)?;
+        locals.set_item("_W", m.getattr("PyWorkerType")?)?;
+        py.run_bound(
+            r#"
+class Language:
+    PYTHON = _L.Python
+    JAVA   = _L.Java
+    CPP    = _L.Cpp
+
+class WorkerType:
+    WORKER         = _W.Worker
+    DRIVER         = _W.Driver
+    SPILL_WORKER   = _W.SpillWorker
+    RESTORE_WORKER = _W.RestoreWorker
+"#,
+            None,
+            Some(&locals),
+        )?;
+        m.add("Language",   locals.get_item("Language")?.expect("just defined"))?;
+        m.add("WorkerType", locals.get_item("WorkerType")?.expect("just defined"))?;
+    }
 
     // ─── Module __getattr__ ───────────────────────────────────────────────────
     // Stubs out any symbol from the original Cython _raylet.pyx that has not

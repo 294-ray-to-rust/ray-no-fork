@@ -181,7 +181,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
         let locals = PyDict::new_bound(py);
         py.run_bound(
             r#"def __getattr__(name):
-    return type(name, (), {
+    _meta = type('_StubMeta', (type,), {
+        '__getattr__': lambda cls, n: (lambda *a, **k: cls()),
+    })
+    return _meta(name, (), {
         '__init__': lambda self, *a, **k: None,
         '__call__': lambda self, *a, **k: None,
         '__getattr__': lambda self, n: (lambda *a, **k: None),

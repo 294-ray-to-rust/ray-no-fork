@@ -3,7 +3,7 @@
 # In contrast, our build jobs are run in Docker containers.
 # This means that even though our build jobs write to
 # `/artifact-mount`, the directory on the host machine is
-# actually `/tmp/artifacts`.
+# `$RAYCI_ARTIFACT_DIR` (defaulting to `/tmp/artifacts`).
 # Here, we cat all text files in artifact-mount/test-summaries
 # and upload them as a Buildkite annotation.
 # These files contain a condensed summary of all failing pytest

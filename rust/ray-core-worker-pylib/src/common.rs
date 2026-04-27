@@ -14,8 +14,11 @@ use ray_core_worker::CoreWorkerError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "python", pyo3::pyclass(module = "_raylet", eq, eq_int))]
 pub enum PyLanguage {
+    #[cfg_attr(feature = "python", pyo3(name = "PYTHON"))]
     Python = 0,
+    #[cfg_attr(feature = "python", pyo3(name = "JAVA"))]
     Java = 1,
+    #[cfg_attr(feature = "python", pyo3(name = "CPP"))]
     Cpp = 2,
 }
 
@@ -54,9 +57,13 @@ impl PyLanguage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "python", pyo3::pyclass(module = "_raylet", eq, eq_int))]
 pub enum PyWorkerType {
+    #[cfg_attr(feature = "python", pyo3(name = "WORKER"))]
     Worker = 0,
+    #[cfg_attr(feature = "python", pyo3(name = "DRIVER"))]
     Driver = 1,
+    #[cfg_attr(feature = "python", pyo3(name = "SPILL_WORKER"))]
     SpillWorker = 2,
+    #[cfg_attr(feature = "python", pyo3(name = "RESTORE_WORKER"))]
     RestoreWorker = 3,
 }
 

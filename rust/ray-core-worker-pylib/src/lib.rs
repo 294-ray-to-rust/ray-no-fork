@@ -195,6 +195,92 @@ fn node_ip_address_from_perspective(address: Option<&str>) -> String {
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn get_port_filename(node_id: &str, port_name: &str) -> String {
+    format!("{port_name}_{node_id}")
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn persist_port(dir: &str, node_id: &str, port_name: &str, port: i32) -> PyResult<()> {
+    let path = std::path::Path::new(dir).join(get_port_filename(node_id, port_name));
+    std::fs::write(&path, port.to_string()).map_err(|e| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!(
+            "failed to persist port to {}: {e}",
+            path.display()
+        ))
+    })
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (dir, node_id, port_name, timeout_ms = 30000, poll_interval_ms = 100))]
+fn wait_for_persisted_port(
+    dir: &str,
+    node_id: &str,
+    port_name: &str,
+    timeout_ms: u64,
+    poll_interval_ms: u64,
+) -> PyResult<i32> {
+    let path = std::path::Path::new(dir).join(get_port_filename(node_id, port_name));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+
+    loop {
+        match std::fs::read_to_string(&path) {
+            Ok(value) => {
+                return value.trim().parse::<i32>().map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "invalid port value in {}: {e}",
+                        path.display()
+                    ))
+                });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "timed out waiting for persisted port {}",
+                        path.display()
+                    )));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(poll_interval_ms));
+            }
+            Err(e) => {
+                return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "failed to read {}: {e}",
+                    path.display()
+                )));
+            }
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn get_session_key_from_storage(
+    _host: &str,
+    _port: u16,
+    _username: Py<PyAny>,
+    _password: Py<PyAny>,
+    _use_ssl: bool,
+    _config: Py<PyAny>,
+    _key: &str,
+) -> Option<Vec<u8>> {
+    None
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn del_key_prefix_from_storage(
+    _host: &str,
+    _port: u16,
+    _username: Py<PyAny>,
+    _password: Py<PyAny>,
+    _use_ssl: bool,
+    _key_prefix: &str,
+) {
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
 }
@@ -244,6 +330,11 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_address, m)?)?;
     m.add_function(wrap_pyfunction!(is_ipv6, m)?)?;
     m.add_function(wrap_pyfunction!(node_ip_address_from_perspective, m)?)?;
+    m.add_function(wrap_pyfunction!(get_port_filename, m)?)?;
+    m.add_function(wrap_pyfunction!(persist_port, m)?)?;
+    m.add_function(wrap_pyfunction!(wait_for_persisted_port, m)?)?;
+    m.add_function(wrap_pyfunction!(get_session_key_from_storage, m)?)?;
+    m.add_function(wrap_pyfunction!(del_key_prefix_from_storage, m)?)?;
 
     // ─── ID types ────────────────────────────────────────────────
     m.add_class::<ids::PyObjectID>()?;
@@ -278,6 +369,34 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // ─── Constants ───────────────────────────────────────────────
     m.add("RAY_VERSION", ray_common::constants::RAY_VERSION)?;
+    m.add("WORKER_PROCESS_SETUP_HOOK_KEY_NAME_GCS", "FunctionsToRun")?;
+    m.add("RESOURCE_UNIT_SCALING", 10000)?;
+    m.add("IMPLICIT_RESOURCE_PREFIX", "node:__internal_implicit_resource_")?;
+    m.add("STREAMING_GENERATOR_RETURN", -2)?;
+    m.add("GCS_AUTOSCALER_STATE_NAMESPACE", "__autoscaler")?;
+    m.add("GCS_AUTOSCALER_V2_ENABLED_KEY", "__autoscaler_v2_enabled")?;
+    m.add("GCS_AUTOSCALER_CLUSTER_CONFIG_KEY", "__autoscaler_cluster_config")?;
+    m.add("GCS_PID_KEY", "gcs_pid")?;
+    m.add("NODE_TYPE_NAME_ENV", "RAY_NODE_TYPE_NAME")?;
+    m.add("NODE_MARKET_TYPE_ENV", "RAY_NODE_MARKET_TYPE")?;
+    m.add("NODE_REGION_ENV", "RAY_NODE_REGION")?;
+    m.add("NODE_ZONE_ENV", "RAY_NODE_ZONE")?;
+    m.add("RAY_NODE_ACCELERATOR_TYPE_KEY", "ray.io/accelerator-type")?;
+    m.add("RAY_NODE_MARKET_TYPE_KEY", "ray.io/market-type")?;
+    m.add("RAY_NODE_REGION_KEY", "ray.io/availability-region")?;
+    m.add("RAY_NODE_ZONE_KEY", "ray.io/availability-zone")?;
+    m.add("RAY_NODE_GROUP_KEY", "ray.io/node-group")?;
+    m.add("RAY_NODE_TPU_TOPOLOGY_KEY", "ray.io/tpu-topology")?;
+    m.add("RAY_NODE_TPU_SLICE_NAME_KEY", "ray.io/tpu-slice-name")?;
+    m.add("RAY_NODE_TPU_WORKER_ID_KEY", "ray.io/tpu-worker-id")?;
+    m.add("RAY_NODE_TPU_POD_TYPE_KEY", "ray.io/tpu-pod-type")?;
+    m.add("RAY_INTERNAL_NAMESPACE_PREFIX", "_ray_internal_")?;
+    m.add("RUNTIME_ENV_AGENT_PORT_NAME", "runtime_env_agent_port")?;
+    m.add("METRICS_AGENT_PORT_NAME", "metrics_agent_port")?;
+    m.add("METRICS_EXPORT_PORT_NAME", "metrics_export_port")?;
+    m.add("DASHBOARD_AGENT_LISTEN_PORT_NAME", "dashboard_agent_listen_port")?;
+    m.add("GCS_SERVER_PORT_NAME", "gcs_server_port")?;
+    m.add("RAY_INTERNAL_DASHBOARD_NAMESPACE", "_ray_internal_dashboard")?;
 
     // ─── Name aliases matching the original Cython _raylet module ─
     m.add("ObjectID", m.getattr("PyObjectID")?)?;

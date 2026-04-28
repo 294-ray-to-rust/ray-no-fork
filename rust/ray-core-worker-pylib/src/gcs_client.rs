@@ -16,7 +16,9 @@ use ray_proto::ray::rpc;
 use ray_rpc::client::RetryConfig;
 
 #[cfg(feature = "python")]
-use pyo3::types::{PyAnyMethods, PyStringMethods};
+use pyo3::types::{IntoPyDict, PyAnyMethods, PyStringMethods};
+#[cfg(feature = "python")]
+use pyo3::IntoPy;
 
 /// Python-facing GCS client.
 ///
@@ -262,6 +264,18 @@ fn py_optional_namespace(
 }
 
 #[cfg(feature = "python")]
+fn py_ready_awaitable<T>(py: pyo3::Python<'_>, value: T) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>>
+where
+    T: IntoPy<pyo3::PyObject>,
+{
+    let asyncio = pyo3::types::PyModule::import_bound(py, "asyncio")?;
+    Ok(asyncio
+        .getattr("sleep")?
+        .call((0,), Some(&[("result", value.into_py(py))].into_py_dict_bound(py)))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
 #[pyo3::pymethods]
 impl PyGcsClient {
     /// Connect to GCS at the given address (e.g. "127.0.0.1:6379").
@@ -360,6 +374,69 @@ impl PyGcsClient {
         let key = py_any_to_string(key)?;
         let namespace = py_optional_namespace(namespace)?;
         Ok(self.internal_kv_exists(&namespace, &key))
+    }
+
+    #[pyo3(name = "async_internal_kv_get", signature = (key, namespace = None, timeout = None))]
+    fn py_async_internal_kv_get(
+        &self,
+        py: pyo3::Python<'_>,
+        key: &pyo3::Bound<'_, pyo3::PyAny>,
+        namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        timeout: Option<f64>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
+        let value = self.py_internal_kv_get(key, namespace, timeout)?;
+        py_ready_awaitable(py, value)
+    }
+
+    #[pyo3(name = "async_internal_kv_put", signature = (key, value, overwrite = false, namespace = None, timeout = None))]
+    fn py_async_internal_kv_put(
+        &self,
+        py: pyo3::Python<'_>,
+        key: &pyo3::Bound<'_, pyo3::PyAny>,
+        value: &pyo3::Bound<'_, pyo3::PyAny>,
+        overwrite: bool,
+        namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        timeout: Option<f64>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
+        let added = self.py_internal_kv_put(key, value, overwrite, namespace, timeout)?;
+        py_ready_awaitable(py, added)
+    }
+
+    #[pyo3(name = "async_internal_kv_del", signature = (key, del_by_prefix = false, namespace = None, timeout = None))]
+    fn py_async_internal_kv_del(
+        &self,
+        py: pyo3::Python<'_>,
+        key: &pyo3::Bound<'_, pyo3::PyAny>,
+        del_by_prefix: bool,
+        namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        timeout: Option<f64>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
+        let deleted = self.py_internal_kv_del(key, del_by_prefix, namespace, timeout)?;
+        py_ready_awaitable(py, deleted)
+    }
+
+    #[pyo3(name = "async_internal_kv_keys", signature = (prefix, namespace = None, timeout = None))]
+    fn py_async_internal_kv_keys(
+        &self,
+        py: pyo3::Python<'_>,
+        prefix: &pyo3::Bound<'_, pyo3::PyAny>,
+        namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        timeout: Option<f64>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
+        let keys = self.py_internal_kv_keys(prefix, namespace, timeout)?;
+        py_ready_awaitable(py, keys)
+    }
+
+    #[pyo3(name = "async_internal_kv_exists", signature = (key, namespace = None, timeout = None))]
+    fn py_async_internal_kv_exists(
+        &self,
+        py: pyo3::Python<'_>,
+        key: &pyo3::Bound<'_, pyo3::PyAny>,
+        namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        timeout: Option<f64>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
+        let exists = self.py_internal_kv_exists(key, namespace, timeout)?;
+        py_ready_awaitable(py, exists)
     }
 
     // ─── Cluster Info ────────────────────────────────────────────────

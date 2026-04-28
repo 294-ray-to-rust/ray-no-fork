@@ -31,7 +31,7 @@ pub use object_ref::PyObjectRef;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
-use pyo3::types::{PyBytes, PyList, PyType};
+use pyo3::types::{PyBytes, PyDict, PyList, PyType};
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
@@ -125,7 +125,9 @@ impl GcsClientOptions {
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
-struct GlobalStateAccessor;
+struct GlobalStateAccessor {
+    gcs_address: String,
+}
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet", subclass)]
@@ -388,12 +390,42 @@ impl RawSerializedObject {
 #[pymethods]
 impl GlobalStateAccessor {
     #[new]
-    fn new(_gcs_options: Option<Py<PyAny>>) -> Self {
-        GlobalStateAccessor
+    #[pyo3(signature = (_gcs_options = None))]
+    fn new(_gcs_options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let gcs_address = match _gcs_options {
+            Some(options) => options.getattr("gcs_address")?.extract()?,
+            None => String::new(),
+        };
+        Ok(GlobalStateAccessor { gcs_address })
     }
 
     fn connect(&self) -> bool {
         true
+    }
+
+    fn get_node(&self, py: Python<'_>, node_id: &str) -> PyResult<Py<PyAny>> {
+        let client = PyGcsClient::new(self.gcs_address.clone());
+        for node in client.get_all_node_info() {
+            if hex::encode(&node.node_id) == node_id {
+                let dict = PyDict::new_bound(py);
+                dict.set_item("node_id", hex::encode(&node.node_id))?;
+                dict.set_item("node_manager_address", node.node_manager_address)?;
+                dict.set_item("raylet_socket_name", node.raylet_socket_name)?;
+                dict.set_item("object_store_socket_name", node.object_store_socket_name)?;
+                dict.set_item("node_manager_port", node.node_manager_port)?;
+                dict.set_item("object_manager_port", node.object_manager_port)?;
+                dict.set_item("metrics_export_port", node.metrics_export_port)?;
+                dict.set_item("runtime_env_agent_port", node.runtime_env_agent_port)?;
+                dict.set_item("metrics_agent_port", node.metrics_agent_port)?;
+                dict.set_item(
+                    "dashboard_agent_listen_port",
+                    node.dashboard_agent_listen_port,
+                )?;
+                dict.set_item("labels", PyDict::new_bound(py))?;
+                return Ok(dict.unbind().into());
+            }
+        }
+        Ok(py.None())
     }
 
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {

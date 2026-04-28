@@ -152,9 +152,10 @@ macro_rules! py_id_wrapper {
             }
 
             /// Return the byte size of this ID type.
+            #[staticmethod]
             #[pyo3(name = "size")]
-            fn py_size(&self) -> usize {
-                self.size()
+            fn py_size() -> usize {
+                <$inner>::SIZE
             }
 
             fn __repr__(&self) -> String {

@@ -99,6 +99,55 @@ impl GlobalStateAccessor {
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn build_address(host: &str, port: &Bound<'_, PyAny>) -> PyResult<String> {
+    let port = port.str()?.to_str()?.to_owned();
+    if host.contains(':') && !host.starts_with('[') {
+        Ok(format!("[{host}]:{port}"))
+    } else {
+        Ok(format!("{host}:{port}"))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn parse_address(address: &str) -> Option<(String, String)> {
+    if let Some(rest) = address.strip_prefix('[') {
+        let (host, port) = rest.split_once("]:")?;
+        return Some((host.to_owned(), port.to_owned()));
+    }
+
+    let (host, port) = address.rsplit_once(':')?;
+    if host.contains(':') {
+        None
+    } else {
+        Some((host.to_owned(), port.to_owned()))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn is_ipv6(host: &str) -> bool {
+    host.parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_ipv6())
+        .unwrap_or_else(|_| host.contains(':'))
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn node_ip_address_from_perspective(address: Option<&str>) -> String {
+    let target = address.unwrap_or("8.8.8.8:53");
+    if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if socket.connect(target).is_ok() {
+            if let Ok(addr) = socket.local_addr() {
+                return addr.ip().to_string();
+            }
+        }
+    }
+    "127.0.0.1".to_owned()
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
 }
@@ -144,6 +193,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_initialized, m)?)?;
     m.add_function(wrap_pyfunction!(mark_initialized, m)?)?;
     m.add_function(wrap_pyfunction!(mark_shutdown, m)?)?;
+    m.add_function(wrap_pyfunction!(build_address, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_address, m)?)?;
+    m.add_function(wrap_pyfunction!(is_ipv6, m)?)?;
+    m.add_function(wrap_pyfunction!(node_ip_address_from_perspective, m)?)?;
 
     // ─── ID types ────────────────────────────────────────────────
     m.add_class::<ids::PyObjectID>()?;

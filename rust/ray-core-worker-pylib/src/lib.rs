@@ -30,6 +30,8 @@ pub use object_ref::PyObjectRef;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
+use pyo3::types::PyType;
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
@@ -72,6 +74,51 @@ impl DynamicObjectRefGenerator {
     #[new]
     fn new() -> Self {
         DynamicObjectRefGenerator
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GcsClientOptions {
+    gcs_address: String,
+    cluster_id_hex: Option<String>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GcsClientOptions {
+    #[new]
+    #[pyo3(signature = (gcs_address = "", cluster_id_hex = None))]
+    fn new(gcs_address: &str, cluster_id_hex: Option<String>) -> Self {
+        GcsClientOptions {
+            gcs_address: gcs_address.to_owned(),
+            cluster_id_hex,
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (gcs_address, cluster_id_hex = None, _allow_cluster_id_nil = true, _fetch_cluster_id_if_nil = false))]
+    fn create(
+        _cls: &Bound<'_, PyType>,
+        gcs_address: &str,
+        cluster_id_hex: Option<String>,
+        _allow_cluster_id_nil: bool,
+        _fetch_cluster_id_if_nil: bool,
+    ) -> Self {
+        GcsClientOptions {
+            gcs_address: gcs_address.to_owned(),
+            cluster_id_hex,
+        }
+    }
+
+    #[getter]
+    fn gcs_address(&self) -> &str {
+        &self.gcs_address
+    }
+
+    #[getter]
+    fn cluster_id_hex(&self) -> Option<&str> {
+        self.cluster_id_hex.as_deref()
     }
 }
 
@@ -220,6 +267,7 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<core_worker::PyCoreWorker>()?;
     m.add_class::<gcs_client::PyGcsClient>()?;
     m.add_class::<cluster::PyClusterHandle>()?;
+    m.add_class::<GcsClientOptions>()?;
     m.add_class::<Config>()?;
     m.add_class::<ObjectRefGenerator>()?;
     m.add_class::<DynamicObjectRefGenerator>()?;

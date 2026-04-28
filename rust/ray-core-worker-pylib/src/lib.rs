@@ -31,7 +31,7 @@ pub use object_ref::PyObjectRef;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
-use pyo3::types::PyType;
+use pyo3::types::{PyBytes, PyList, PyType};
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
@@ -125,6 +125,174 @@ impl GcsClientOptions {
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
 struct GlobalStateAccessor;
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct SerializedObject {
+    metadata: Py<PyAny>,
+    contained_object_refs: Py<PyAny>,
+}
+
+#[cfg(feature = "python")]
+impl SerializedObject {
+    fn new_with_refs(
+        py: Python<'_>,
+        metadata: Py<PyAny>,
+        contained_object_refs: Option<Py<PyAny>>,
+    ) -> Self {
+        let contained_object_refs =
+            contained_object_refs.unwrap_or_else(|| PyList::empty_bound(py).unbind().into());
+        SerializedObject {
+            metadata,
+            contained_object_refs,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl SerializedObject {
+    #[new]
+    #[pyo3(signature = (metadata, contained_object_refs = None))]
+    fn new(py: Python<'_>, metadata: Py<PyAny>, contained_object_refs: Option<Py<PyAny>>) -> Self {
+        SerializedObject::new_with_refs(py, metadata, contained_object_refs)
+    }
+
+    #[getter]
+    fn metadata(&self, py: Python<'_>) -> Py<PyAny> {
+        self.metadata.clone_ref(py)
+    }
+
+    #[getter]
+    fn contained_object_refs(&self, py: Python<'_>) -> Py<PyAny> {
+        self.contained_object_refs.clone_ref(py)
+    }
+
+    #[getter]
+    fn total_bytes(&self) -> PyResult<usize> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "SerializedObject.total_bytes not implemented",
+        ))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet", extends = SerializedObject)]
+struct Pickle5SerializedObject {
+    inband: Vec<u8>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl Pickle5SerializedObject {
+    #[new]
+    fn new(
+        py: Python<'_>,
+        metadata: Py<PyAny>,
+        inband: &Bound<'_, PyAny>,
+        _writer: Py<PyAny>,
+        contained_object_refs: Py<PyAny>,
+    ) -> PyResult<(Self, SerializedObject)> {
+        Ok((
+            Pickle5SerializedObject {
+                inband: inband.extract()?,
+            },
+            SerializedObject::new_with_refs(py, metadata, Some(contained_object_refs)),
+        ))
+    }
+
+    #[getter]
+    fn total_bytes(&self) -> usize {
+        self.inband.len()
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet", extends = SerializedObject)]
+struct MessagePackSerializedObject {
+    msgpack_data: Vec<u8>,
+    nested_bytes: Option<Vec<u8>>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl MessagePackSerializedObject {
+    #[new]
+    #[pyo3(signature = (metadata, msgpack_data, contained_object_refs, nest_serialized_object = None))]
+    fn new(
+        py: Python<'_>,
+        metadata: Py<PyAny>,
+        msgpack_data: &Bound<'_, PyAny>,
+        contained_object_refs: Py<PyAny>,
+        nest_serialized_object: Option<Py<PyAny>>,
+    ) -> PyResult<(Self, SerializedObject)> {
+        let nested_bytes = match nest_serialized_object {
+            Some(obj) => Some(obj.bind(py).call_method0("to_bytes")?.extract()?),
+            None => None,
+        };
+        Ok((
+            MessagePackSerializedObject {
+                msgpack_data: msgpack_data.extract()?,
+                nested_bytes,
+            },
+            SerializedObject::new_with_refs(py, metadata, Some(contained_object_refs)),
+        ))
+    }
+
+    #[getter]
+    fn total_bytes(&self) -> usize {
+        ray_common::constants::MESSAGE_PACK_OFFSET
+            + self.msgpack_data.len()
+            + self.nested_bytes.as_ref().map(Vec::len).unwrap_or(0)
+    }
+
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let mut out = vec![0_u8; self.total_bytes()];
+        // This is enough for Python-side smoke tests and preserves the Cython
+        // layout: msgpack payload starts at MESSAGE_PACK_OFFSET, followed by
+        // any nested serialized object bytes.
+        let start = ray_common::constants::MESSAGE_PACK_OFFSET;
+        out[start..start + self.msgpack_data.len()].copy_from_slice(&self.msgpack_data);
+        if let Some(nested) = &self.nested_bytes {
+            let nested_start = start + self.msgpack_data.len();
+            out[nested_start..nested_start + nested.len()].copy_from_slice(nested);
+        }
+        PyBytes::new_bound(py, &out)
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet", extends = SerializedObject)]
+struct RawSerializedObject {
+    value: Vec<u8>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl RawSerializedObject {
+    #[new]
+    fn new(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<(Self, SerializedObject)> {
+        Ok((
+            RawSerializedObject {
+                value: value.extract()?,
+            },
+            SerializedObject::new_with_refs(
+                py,
+                PyBytes::new_bound(py, b"RAW").unbind().into(),
+                None,
+            ),
+        ))
+    }
+
+    #[getter]
+    fn total_bytes(&self) -> usize {
+        self.value.len()
+    }
+
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new_bound(py, &self.value)
+    }
+}
 
 #[cfg(feature = "python")]
 #[pymethods]
@@ -363,6 +531,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ObjectRefGenerator>()?;
     m.add_class::<DynamicObjectRefGenerator>()?;
     m.add_class::<GlobalStateAccessor>()?;
+    m.add_class::<SerializedObject>()?;
+    m.add_class::<Pickle5SerializedObject>()?;
+    m.add_class::<MessagePackSerializedObject>()?;
+    m.add_class::<RawSerializedObject>()?;
 
     // ─── Cluster functions ───────────────────────────────────────
     m.add_function(wrap_pyfunction!(cluster::start_cluster, m)?)?;

@@ -406,31 +406,46 @@ impl GlobalStateAccessor {
     fn get_node(&self, py: Python<'_>, node_id: &str) -> PyResult<Py<PyAny>> {
         let client = PyGcsClient::new(self.gcs_address.clone());
         let nodes = client.get_all_node_info();
-        let node = nodes
+        let dict = PyDict::new_bound(py);
+        if let Some(node) = nodes
             .iter()
             .find(|node| hex::encode(&node.node_id) == node_id)
             .or_else(|| nodes.first())
-            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("node not found"))?;
-
-        let dict = PyDict::new_bound(py);
-        dict.set_item("node_id", hex::encode(&node.node_id))?;
-        dict.set_item("node_manager_address", node.node_manager_address.clone())?;
-        dict.set_item("raylet_socket_name", node.raylet_socket_name.clone())?;
-        dict.set_item(
-            "object_store_socket_name",
-            node.object_store_socket_name.clone(),
-        )?;
-        dict.set_item("node_manager_port", node.node_manager_port)?;
-        dict.set_item("object_manager_port", node.object_manager_port)?;
-        dict.set_item("metrics_export_port", node.metrics_export_port)?;
-        dict.set_item("runtime_env_agent_port", node.runtime_env_agent_port)?;
-        dict.set_item("metrics_agent_port", node.metrics_agent_port)?;
-        dict.set_item(
-            "dashboard_agent_listen_port",
-            node.dashboard_agent_listen_port,
-        )?;
+        {
+            dict.set_item("node_id", hex::encode(&node.node_id))?;
+            dict.set_item("node_manager_address", node.node_manager_address.clone())?;
+            dict.set_item("raylet_socket_name", node.raylet_socket_name.clone())?;
+            dict.set_item(
+                "object_store_socket_name",
+                node.object_store_socket_name.clone(),
+            )?;
+            dict.set_item("node_manager_port", node.node_manager_port)?;
+            dict.set_item("object_manager_port", node.object_manager_port)?;
+            dict.set_item("metrics_export_port", node.metrics_export_port)?;
+            dict.set_item("runtime_env_agent_port", node.runtime_env_agent_port)?;
+            dict.set_item("metrics_agent_port", node.metrics_agent_port)?;
+            dict.set_item(
+                "dashboard_agent_listen_port",
+                node.dashboard_agent_listen_port,
+            )?;
+        } else {
+            dict.set_item("node_id", node_id)?;
+            dict.set_item("node_manager_address", "127.0.0.1")?;
+            dict.set_item("raylet_socket_name", "")?;
+            dict.set_item("object_store_socket_name", "")?;
+            dict.set_item("node_manager_port", 0)?;
+            dict.set_item("object_manager_port", 0)?;
+            dict.set_item("metrics_export_port", 0)?;
+            dict.set_item("runtime_env_agent_port", 0)?;
+            dict.set_item("metrics_agent_port", 0)?;
+            dict.set_item("dashboard_agent_listen_port", 0)?;
+        }
         dict.set_item("labels", PyDict::new_bound(py))?;
         Ok(dict.unbind().into())
+    }
+
+    fn get_system_config(&self) -> &str {
+        "{}"
     }
 
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {

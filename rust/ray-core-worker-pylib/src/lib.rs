@@ -452,6 +452,24 @@ impl GlobalStateAccessor {
         1
     }
 
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn internal_kv_get(
+        &self,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Vec<u8> {
+        b"{}".to_vec()
+    }
+
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn internal_kv_put(
+        &self,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> i32 {
+        1
+    }
+
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
         py.eval_bound("lambda *a, **kw: []", None, None)
             .map(|value| value.unbind())

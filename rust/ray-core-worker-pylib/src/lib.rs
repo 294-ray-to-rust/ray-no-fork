@@ -97,14 +97,15 @@ impl GcsClientOptions {
     }
 
     #[classmethod]
-    #[pyo3(signature = (gcs_address, cluster_id_hex = None, _allow_cluster_id_nil = true, _fetch_cluster_id_if_nil = false))]
+    #[pyo3(signature = (gcs_address, cluster_id_hex = None, allow_cluster_id_nil = true, fetch_cluster_id_if_nil = false))]
     fn create(
         _cls: &Bound<'_, PyType>,
         gcs_address: &str,
         cluster_id_hex: Option<String>,
-        _allow_cluster_id_nil: bool,
-        _fetch_cluster_id_if_nil: bool,
+        allow_cluster_id_nil: bool,
+        fetch_cluster_id_if_nil: bool,
     ) -> Self {
+        let _ = (allow_cluster_id_nil, fetch_cluster_id_if_nil);
         GcsClientOptions {
             gcs_address: gcs_address.to_owned(),
             cluster_id_hex,
@@ -306,6 +307,24 @@ impl GenericStub {
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
         GenericStub
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn redirect_stdout(
+        _cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) {
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn redirect_stderr(
+        _cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) {
     }
 
     fn reset_cache(&self) {}

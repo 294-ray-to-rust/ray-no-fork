@@ -751,5 +751,16 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WorkerType", m.getattr("PyWorkerType")?)?;
     m.add("GcsClient", m.getattr("PyGcsClient")?)?;
 
+    let language = m.getattr("PyLanguage")?;
+    language.setattr("PYTHON", language.getattr("Python")?)?;
+    language.setattr("JAVA", language.getattr("Java")?)?;
+    language.setattr("CPP", language.getattr("Cpp")?)?;
+
+    let worker_type = m.getattr("PyWorkerType")?;
+    worker_type.setattr("WORKER", worker_type.getattr("Worker")?)?;
+    worker_type.setattr("DRIVER", worker_type.getattr("Driver")?)?;
+    worker_type.setattr("SPILL_WORKER", worker_type.getattr("SpillWorker")?)?;
+    worker_type.setattr("RESTORE_WORKER", worker_type.getattr("RestoreWorker")?)?;
+
     Ok(())
 }

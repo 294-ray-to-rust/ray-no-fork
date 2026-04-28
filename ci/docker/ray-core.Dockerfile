@@ -28,13 +28,78 @@ RUN --mount=type=cache,target=${DOWNLOAD_CACHE},uid=2000,gid=100,id=ray-download
 #!/bin/bash
 set -euo pipefail
 
-# Install Rust toolchain for building the Rust backend
+# Set up compiler toolchain (manylinux2014 devtoolset). The enable scripts
+# read unset variables, so relax nounset while sourcing them.
+set +u
+if [[ -d /opt/rh/devtoolset-10 ]]; then
+    source /opt/rh/devtoolset-10/enable
+elif [[ -d /opt/rh/devtoolset-8 ]]; then
+    source /opt/rh/devtoolset-8/enable
+fi
+set -u
+
+# Install Rust toolchain for building the Rust backend.
+#
+# RUSTUP_HOME and CARGO_HOME live in a BuildKit cache mount shared across
+# Python-version variants. Serialize setup so concurrent wanda builds do not
+# corrupt the rustup cache while installing components.
 export RUSTUP_HOME=$DOWNLOAD_CACHE/rustup
 export CARGO_HOME=$DOWNLOAD_CACHE/cargo
-if [[ ! -f "$CARGO_HOME/bin/cargo" ]]; then
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0 --no-modify-path
-fi
 export PATH="$CARGO_HOME/bin:$PATH"
+
+mkdir -p "$DOWNLOAD_CACHE"
+(
+    flock 9
+
+    if ! command -v cargo >/dev/null 2>&1 || ! cargo --version >/dev/null 2>&1; then
+        rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+            -y --default-toolchain 1.85.0 --no-modify-path --profile minimal
+    fi
+
+    tc_dir="$RUSTUP_HOME/toolchains/stable-${HOSTTYPE}-unknown-linux-gnu"
+    toolchain_ok=1
+    for bin in "$tc_dir/bin/rustc" "$tc_dir/bin/cargo-clippy" "$tc_dir/bin/rustfmt"; do
+        if [[ ! -x "$bin" ]] || ! "$bin" --version >/dev/null 2>&1; then
+            toolchain_ok=0
+            break
+        fi
+    done
+    if [[ $toolchain_ok -eq 0 ]]; then
+        rm -rf "$RUSTUP_HOME/toolchains"
+        rustup toolchain install stable \
+            --profile minimal --component rustfmt --component clippy
+    fi
+) 9>"$DOWNLOAD_CACHE/.rustup.lock"
+
+# Install protoc, required by prost-build/tonic-build for ray-proto codegen.
+PROTOC_VERSION=28.3
+PROTOC_BIN="$DOWNLOAD_CACHE/protoc/bin/protoc"
+(
+    flock 8
+    if [[ ! -x "$PROTOC_BIN" ]]; then
+        mkdir -p "$DOWNLOAD_CACHE/protoc"
+        PROTOC_ZIP="$DOWNLOAD_CACHE/protoc-${PROTOC_VERSION}.zip"
+        curl -sSfL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" \
+            -o "$PROTOC_ZIP"
+        unzip -q -o "$PROTOC_ZIP" -d "$DOWNLOAD_CACHE/protoc"
+        rm -f "$PROTOC_ZIP"
+    fi
+) 8>"$DOWNLOAD_CACHE/.protoc.lock"
+export PATH="$DOWNLOAD_CACHE/protoc/bin:$PATH"
+export PROTOC="$PROTOC_BIN"
+
+# Build the Rust backend before Bazel so Bazel only packages the produced
+# extension module. COPY leaves the source tree root-owned, so use a writable
+# cache directory for cargo's target output and sudo only the final copy.
+echo "Building Rust backend..."
+export CARGO_TARGET_DIR=$DOWNLOAD_CACHE/cargo-target-py${PYTHON_VERSION}
+mkdir -p "$CARGO_TARGET_DIR"
+cd rust
+cargo build --release --package ray-core-worker-pylib --features python
+sudo cp "$CARGO_TARGET_DIR/release/lib_raylet.so" _raylet.so
+cd ..
+echo "Rust backend built: rust/_raylet.so"
 
 export BAZELISK_HOME=$DOWNLOAD_CACHE/bazelisk
 REPOSITORY_CACHE=$DOWNLOAD_CACHE/repo

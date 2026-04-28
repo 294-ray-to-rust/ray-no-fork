@@ -19,6 +19,12 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
+# Export linker scripts needed by Java core worker build.
+exports_files([
+    "src/ray/ray_exported_symbols.lds",
+    "src/ray/ray_version_script.lds",
+])
+
 # C/C++ toolchain constraint configs.
 
 config_setting(

@@ -1,41 +1,17 @@
-# Rust crates for Ray - built via Cargo, integrated into Bazel packaging
+# Rust crates for Ray - pre-built by Cargo in the Docker build step.
+#
+# The _raylet.so is built by cargo in ci/docker/ray-core.Dockerfile before
+# Bazel runs, then copied here. This avoids depending on Bazel's sandboxed
+# environment for Rust toolchain setup.
 
 package(default_visibility = ["//visibility:public"])
 
-# Export Cargo workspace files for reference
-exports_files([
-    "Cargo.toml",
-    "Cargo.lock",
-])
+# Export the pre-built Rust library. This file is created by cargo in the
+# Dockerfile before bazel runs.
+exports_files(["_raylet.so"])
 
-# Build the Rust _raylet.so via Cargo
-# Uses local=1 because Cargo needs network access for crates and
-# the proto files at src/ray/protobuf/
-genrule(
+# Alias for compatibility with the rest of the build.
+filegroup(
     name = "_raylet",
-    srcs = glob(
-        ["**/*.rs", "**/*.toml"],
-        exclude = ["target/**"],
-    ) + [
-        "Cargo.lock",
-        "//src/ray/protobuf:proto_srcs",
-    ],
-    outs = ["_raylet.so"],
-    cmd = """
-        set -euo pipefail
-
-        # Save output path before changing directories
-        OUTPUT_PATH="$@"
-
-        # Build in the rust directory (where Cargo.lock lives)
-        cd $$(dirname $(location Cargo.lock))
-
-        # Build with the python feature enabled
-        cargo build --release --package ray-core-worker-pylib --features python
-
-        # Copy the output (on Linux it's lib_raylet.so, we rename to _raylet.so)
-        cp target/release/lib_raylet.so "$$OUTPUT_PATH"
-    """,
-    local = 1,
-    tags = ["no-sandbox"],
+    srcs = ["_raylet.so"],
 )

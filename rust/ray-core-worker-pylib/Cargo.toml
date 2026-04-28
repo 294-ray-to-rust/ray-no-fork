@@ -30,4 +30,5 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
+hex = { workspace = true }
 async-trait = { workspace = true }

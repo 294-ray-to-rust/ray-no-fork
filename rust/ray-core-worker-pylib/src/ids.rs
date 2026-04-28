@@ -114,18 +114,21 @@ macro_rules! py_id_wrapper {
 
             /// Return a nil (all-zeroes) ID.
             #[staticmethod]
+            #[pyo3(name = "nil")]
             fn py_nil() -> Self {
                 Self::nil()
             }
 
             /// Construct from a hex string.
             #[staticmethod]
+            #[pyo3(name = "from_hex")]
             fn py_from_hex(hex_str: &str) -> Self {
                 Self::from_hex(hex_str)
             }
 
             /// Construct a random ID.
             #[staticmethod]
+            #[pyo3(name = "from_random")]
             fn py_from_random() -> Self {
                 Self::from_random()
             }
@@ -149,9 +152,10 @@ macro_rules! py_id_wrapper {
             }
 
             /// Return the byte size of this ID type.
+            #[staticmethod]
             #[pyo3(name = "size")]
-            fn py_size(&self) -> usize {
-                self.size()
+            fn py_size() -> usize {
+                <$inner>::SIZE
             }
 
             fn __repr__(&self) -> String {
@@ -183,6 +187,7 @@ py_id_wrapper!(PyActorID, id::ActorID);
 py_id_wrapper!(PyJobID, id::JobID, {
     /// Construct a JobID from an integer.
     #[staticmethod]
+    #[pyo3(name = "from_int")]
     fn py_from_int(value: u32) -> Self {
         Self { inner: id::JobID::from_int(value) }
     }
@@ -196,6 +201,10 @@ py_id_wrapper!(PyJobID, id::JobID, {
 py_id_wrapper!(PyWorkerID, id::WorkerID);
 py_id_wrapper!(PyNodeID, id::NodeID);
 py_id_wrapper!(PyPlacementGroupID, id::PlacementGroupID);
+py_id_wrapper!(PyActorClassID, id::ActorClassID);
+py_id_wrapper!(PyFunctionID, id::FunctionID);
+py_id_wrapper!(PyUniqueID, id::UniqueID);
+py_id_wrapper!(PyClusterID, id::ClusterID);
 
 // Extra methods for PyJobID (Rust-only).
 impl PyJobID {

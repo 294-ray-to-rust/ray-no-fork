@@ -448,6 +448,10 @@ impl GlobalStateAccessor {
         "{}"
     }
 
+    fn get_next_job_id(&self) -> u32 {
+        1
+    }
+
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
         py.eval_bound("lambda *a, **kw: []", None, None)
             .map(|value| value.unbind())

@@ -127,7 +127,7 @@ impl GcsClientOptions {
 struct GlobalStateAccessor;
 
 #[cfg(feature = "python")]
-#[pyclass(module = "_raylet")]
+#[pyclass(module = "_raylet", subclass)]
 struct SerializedObject {
     metadata: Py<PyAny>,
     contained_object_refs: Py<PyAny>,

@@ -31,6 +31,28 @@ steps:
       - release_wheels
       - java
 
+  - name: rust-oss-ci-base-test-py310
+    label: "wanda: rust oss-ci-base_test py3.10"
+    wanda: ci/docker/base.test.wanda.yaml
+    env:
+      PYTHON: "3.10"
+    depends_on:
+      - forge
+    tags:
+      - always
+      - cibase
+
+  - name: rust-oss-ci-base-build-py310
+    label: "wanda: rust oss-ci-base_build py3.10"
+    wanda: ci/docker/base.build.wanda.yaml
+    env:
+      PYTHON: "3.10"
+    depends_on:
+      - rust-oss-ci-base-test-py310
+    tags:
+      - always
+      - cibase
+
   - name: rust-corebuild-py310
     label: "wanda: rust corebuild py3.10"
     wanda: ci/docker/core.build.wanda.yaml
@@ -39,7 +61,7 @@ steps:
       BASE_TYPE: "build"
       BUILD_VARIANT: "build"
     depends_on:
-      - forge
+      - rust-oss-ci-base-build-py310
     tags:
       - always
       - cibase

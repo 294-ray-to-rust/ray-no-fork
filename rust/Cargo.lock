@@ -1521,6 +1521,7 @@ version = "3.0.0-dev"
 dependencies = [
  "async-trait",
  "bytes",
+ "hex",
  "pyo3",
  "ray-common",
  "ray-core-worker",

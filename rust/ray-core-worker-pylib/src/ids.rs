@@ -187,6 +187,7 @@ py_id_wrapper!(PyActorID, id::ActorID);
 py_id_wrapper!(PyJobID, id::JobID, {
     /// Construct a JobID from an integer.
     #[staticmethod]
+    #[pyo3(name = "from_int")]
     fn py_from_int(value: u32) -> Self {
         Self { inner: id::JobID::from_int(value) }
     }

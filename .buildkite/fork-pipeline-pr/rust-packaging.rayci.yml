@@ -31,6 +31,19 @@ steps:
       - release_wheels
       - java
 
+  - name: rust-ray-dashboard
+    label: "wanda: rust dashboard (x86_64)"
+    wanda: ci/docker/ray-dashboard.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    depends_on:
+      - forge
+    tags:
+      - always
+      - release_wheels
+
   - name: rust-oss-ci-base-test-py310
     label: "wanda: rust oss-ci-base_test py3.10"
     wanda: ci/docker/base.test.wanda.yaml
@@ -84,4 +97,5 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
       - rust-corebuild-py310
+      - rust-ray-dashboard
       - forge

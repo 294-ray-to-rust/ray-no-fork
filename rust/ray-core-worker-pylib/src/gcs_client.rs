@@ -226,8 +226,10 @@ impl PyGcsClient {
 impl PyGcsClient {
     /// Connect to GCS at the given address (e.g. "127.0.0.1:6379").
     #[new]
-    fn py_new(gcs_address: String) -> Self {
-        Self::new(gcs_address)
+    #[pyo3(signature = (address, cluster_id = None))]
+    fn py_new(address: String, cluster_id: Option<String>) -> Self {
+        let _ = cluster_id;
+        Self::new(address)
     }
 
     /// Get the GCS address.

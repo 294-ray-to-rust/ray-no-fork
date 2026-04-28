@@ -288,6 +288,26 @@ impl GenericStub {
         GenericStub
     }
 
+    #[classmethod]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn from_class(
+        _cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        GenericStub
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn from_function(
+        _cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        GenericStub
+    }
+
     fn reset_cache(&self) {}
 
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {

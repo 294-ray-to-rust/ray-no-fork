@@ -1,0 +1,32 @@
+group: rust packaging preflight
+sort_key: rust-packaging-preflight
+steps:
+  # Fast PR signal for the Rust _raylet packaging path. The full merge-queue
+  # pipeline still runs the complete Python-version matrix and wheel tests.
+  - name: rust-ray-core-py310
+    label: "wanda: rust ray-core py3.10 (x86_64)"
+    wanda: ci/docker/ray-core.wanda.yaml
+    env_file: rayci.env
+    env:
+      PYTHON_VERSION: "3.10"
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    depends_on:
+      - forge
+    tags:
+      - always
+      - release_wheels
+
+  - name: rust-ray-java
+    label: "wanda: rust java build (x86_64)"
+    wanda: ci/docker/ray-java.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    depends_on:
+      - forge
+    tags:
+      - always
+      - release_wheels
+      - java

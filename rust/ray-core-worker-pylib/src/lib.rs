@@ -76,6 +76,28 @@ impl DynamicObjectRefGenerator {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GlobalStateAccessor;
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GlobalStateAccessor {
+    #[new]
+    fn new(_gcs_options: Option<Py<PyAny>>) -> Self {
+        GlobalStateAccessor
+    }
+
+    fn connect(&self) -> bool {
+        true
+    }
+
+    fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
+        py.eval_bound("lambda *a, **kw: []", None, None)
+            .map(|value| value.unbind())
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
@@ -148,6 +170,7 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Config>()?;
     m.add_class::<ObjectRefGenerator>()?;
     m.add_class::<DynamicObjectRefGenerator>()?;
+    m.add_class::<GlobalStateAccessor>()?;
 
     // ─── Cluster functions ───────────────────────────────────────
     m.add_function(wrap_pyfunction!(cluster::start_cluster, m)?)?;

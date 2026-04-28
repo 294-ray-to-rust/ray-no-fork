@@ -30,3 +30,36 @@ steps:
       - always
       - release_wheels
       - java
+
+  - name: rust-corebuild-py310
+    label: "wanda: rust corebuild py3.10"
+    wanda: ci/docker/core.build.wanda.yaml
+    env:
+      PYTHON: "3.10"
+      BASE_TYPE: "build"
+      BUILD_VARIANT: "build"
+    depends_on:
+      - forge
+    tags:
+      - always
+      - cibase
+
+  - label: ":ray: rust smoke tests"
+    tags:
+      - always
+      - python
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/dashboard:test_dashboard
+        //python/ray/tests:test_bundle_label_selector
+        //python/ray/tests:test_namespace
+        //python/ray/tests:test_nested_task
+        //python/ray/tests:test_multiprocessing_standalone
+        //python/ray/tests:test_placement_group_mini_integration
+        core
+        --install-mask all-ray-libraries
+        --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - rust-corebuild-py310
+      - forge

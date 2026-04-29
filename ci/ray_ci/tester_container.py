@@ -234,10 +234,14 @@ class TesterContainer(Container):
         commands = [
             (
                 "cleanup() {\n"
-                f'  chmod -R a+r "{self.bazel_log_dir}";\n'
+                "  set +e;\n"
+                f'  chmod -R a+r "{self.bazel_log_dir}" 2>/dev/null;\n'
                 "  if [ -e bazel-testlogs ]; then\n"
-                f'    tar -czhf "/artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz" '
-                "bazel-testlogs 2>/dev/null || true;\n"
+                f'    echo "Archiving bazel-testlogs to /artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz" >&2;\n'
+                f'    tar -czhf "/artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz" bazel-testlogs;\n'
+                f'    echo "Archive exit: $?, size: $(stat -c %s \\"/artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz\\" 2>/dev/null)" >&2;\n'
+                "  else\n"
+                '    echo "No bazel-testlogs symlink at workspace root; skipping archive" >&2;\n'
                 "  fi;\n"
                 "}"
             ),

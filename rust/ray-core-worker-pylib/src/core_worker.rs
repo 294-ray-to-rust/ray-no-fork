@@ -149,43 +149,149 @@ impl PyCoreWorker {
 impl PyCoreWorker {
     /// Initialize a core worker from Python.
     ///
-    /// Arguments:
-    ///   worker_type: 0=WORKER, 1=DRIVER
-    ///   node_ip_address: e.g. "127.0.0.1"
-    ///   gcs_address: "host:port" of the GCS server
-    ///   job_id_int: integer job ID
-    ///   worker_id: optional PyWorkerID (random if None)
-    ///   node_id: optional PyNodeID (nil if None)
+    /// Supports both the Rust shim's compact constructor:
+    ///   (worker_type, node_ip_address, gcs_address, job_id_int,
+    ///    worker_id=None, node_id=None, max_concurrency=0)
+    /// and the legacy Cython _raylet CoreWorker constructor used by
+    /// python/ray/_private/worker.py during startup.
     #[new]
-    #[pyo3(signature = (worker_type, node_ip_address, gcs_address, job_id_int, worker_id=None, node_id=None, max_concurrency=0))]
+    #[pyo3(signature = (*args, **kwargs))]
     fn py_new(
-        worker_type: i32,
-        node_ip_address: String,
-        gcs_address: String,
-        job_id_int: u32,
-        worker_id: Option<&crate::ids::PyWorkerID>,
-        node_id: Option<&crate::ids::PyNodeID>,
-        max_concurrency: usize,
+        args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
     ) -> pyo3::PyResult<Self> {
         use crate::common::PyWorkerType;
+        use pyo3::types::{PyAnyMethods, PyDictMethods};
         use ray_common::id::NodeID;
-        let wt = PyWorkerType::from_i32(worker_type)
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(
-                format!("invalid worker_type: {}", worker_type),
-            ))?;
-        let wid = worker_id
-            .map(|w| *w.inner())
-            .unwrap_or_else(WorkerID::from_random);
-        let nid = node_id
-            .map(|n| *n.inner())
-            .unwrap_or_else(NodeID::nil);
+
+        let argc = args.len()?;
+
+        let (
+            worker_type,
+            node_ip_address,
+            gcs_address,
+            job_id_int,
+            worker_id,
+            node_id,
+            max_concurrency,
+        ) = if argc >= 19 {
+            // Legacy form from ray._private.worker.Worker.connect(). Most of
+            // these arguments describe C++ worker internals that the Rust
+            // shim does not implement yet, so keep only the pieces that map
+            // to CoreWorkerOptions.
+            let mode = args.get_item(0)?.extract::<i32>()?;
+            let worker_type = match mode {
+                0 => 1, // SCRIPT_MODE -> Driver
+                1 => 0, // WORKER_MODE -> Worker
+                other => other,
+            };
+            let gcs_options = args.get_item(4)?;
+            let gcs_address = gcs_options.getattr("gcs_address")?.extract::<String>()?;
+            let node_ip_address = args.get_item(6)?.extract::<String>()?;
+            let job_id = args.get_item(3)?;
+            let job_id_int = if let Ok(value) = job_id.extract::<u32>() {
+                value
+            } else {
+                job_id.call_method0("to_int")?.extract::<u32>()?
+            };
+            let worker_id = if args.get_item(12)?.is_none() {
+                None
+            } else {
+                Some(
+                    *args
+                        .get_item(12)?
+                        .extract::<pyo3::PyRef<'_, crate::ids::PyWorkerID>>()?
+                        .inner(),
+                )
+            };
+            (
+                worker_type,
+                node_ip_address,
+                gcs_address,
+                job_id_int,
+                worker_id,
+                None,
+                0,
+            )
+        } else {
+            let worker_type = args.get_item(0)?.extract::<i32>()?;
+            let node_ip_address = args.get_item(1)?.extract::<String>()?;
+            let gcs_address = args.get_item(2)?.extract::<String>()?;
+            let job_id_int = args.get_item(3)?.extract::<u32>()?;
+            let worker_id = if argc > 4 && !args.get_item(4)?.is_none() {
+                Some(
+                    *args
+                        .get_item(4)?
+                        .extract::<pyo3::PyRef<'_, crate::ids::PyWorkerID>>()?
+                        .inner(),
+                )
+            } else if let Some(kwargs) = kwargs {
+                PyDictMethods::get_item(kwargs, "worker_id")?
+                    .map(|value| {
+                        Ok::<_, pyo3::PyErr>(
+                            *value
+                                .extract::<pyo3::PyRef<'_, crate::ids::PyWorkerID>>()?
+                                .inner(),
+                        )
+                    })
+                    .transpose()?
+            } else {
+                None
+            };
+            let node_id = if argc > 5 && !args.get_item(5)?.is_none() {
+                Some(
+                    *args
+                        .get_item(5)?
+                        .extract::<pyo3::PyRef<'_, crate::ids::PyNodeID>>()?
+                        .inner(),
+                )
+            } else if let Some(kwargs) = kwargs {
+                PyDictMethods::get_item(kwargs, "node_id")?
+                    .map(|value| {
+                        Ok::<_, pyo3::PyErr>(
+                            *value
+                                .extract::<pyo3::PyRef<'_, crate::ids::PyNodeID>>()?
+                                .inner(),
+                        )
+                    })
+                    .transpose()?
+            } else {
+                None
+            };
+            let max_concurrency = if argc > 6 {
+                args.get_item(6)?.extract::<usize>()?
+            } else if let Some(kwargs) = kwargs {
+                PyDictMethods::get_item(kwargs, "max_concurrency")?
+                    .map(|value| value.extract::<usize>())
+                    .transpose()?
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            (
+                worker_type,
+                node_ip_address,
+                gcs_address,
+                job_id_int,
+                worker_id,
+                node_id,
+                max_concurrency,
+            )
+        };
+
+        let wt = PyWorkerType::from_i32(worker_type).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid worker_type: {}",
+                worker_type
+            ))
+        })?;
         let options = CoreWorkerOptions {
             worker_type: wt.to_core(),
             node_ip_address,
             gcs_address,
             job_id: JobID::from_int(job_id_int),
-            worker_id: wid,
-            node_id: nid,
+            worker_id: worker_id.unwrap_or_else(WorkerID::from_random),
+            node_id: node_id.unwrap_or_else(NodeID::nil),
             max_concurrency,
             ..CoreWorkerOptions::default()
         };

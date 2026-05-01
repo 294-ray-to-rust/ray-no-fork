@@ -862,6 +862,7 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("UniqueID", m.getattr("PyUniqueID")?)?;
     m.add("ClusterID", m.getattr("PyClusterID")?)?;
     m.add("ObjectRef", m.getattr("PyObjectRef")?)?;
+    m.add("CoreWorker", m.getattr("PyCoreWorker")?)?;
     m.add("Language", m.getattr("PyLanguage")?)?;
     m.add("WorkerType", m.getattr("PyWorkerType")?)?;
     m.add("GcsClient", m.getattr("PyGcsClient")?)?;

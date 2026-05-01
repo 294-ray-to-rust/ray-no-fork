@@ -299,17 +299,25 @@ impl PyGcsClient {
     // ─── Internal KV ─────────────────────────────────────────────────
 
     /// Get a value from the internal KV store.
+    ///
+    /// Returns `bytes`, not `list[int]` — Ray's Python callers do
+    /// `result.decode("utf-8")` on this, which only works on a true bytes
+    /// object. PyO3 maps `Vec<u8>` to a Python list by default, so go through
+    /// `PyBytes` explicitly.
     #[pyo3(name = "internal_kv_get", signature = (key, namespace = None, timeout = None))]
     fn py_internal_kv_get(
         &self,
+        py: pyo3::Python<'_>,
         key: &pyo3::Bound<'_, pyo3::PyAny>,
         namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
         timeout: Option<f64>,
-    ) -> pyo3::PyResult<Option<Vec<u8>>> {
+    ) -> pyo3::PyResult<Option<pyo3::Py<pyo3::types::PyBytes>>> {
         let _ = timeout;
         let key = py_any_to_string(key)?;
         let namespace = py_optional_namespace(namespace)?;
-        Ok(self.internal_kv_get(&namespace, &key))
+        Ok(self
+            .internal_kv_get(&namespace, &key)
+            .map(|v| pyo3::types::PyBytes::new_bound(py, &v).unbind()))
     }
 
     /// Put a value into the internal KV store. Returns 1 if added, 0 if overwritten.
@@ -384,7 +392,7 @@ impl PyGcsClient {
         namespace: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
         timeout: Option<f64>,
     ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
-        let value = self.py_internal_kv_get(key, namespace, timeout)?;
+        let value = self.py_internal_kv_get(py, key, namespace, timeout)?;
         py_ready_awaitable(py, value)
     }
 

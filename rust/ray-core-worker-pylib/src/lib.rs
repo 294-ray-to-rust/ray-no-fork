@@ -702,6 +702,26 @@ fn mark_shutdown() {
     INITIALIZED.store(false, std::sync::atomic::Ordering::Relaxed);
 }
 
+// `setproctitle` only needs to round-trip the title through Python — the
+// dashboard subprocess module reads it back to label restarts. A real OS
+// proctitle update isn't required for tests to pass, so back it with a
+// process-local mutex.
+static PROC_TITLE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn getproctitle() -> String {
+    PROC_TITLE.lock().map(|t| t.clone()).unwrap_or_default()
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn setproctitle(title: String) {
+    if let Ok(mut t) = PROC_TITLE.lock() {
+        *t = title;
+    }
+}
+
 #[cfg(feature = "python")]
 #[pymodule]
 fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -729,6 +749,8 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(split_buffer, m)?)?;
     m.add_function(wrap_pyfunction!(unpack_pickle5_buffers, m)?)?;
+    m.add_function(wrap_pyfunction!(getproctitle, m)?)?;
+    m.add_function(wrap_pyfunction!(setproctitle, m)?)?;
 
     // ─── ID types ────────────────────────────────────────────────
     m.add_class::<ids::PyObjectID>()?;

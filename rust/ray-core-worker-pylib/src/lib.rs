@@ -11,12 +11,12 @@
 //! Replaces `python/ray/_raylet.pyx` (Cython).
 //! Will be built with maturin to produce `_raylet.so`.
 
-pub mod common;
 pub mod cluster;
-pub mod ids;
-pub mod object_ref;
+pub mod common;
 pub mod core_worker;
 pub mod gcs_client;
+pub mod ids;
+pub mod object_ref;
 pub mod serialization;
 
 // Re-export primary types for Rust consumers.
@@ -821,6 +821,40 @@ fn unpack_pickle5_buffers<'py>(
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn _get_actor_serialized_owner_address_or_none(
+    py: Python<'_>,
+    actor_table_data: &[u8],
+) -> PyResult<Py<PyAny>> {
+    let gcs_pb2 = PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;
+    let actor_cls = gcs_pb2.getattr("ActorTableData")?;
+    let actor = actor_cls.call0()?;
+    actor.call_method1(
+        "ParseFromString",
+        (PyBytes::new_bound(py, actor_table_data),),
+    )?;
+    let address = actor.getattr("address")?;
+    let worker_id = address.getattr("worker_id")?.extract::<Vec<u8>>()?;
+    if worker_id.is_empty() {
+        Ok(py.None())
+    } else {
+        Ok(address.call_method0("SerializeToString")?.unbind())
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn raise_if_dependency_failed(arg: &Bound<'_, PyAny>) -> PyResult<()> {
+    let ray_exceptions = PyModule::import_bound(arg.py(), "ray.exceptions")?;
+    let ray_error = ray_exceptions.getattr("RayError")?;
+    if arg.is_instance(&ray_error)? {
+        Err(pyo3::PyErr::from_value_bound(arg.clone()))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
 }
@@ -840,8 +874,7 @@ fn is_initialized() -> bool {
 }
 
 #[cfg(feature = "python")]
-static INITIALIZED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static INITIALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Mark Ray as initialized. Called internally after successful init.
 #[cfg(feature = "python")]
@@ -906,6 +939,11 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unpack_pickle5_buffers, m)?)?;
     m.add_function(wrap_pyfunction!(getproctitle, m)?)?;
     m.add_function(wrap_pyfunction!(setproctitle, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        _get_actor_serialized_owner_address_or_none,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(raise_if_dependency_failed, m)?)?;
 
     // ─── ID types ────────────────────────────────────────────────
     m.add_class::<ids::PyObjectID>()?;
@@ -979,11 +1017,17 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("RAY_VERSION", ray_common::constants::RAY_VERSION)?;
     m.add("WORKER_PROCESS_SETUP_HOOK_KEY_NAME_GCS", "FunctionsToRun")?;
     m.add("RESOURCE_UNIT_SCALING", 10000)?;
-    m.add("IMPLICIT_RESOURCE_PREFIX", "node:__internal_implicit_resource_")?;
+    m.add(
+        "IMPLICIT_RESOURCE_PREFIX",
+        "node:__internal_implicit_resource_",
+    )?;
     m.add("STREAMING_GENERATOR_RETURN", -2)?;
     m.add("GCS_AUTOSCALER_STATE_NAMESPACE", "__autoscaler")?;
     m.add("GCS_AUTOSCALER_V2_ENABLED_KEY", "__autoscaler_v2_enabled")?;
-    m.add("GCS_AUTOSCALER_CLUSTER_CONFIG_KEY", "__autoscaler_cluster_config")?;
+    m.add(
+        "GCS_AUTOSCALER_CLUSTER_CONFIG_KEY",
+        "__autoscaler_cluster_config",
+    )?;
     m.add("GCS_PID_KEY", "gcs_pid")?;
     m.add("NODE_TYPE_NAME_ENV", "RAY_NODE_TYPE_NAME")?;
     m.add("NODE_MARKET_TYPE_ENV", "RAY_NODE_MARKET_TYPE")?;
@@ -1002,9 +1046,29 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("RUNTIME_ENV_AGENT_PORT_NAME", "runtime_env_agent_port")?;
     m.add("METRICS_AGENT_PORT_NAME", "metrics_agent_port")?;
     m.add("METRICS_EXPORT_PORT_NAME", "metrics_export_port")?;
-    m.add("DASHBOARD_AGENT_LISTEN_PORT_NAME", "dashboard_agent_listen_port")?;
+    m.add(
+        "DASHBOARD_AGENT_LISTEN_PORT_NAME",
+        "dashboard_agent_listen_port",
+    )?;
     m.add("GCS_SERVER_PORT_NAME", "gcs_server_port")?;
-    m.add("RAY_INTERNAL_DASHBOARD_NAMESPACE", "_ray_internal_dashboard")?;
+    m.add(
+        "RAY_INTERNAL_DASHBOARD_NAMESPACE",
+        "_ray_internal_dashboard",
+    )?;
+    m.add("OPTIMIZED", true)?;
+    m.add("GRPC_STATUS_CODE_UNAVAILABLE", 14)?;
+    m.add("GRPC_STATUS_CODE_UNKNOWN", 2)?;
+    m.add("GRPC_STATUS_CODE_DEADLINE_EXCEEDED", 4)?;
+    m.add("GRPC_STATUS_CODE_RESOURCE_EXHAUSTED", 8)?;
+    m.add("GRPC_STATUS_CODE_UNIMPLEMENTED", 12)?;
+    m.add(
+        "async_task_id",
+        m.py().eval_bound(
+            "__import__('contextvars').ContextVar('async_task_id', default=None)",
+            None,
+            None,
+        )?,
+    )?;
 
     // ─── Name aliases matching the original Cython _raylet module ─
     m.add("ObjectID", m.getattr("PyObjectID")?)?;

@@ -18,9 +18,9 @@ use ray_rpc::client::RetryConfig;
 #[cfg(feature = "python")]
 use prost::Message;
 #[cfg(feature = "python")]
-use pyo3::IntoPy;
-#[cfg(feature = "python")]
 use pyo3::types::{IntoPyDict, PyAnyMethods, PyDict, PyStringMethods};
+#[cfg(feature = "python")]
+use pyo3::IntoPy;
 
 /// Python-facing GCS client.
 ///

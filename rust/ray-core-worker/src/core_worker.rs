@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use ray_common::id::{ActorID, JobID, ObjectID, TaskID, WorkerID};
+use ray_common::id::{ActorID, JobID, NodeID, ObjectID, TaskID, WorkerID};
 use ray_proto::ray::rpc::{Address, TaskSpec};
 
 use crate::actor_handle::ActorHandle;
@@ -299,6 +299,10 @@ impl CoreWorker {
 
     pub fn current_job_id(&self) -> JobID {
         self.context.current_job_id()
+    }
+
+    pub fn current_node_id(&self) -> NodeID {
+        NodeID::from_binary(&self.worker_address.node_id)
     }
 
     pub fn worker_id(&self) -> WorkerID {

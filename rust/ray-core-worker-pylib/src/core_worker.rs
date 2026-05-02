@@ -139,6 +139,11 @@ impl PyCoreWorker {
         self.inner.current_job_id()
     }
 
+    /// Get the current node ID.
+    pub fn get_current_node_id(&self) -> NodeID {
+        self.inner.current_node_id()
+    }
+
     /// Get the worker ID.
     pub fn get_worker_id(&self) -> WorkerID {
         self.inner.worker_id()
@@ -434,6 +439,24 @@ impl PyCoreWorker {
     #[pyo3(name = "current_job_id")]
     fn py_current_job_id(&self) -> crate::ids::PyJobID {
         crate::ids::PyJobID::from_inner(self.get_current_job_id())
+    }
+
+    /// Cython-compatible CoreWorker.get_current_job_id() API.
+    #[pyo3(name = "get_current_job_id")]
+    fn py_get_current_job_id(&self) -> crate::ids::PyJobID {
+        crate::ids::PyJobID::from_inner(self.get_current_job_id())
+    }
+
+    /// Get the current node ID.
+    #[pyo3(name = "current_node_id")]
+    fn py_current_node_id(&self) -> crate::ids::PyNodeID {
+        crate::ids::PyNodeID::from_inner(self.get_current_node_id())
+    }
+
+    /// Cython-compatible CoreWorker.get_current_node_id() API.
+    #[pyo3(name = "get_current_node_id")]
+    fn py_get_current_node_id(&self) -> crate::ids::PyNodeID {
+        crate::ids::PyNodeID::from_inner(self.get_current_node_id())
     }
 
     /// Get the worker ID.

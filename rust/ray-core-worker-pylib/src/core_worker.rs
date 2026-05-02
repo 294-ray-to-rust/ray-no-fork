@@ -22,6 +22,9 @@ use ray_core_worker::memory_store::RayObject;
 use ray_core_worker::options::CoreWorkerOptions;
 use ray_core_worker::CoreWorker;
 
+#[cfg(feature = "python")]
+use pyo3::types::PyAnyMethods;
+
 /// Python-facing wrapper around `CoreWorker`.
 #[cfg_attr(feature = "python", pyo3::pyclass(module = "_raylet"))]
 pub struct PyCoreWorker {

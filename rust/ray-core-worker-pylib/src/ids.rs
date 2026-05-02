@@ -14,6 +14,9 @@
 use ray_common::id;
 use std::hash::{Hash, Hasher};
 
+#[cfg(feature = "python")]
+use pyo3::types::PyBytes;
+
 /// Macro to generate a Python-facing wrapper for a Ray ID type.
 ///
 /// When the `python` feature is enabled, the struct gets `#[pyclass]` and
@@ -135,8 +138,8 @@ macro_rules! py_id_wrapper {
 
             /// Return the raw bytes.
             #[pyo3(name = "binary")]
-            fn py_binary(&self) -> Vec<u8> {
-                self.binary()
+            fn py_binary<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, PyBytes> {
+                PyBytes::new_bound(py, &self.binary())
             }
 
             /// Return the hex representation.

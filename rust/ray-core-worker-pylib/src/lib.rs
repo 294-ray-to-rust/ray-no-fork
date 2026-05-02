@@ -130,6 +130,120 @@ struct GlobalStateAccessor {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GcsErrorSubscriber {
+    address: String,
+    worker_id: Option<Vec<u8>>,
+    subscribed: bool,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GcsErrorSubscriber {
+    #[new]
+    #[pyo3(signature = (address, worker_id = None))]
+    fn new(address: String, worker_id: Option<&[u8]>) -> Self {
+        Self {
+            address,
+            worker_id: worker_id.map(|id| id.to_vec()),
+            subscribed: false,
+        }
+    }
+
+    fn subscribe(&mut self) {
+        self.subscribed = true;
+    }
+
+    #[getter]
+    fn last_batch_size(&self) -> usize {
+        0
+    }
+
+    fn close(&mut self) {
+        self.subscribed = false;
+    }
+
+    #[pyo3(signature = (timeout = None))]
+    fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
+        if let Some(seconds) = timeout.filter(|seconds| *seconds > 0.0) {
+            py.allow_threads(|| std::thread::sleep(std::time::Duration::from_secs_f64(seconds)));
+        }
+        Ok((py.None(), py.None()))
+    }
+
+    #[getter]
+    fn address(&self) -> &str {
+        &self.address
+    }
+
+    #[getter]
+    fn worker_id<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
+        self.worker_id.as_ref().map(|id| PyBytes::new_bound(py, id))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GcsLogSubscriber {
+    address: String,
+    worker_id: Option<Vec<u8>>,
+    subscribed: bool,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GcsLogSubscriber {
+    #[new]
+    #[pyo3(signature = (address, worker_id = None))]
+    fn new(address: String, worker_id: Option<&[u8]>) -> Self {
+        Self {
+            address,
+            worker_id: worker_id.map(|id| id.to_vec()),
+            subscribed: false,
+        }
+    }
+
+    fn subscribe(&mut self) {
+        self.subscribed = true;
+    }
+
+    #[getter]
+    fn last_batch_size(&self) -> usize {
+        0
+    }
+
+    fn close(&mut self) {
+        self.subscribed = false;
+    }
+
+    #[pyo3(signature = (timeout = None))]
+    fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Py<PyAny>> {
+        if let Some(seconds) = timeout.filter(|seconds| *seconds > 0.0) {
+            py.allow_threads(|| std::thread::sleep(std::time::Duration::from_secs_f64(seconds)));
+        }
+        let result = PyDict::new_bound(py);
+        result.set_item("ip", "")?;
+        result.set_item("pid", "")?;
+        result.set_item("job", "")?;
+        result.set_item("is_err", false)?;
+        result.set_item("actor_name", "")?;
+        result.set_item("task_name", "")?;
+        result.set_item("lines", PyList::empty_bound(py))?;
+        Ok(result.unbind().into())
+    }
+
+    #[getter]
+    fn address(&self) -> &str {
+        &self.address
+    }
+
+    #[getter]
+    fn worker_id<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
+        self.worker_id.as_ref().map(|id| PyBytes::new_bound(py, id))
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(module = "_raylet", subclass)]
 struct SerializedObject {
     metadata: Py<PyAny>,
@@ -775,6 +889,8 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<gcs_client::PyGcsClient>()?;
     m.add_class::<cluster::PyClusterHandle>()?;
     m.add_class::<GcsClientOptions>()?;
+    m.add_class::<GcsErrorSubscriber>()?;
+    m.add_class::<GcsLogSubscriber>()?;
     m.add_class::<Config>()?;
     m.add_class::<ObjectRefGenerator>()?;
     m.add_class::<DynamicObjectRefGenerator>()?;

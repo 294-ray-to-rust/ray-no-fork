@@ -41,6 +41,10 @@ impl PyLanguage {
 #[cfg(feature = "python")]
 #[pyo3::pymethods]
 impl PyLanguage {
+    fn value(&self) -> i32 {
+        *self as i32
+    }
+
     fn __repr__(&self) -> &'static str {
         match self {
             PyLanguage::Python => "Language.PYTHON",

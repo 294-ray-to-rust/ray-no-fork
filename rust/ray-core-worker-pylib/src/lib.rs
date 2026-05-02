@@ -747,6 +747,26 @@ fn wait_for_persisted_port(
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn compute_task_id(_object_ref: &object_ref::PyObjectRef) -> ids::PyTaskID {
+    ids::PyTaskID::nil()
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn maybe_initialize_job_config() {}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn serialize_retry_exception_allowlist(
+    py: Python<'_>,
+    _retry_exception_allowlist: Py<PyAny>,
+    _function_descriptor: Py<PyAny>,
+) -> Bound<'_, PyBytes> {
+    PyBytes::new_bound(py, &[])
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_session_key_from_storage(
     _host: &str,
     _port: u16,
@@ -929,6 +949,9 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_ipv6, m)?)?;
     m.add_function(wrap_pyfunction!(node_ip_address_from_perspective, m)?)?;
     m.add_function(wrap_pyfunction!(get_port_filename, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_task_id, m)?)?;
+    m.add_function(wrap_pyfunction!(maybe_initialize_job_config, m)?)?;
+    m.add_function(wrap_pyfunction!(serialize_retry_exception_allowlist, m)?)?;
     m.add_function(wrap_pyfunction!(persist_port, m)?)?;
     m.add_function(wrap_pyfunction!(wait_for_persisted_port, m)?)?;
     m.add_function(wrap_pyfunction!(get_session_key_from_storage, m)?)?;
@@ -992,6 +1015,8 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "AuthenticationTokenLoader",
         "Count",
         "CppFunctionDescriptor",
+        "Buffer",
+        "FunctionDescriptor",
         "Gauge",
         "Histogram",
         "JavaFunctionDescriptor",
@@ -1006,6 +1031,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     ] {
         m.add(name, m.getattr("GenericStub")?)?;
     }
+    m.add(
+        "NumReturnsWarning",
+        m.py().eval_bound("type('NumReturnsWarning', (UserWarning,), {})", None, None)?,
+    )?;
     m.add(
         "AuthenticationMode",
         m.py().eval_bound(

@@ -558,6 +558,47 @@ impl GlobalStateAccessor {
         Ok(dict.unbind().into())
     }
 
+    fn get_node_table(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let client = PyGcsClient::new(self.gcs_address.clone());
+        let nodes = client.get_all_node_info();
+        let mut results = Vec::with_capacity(nodes.len());
+
+        for node in nodes {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("NodeID", hex::encode(&node.node_id))?;
+            dict.set_item("Alive", node.state == 0)?;
+            dict.set_item("NodeManagerAddress", node.node_manager_address.clone())?;
+            dict.set_item("NodeManagerHostname", node.node_manager_hostname.clone())?;
+            dict.set_item("NodeManagerPort", node.node_manager_port)?;
+            dict.set_item("ObjectManagerPort", node.object_manager_port)?;
+            dict.set_item("ObjectStoreSocketName", node.object_store_socket_name.clone())?;
+            dict.set_item("RayletSocketName", node.raylet_socket_name.clone())?;
+            dict.set_item("MetricsExportPort", node.metrics_export_port)?;
+            dict.set_item("MetricsAgentPort", node.metrics_agent_port)?;
+            dict.set_item("DashboardAgentListenPort", node.dashboard_agent_listen_port)?;
+            dict.set_item("NodeName", node.node_name.clone())?;
+            dict.set_item("RuntimeEnvAgentPort", node.runtime_env_agent_port)?;
+            dict.set_item("DeathReason", node.death_info.as_ref().map(|d| d.reason).unwrap_or(0))?;
+            dict.set_item(
+                "DeathReasonMessage",
+                node.death_info
+                    .as_ref()
+                    .map(|d| d.reason_message.clone())
+                    .unwrap_or_default(),
+            )?;
+            dict.set_item("alive", node.state == 0)?;
+            if node.state == 0 {
+                dict.set_item("Resources", node.resources_total.clone())?;
+            } else {
+                dict.set_item("Resources", PyDict::new_bound(py))?;
+            }
+            dict.set_item("labels", node.labels.clone())?;
+            results.push(dict.unbind().into());
+        }
+
+        Ok(results)
+    }
+
     fn get_system_config(&self) -> &str {
         "{}"
     }

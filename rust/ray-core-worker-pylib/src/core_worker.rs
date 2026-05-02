@@ -461,6 +461,33 @@ impl PyCoreWorker {
         crate::ids::PyWorkerID::from_inner(self.get_worker_id())
     }
 
+    /// Cython-compatible CoreWorker.get_task_depth() API.
+    ///
+    /// The Rust shim currently only runs top-level compatibility smoke paths,
+    /// so report the legacy driver default depth.
+    #[pyo3(name = "get_task_depth")]
+    fn py_get_task_depth(&self) -> i64 {
+        0
+    }
+
+    /// Cython-compatible CoreWorker.get_placement_group_id() API.
+    ///
+    /// No placement group is active in the current Rust shim startup path, so
+    /// return the nil ID used by legacy Python for "no placement group".
+    #[pyo3(name = "get_placement_group_id")]
+    fn py_get_placement_group_id(&self) -> crate::ids::PyPlacementGroupID {
+        crate::ids::PyPlacementGroupID::nil()
+    }
+
+    /// Cython-compatible CoreWorker.should_capture_child_tasks_in_placement_group() API.
+    ///
+    /// With no active placement group, child tasks should not be implicitly
+    /// captured into one.
+    #[pyo3(name = "should_capture_child_tasks_in_placement_group")]
+    fn py_should_capture_child_tasks_in_placement_group(&self) -> bool {
+        false
+    }
+
     /// Cython-compatible driver shutdown hook.
     ///
     /// The Rust shim does not yet own external worker resources that need an

@@ -445,6 +445,11 @@ impl GenericStub {
 
     fn reset_cache(&self) {}
 
+    #[getter]
+    fn function_id(&self) -> ids::PyFunctionID {
+        ids::PyFunctionID::nil()
+    }
+
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
         py.eval_bound("lambda *a, **kw: None", None, None)
             .map(|value| value.unbind())

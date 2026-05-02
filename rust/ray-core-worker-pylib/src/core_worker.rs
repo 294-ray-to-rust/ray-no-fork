@@ -418,6 +418,21 @@ impl PyCoreWorker {
         crate::ids::PyWorkerID::from_inner(self.get_worker_id())
     }
 
+    /// Cython-compatible CoreWorker.get_worker_id() API.
+    #[pyo3(name = "get_worker_id")]
+    fn py_get_worker_id(&self) -> crate::ids::PyWorkerID {
+        crate::ids::PyWorkerID::from_inner(self.get_worker_id())
+    }
+
+    /// Cython-compatible driver shutdown hook.
+    ///
+    /// The Rust shim does not yet own external worker resources that need an
+    /// explicit Python-level shutdown, but Python cleanup paths call this
+    /// method unconditionally during ray.shutdown(). Provide a no-op so the
+    /// first real test failure is not masked by teardown AttributeErrors.
+    #[pyo3(name = "shutdown_driver")]
+    fn py_shutdown_driver(&self) {}
+
     /// Kill an actor by binary actor ID.
     #[pyo3(name = "kill_actor")]
     fn py_kill_actor(

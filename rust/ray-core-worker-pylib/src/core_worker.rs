@@ -27,6 +27,7 @@ use ray_core_worker::CoreWorker;
 pub struct PyCoreWorker {
     inner: Arc<CoreWorker>,
     runtime: tokio::runtime::Runtime,
+    serialized_job_config: Vec<u8>,
 }
 
 impl PyCoreWorker {
@@ -37,7 +38,11 @@ impl PyCoreWorker {
             .build()
             .expect("failed to create tokio runtime");
         let inner = Arc::new(CoreWorker::new(options));
-        Self { inner, runtime }
+        Self {
+            inner,
+            runtime,
+            serialized_job_config: Vec::new(),
+        }
     }
 
     /// Put an object.
@@ -174,6 +179,7 @@ impl PyCoreWorker {
             worker_id,
             node_id,
             max_concurrency,
+            serialized_job_config,
         ) = if argc >= 19 {
             // Legacy form from ray._private.worker.Worker.connect(). Most of
             // these arguments describe C++ worker internals that the Rust
@@ -204,6 +210,7 @@ impl PyCoreWorker {
                         .inner(),
                 )
             };
+            let serialized_job_config = args.get_item(9)?.extract::<Vec<u8>>()?;
             (
                 worker_type,
                 node_ip_address,
@@ -212,6 +219,7 @@ impl PyCoreWorker {
                 worker_id,
                 None,
                 0,
+                serialized_job_config,
             )
         } else {
             let worker_type = args.get_item(0)?.extract::<i32>()?;
@@ -276,6 +284,7 @@ impl PyCoreWorker {
                 worker_id,
                 node_id,
                 max_concurrency,
+                Vec::new(),
             )
         };
 
@@ -295,7 +304,19 @@ impl PyCoreWorker {
             max_concurrency,
             ..CoreWorkerOptions::default()
         };
-        Ok(Self::new(options))
+        let mut worker = Self::new(options);
+        worker.serialized_job_config = serialized_job_config;
+        Ok(worker)
+    }
+
+    /// Cython-compatible CoreWorker.get_job_config() API.
+    #[pyo3(name = "get_job_config")]
+    fn py_get_job_config(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::PyObject> {
+        let common_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.common_pb2")?;
+        let job_config = common_pb2.getattr("JobConfig")?.call0()?;
+        let bytes = pyo3::types::PyBytes::new_bound(py, &self.serialized_job_config);
+        job_config.call_method1("ParseFromString", (bytes,))?;
+        Ok(job_config.into())
     }
 
     /// Put an object, returning the object ID.

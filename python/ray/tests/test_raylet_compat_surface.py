@@ -241,5 +241,13 @@ def test_function_descriptor_shape_and_function_id(class_name):
     assert isinstance(function_id.binary(), bytes)
 
 
+def test_gcs_subscriber_empty_poll_shape():
+    error_subscriber = raylet.GcsErrorSubscriber("127.0.0.1:0")
+    assert error_subscriber.poll(timeout=0.001) == (None, None)
+
+    log_subscriber = raylet.GcsLogSubscriber("127.0.0.1:0")
+    assert log_subscriber.poll(timeout=0.001) is None
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main(["-sv", __file__]))

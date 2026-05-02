@@ -34,6 +34,24 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
 
 #[cfg(feature = "python")]
+fn empty_subscriber_poll_delay(timeout: Option<f64>) -> std::time::Duration {
+    const DEFAULT_EMPTY_POLL_SLEEP_MS: u64 = 50;
+
+    match timeout {
+        Some(seconds) if seconds.is_finite() && seconds > 0.0 => {
+            std::time::Duration::from_secs_f64(seconds)
+        }
+        _ => std::time::Duration::from_millis(DEFAULT_EMPTY_POLL_SLEEP_MS),
+    }
+}
+
+#[cfg(feature = "python")]
+fn wait_for_empty_subscriber_poll(py: Python<'_>, timeout: Option<f64>) {
+    let delay = empty_subscriber_poll_delay(timeout);
+    py.allow_threads(|| std::thread::sleep(delay));
+}
+
+#[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
 struct Config;
 
@@ -165,9 +183,7 @@ impl GcsErrorSubscriber {
 
     #[pyo3(signature = (timeout = None))]
     fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
-        if let Some(seconds) = timeout.filter(|seconds| *seconds > 0.0) {
-            py.allow_threads(|| std::thread::sleep(std::time::Duration::from_secs_f64(seconds)));
-        }
+        wait_for_empty_subscriber_poll(py, timeout);
         Ok((py.None(), py.None()))
     }
 
@@ -218,18 +234,8 @@ impl GcsLogSubscriber {
 
     #[pyo3(signature = (timeout = None))]
     fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Py<PyAny>> {
-        if let Some(seconds) = timeout.filter(|seconds| *seconds > 0.0) {
-            py.allow_threads(|| std::thread::sleep(std::time::Duration::from_secs_f64(seconds)));
-        }
-        let result = PyDict::new_bound(py);
-        result.set_item("ip", "")?;
-        result.set_item("pid", "")?;
-        result.set_item("job", "")?;
-        result.set_item("is_err", false)?;
-        result.set_item("actor_name", "")?;
-        result.set_item("task_name", "")?;
-        result.set_item("lines", PyList::empty_bound(py))?;
-        Ok(result.unbind().into())
+        wait_for_empty_subscriber_poll(py, timeout);
+        Ok(py.None())
     }
 
     #[getter]

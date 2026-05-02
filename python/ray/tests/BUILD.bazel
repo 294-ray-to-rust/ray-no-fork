@@ -1,5 +1,5 @@
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@py_deps_py310//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//bazel:python.bzl", "py_test_module_list")
 
 py_library(
@@ -18,10 +18,7 @@ py_test(
     name = "test_raylet_compat_surface",
     size = "small",
     srcs = ["test_raylet_compat_surface.py"],
-    tags = [
-        "no_main",
-        "team:core",
-    ],
+    tags = ["team:core"],
     deps = [
         "//:ray_lib",
         requirement("pytest"),

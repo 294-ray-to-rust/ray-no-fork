@@ -1,27 +1,16 @@
 group: rust packaging preflight
 sort_key: rust-packaging-preflight
 steps:
-  - label: ":ray: rust _raylet compat preflight"
-    key: rust-raylet-compat-preflight
-    tags:
-      - always
-      - python
-    instance_type: medium
-    commands:
-      - bazel test //python/ray/tests:test_raylet_compat_surface --test_output=errors --flaky_test_attempts=1
-    depends_on:
-      - forge
-
   # Stage 2 prerequisite chain: keep the image build path minimal, then run
-  # the previous Rust smoke shard only after the fail-fast compat check passes.
-  # Stage 3 remains GitHub merge queue/main full CI.
+  # the fail-fast compat check and previous Rust smoke shard inside the built
+  # core image. Stage 3 remains GitHub merge queue/main full CI.
   - name: rust-oss-ci-base-test-py310
     label: "wanda: rust oss-ci-base_test py3.10"
     wanda: ci/docker/base.test.wanda.yaml
     env:
       PYTHON: "3.10"
     depends_on:
-      - rust-raylet-compat-preflight
+      - forge
     tags:
       - always
       - cibase
@@ -49,6 +38,21 @@ steps:
     tags:
       - always
       - cibase
+
+  - label: ":ray: rust _raylet compat preflight"
+    key: rust-raylet-compat-preflight
+    tags:
+      - always
+      - python
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/tests:test_raylet_compat_surface
+        core
+        --install-mask all-ray-libraries
+        --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - rust-corebuild-py310
 
   - name: rust-ray-dashboard
     label: "wanda: rust dashboard (x86_64)"

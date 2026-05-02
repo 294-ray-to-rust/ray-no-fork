@@ -9,6 +9,7 @@ code before heavier smoke tests spend minutes finding the same issue indirectly.
 """
 
 import inspect
+import sys
 
 import pytest
 
@@ -238,3 +239,7 @@ def test_function_descriptor_shape_and_function_id(class_name):
     function_id = descriptor.function_id
     assert hasattr(function_id, "binary")
     assert isinstance(function_id.binary(), bytes)
+
+
+if __name__ == "__main__":
+    sys.exit(pytest.main(["-sv", __file__]))

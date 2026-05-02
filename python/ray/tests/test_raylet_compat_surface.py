@@ -13,6 +13,7 @@ import inspect
 import pytest
 
 import ray._raylet as raylet
+
 MODULE_CALLABLES = {
     "_get_actor_serialized_owner_address_or_none",
     "build_address",

@@ -1,56 +1,27 @@
 group: rust packaging preflight
 sort_key: rust-packaging-preflight
 steps:
-  # Fast PR signal for the Rust _raylet packaging path. The full merge-queue
-  # pipeline still runs the complete Python-version matrix and wheel tests.
-  - name: rust-ray-core-py310
-    label: "wanda: rust ray-core py3.10 (x86_64)"
-    wanda: ci/docker/ray-core.wanda.yaml
-    env_file: rayci.env
-    env:
-      PYTHON_VERSION: "3.10"
-      ARCH_SUFFIX: ""
-      HOSTTYPE: "x86_64"
-    depends_on:
-      - forge
+  - label: ":ray: rust _raylet compat preflight"
+    key: rust-raylet-compat-preflight
     tags:
       - always
-      - release_wheels
-
-  - name: rust-ray-java
-    label: "wanda: rust java build (x86_64)"
-    wanda: ci/docker/ray-java.wanda.yaml
-    env_file: rayci.env
-    env:
-      ARCH_SUFFIX: ""
-      HOSTTYPE: "x86_64"
+      - python
+    instance_type: medium
+    commands:
+      - bazel test //python/ray/tests:test_raylet_compat_surface --test_output=errors
     depends_on:
       - forge
-    tags:
-      - always
-      - release_wheels
-      - java
 
-  - name: rust-ray-dashboard
-    label: "wanda: rust dashboard (x86_64)"
-    wanda: ci/docker/ray-dashboard.wanda.yaml
-    env_file: rayci.env
-    env:
-      ARCH_SUFFIX: ""
-      HOSTTYPE: "x86_64"
-    depends_on:
-      - forge
-    tags:
-      - always
-      - release_wheels
-
+  # Keep the PR lane intentionally tiny: the compatibility preflight first,
+  # then only the simple py3.10 corebuild image chain needed to prove the Rust
+  # packaging path still builds. Full smoke coverage belongs to merge queue/main.
   - name: rust-oss-ci-base-test-py310
     label: "wanda: rust oss-ci-base_test py3.10"
     wanda: ci/docker/base.test.wanda.yaml
     env:
       PYTHON: "3.10"
     depends_on:
-      - forge
+      - rust-raylet-compat-preflight
     tags:
       - always
       - cibase
@@ -78,41 +49,3 @@ steps:
     tags:
       - always
       - cibase
-
-  - label: ":ray: rust _raylet compat preflight"
-    key: rust-raylet-compat-preflight
-    tags:
-      - always
-      - python
-    instance_type: medium
-    commands:
-      - bazel run //ci/ray_ci:test_in_docker --
-        //python/ray/tests:test_raylet_compat_surface
-        core
-        --install-mask all-ray-libraries
-        --python-version 3.10 --build-name corebuild-py3.10
-    depends_on:
-      - rust-corebuild-py310
-      - forge
-
-  - label: ":ray: rust smoke tests"
-    tags:
-      - always
-      - python
-    instance_type: medium
-    commands:
-      - bazel run //ci/ray_ci:test_in_docker --
-        //python/ray/dashboard:test_dashboard
-        //python/ray/tests:test_bundle_label_selector
-        //python/ray/tests:test_namespace
-        //python/ray/tests:test_nested_task
-        //python/ray/tests:test_multiprocessing_standalone
-        //python/ray/tests:test_placement_group_mini_integration
-        core
-        --install-mask all-ray-libraries
-        --python-version 3.10 --build-name corebuild-py3.10
-    depends_on:
-      - rust-raylet-compat-preflight
-      - rust-corebuild-py310
-      - rust-ray-dashboard
-      - forge

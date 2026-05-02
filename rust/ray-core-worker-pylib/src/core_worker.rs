@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-use ray_common::id::{ActorID, JobID, ObjectID, TaskID, WorkerID};
+use ray_common::id::{ActorID, JobID, NodeID, ObjectID, TaskID, WorkerID};
 use ray_core_worker::error::CoreWorkerResult;
 use ray_core_worker::memory_store::RayObject;
 use ray_core_worker::options::CoreWorkerOptions;

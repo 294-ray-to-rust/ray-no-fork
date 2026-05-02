@@ -8,7 +8,7 @@ steps:
       - python
     instance_type: medium
     commands:
-      - bazel test //python/ray/tests:test_raylet_compat_surface --test_output=errors
+      - bazel test //python/ray/tests:test_raylet_compat_surface --test_output=errors --flaky_test_attempts=1
     depends_on:
       - forge
 

@@ -18,6 +18,7 @@ py_test(
     size = "small",
     srcs = ["test_raylet_compat_surface.py"],
     tags = [
+        "no_main",
         "team:core",
     ],
     deps = [

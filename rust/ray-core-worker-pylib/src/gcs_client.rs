@@ -289,8 +289,8 @@ impl PyGcsClient {
     }
 
     /// Get the GCS address.
-    #[pyo3(name = "address")]
-    fn py_address(&self) -> String {
+    #[getter]
+    fn address(&self) -> String {
         self.gcs_address.clone()
     }
 

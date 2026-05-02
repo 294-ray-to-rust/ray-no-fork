@@ -12,9 +12,9 @@ steps:
     depends_on:
       - forge
 
-  # Keep the PR lane intentionally tiny: the compatibility preflight first,
-  # then only the simple py3.10 corebuild image chain needed to prove the Rust
-  # packaging path still builds. Full smoke coverage belongs to merge queue/main.
+  # Stage 2 prerequisite chain: keep the image build path minimal, then run
+  # the previous Rust smoke shard only after the fail-fast compat check passes.
+  # Stage 3 remains GitHub merge queue/main full CI.
   - name: rust-oss-ci-base-test-py310
     label: "wanda: rust oss-ci-base_test py3.10"
     wanda: ci/docker/base.test.wanda.yaml
@@ -49,3 +49,39 @@ steps:
     tags:
       - always
       - cibase
+
+  - name: rust-ray-dashboard
+    label: "wanda: rust dashboard (x86_64)"
+    wanda: ci/docker/ray-dashboard.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    depends_on:
+      - rust-raylet-compat-preflight
+    tags:
+      - always
+      - release_wheels
+
+  - label: ":ray: rust smoke tests"
+    key: rust-smoke-tests
+    tags:
+      - always
+      - python
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/dashboard:test_dashboard
+        //python/ray/tests:test_bundle_label_selector
+        //python/ray/tests:test_namespace
+        //python/ray/tests:test_nested_task
+        //python/ray/tests:test_multiprocessing_standalone
+        //python/ray/tests:test_placement_group_mini_integration
+        core
+        --install-mask all-ray-libraries
+        --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - rust-raylet-compat-preflight
+      - rust-corebuild-py310
+      - rust-ray-dashboard
+      - forge

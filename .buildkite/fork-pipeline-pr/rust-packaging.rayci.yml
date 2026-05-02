@@ -80,7 +80,6 @@ steps:
       - cibase
 
   - label: ":ray: rust smoke tests"
-    timeout_in_minutes: 30
     tags:
       - always
       - python

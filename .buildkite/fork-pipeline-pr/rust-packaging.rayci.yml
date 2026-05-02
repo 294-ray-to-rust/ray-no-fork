@@ -101,7 +101,6 @@ steps:
         --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
-      - rust-raylet-compat-preflight
       - rust-corebuild-py310
       - rust-ray-core-py310
       - rust-ray-dashboard

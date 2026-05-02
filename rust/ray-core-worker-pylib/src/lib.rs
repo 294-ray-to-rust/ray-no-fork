@@ -32,6 +32,8 @@ pub use object_ref::PyObjectRef;
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
+#[cfg(feature = "python")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(feature = "python")]
 fn empty_subscriber_poll_delay(timeout: Option<f64>) -> std::time::Duration {
@@ -152,7 +154,7 @@ struct GlobalStateAccessor {
 struct GcsErrorSubscriber {
     address: String,
     worker_id: Option<Vec<u8>>,
-    subscribed: bool,
+    subscribed: AtomicBool,
 }
 
 #[cfg(feature = "python")]
@@ -164,12 +166,12 @@ impl GcsErrorSubscriber {
         Self {
             address,
             worker_id: worker_id.map(|id| id.to_vec()),
-            subscribed: false,
+            subscribed: AtomicBool::new(false),
         }
     }
 
-    fn subscribe(&mut self) {
-        self.subscribed = true;
+    fn subscribe(&self) {
+        self.subscribed.store(true, Ordering::Relaxed);
     }
 
     #[getter]
@@ -177,8 +179,8 @@ impl GcsErrorSubscriber {
         0
     }
 
-    fn close(&mut self) {
-        self.subscribed = false;
+    fn close(&self) {
+        self.subscribed.store(false, Ordering::Relaxed);
     }
 
     #[pyo3(signature = (timeout = None))]
@@ -203,7 +205,7 @@ impl GcsErrorSubscriber {
 struct GcsLogSubscriber {
     address: String,
     worker_id: Option<Vec<u8>>,
-    subscribed: bool,
+    subscribed: AtomicBool,
 }
 
 #[cfg(feature = "python")]
@@ -215,12 +217,12 @@ impl GcsLogSubscriber {
         Self {
             address,
             worker_id: worker_id.map(|id| id.to_vec()),
-            subscribed: false,
+            subscribed: AtomicBool::new(false),
         }
     }
 
-    fn subscribe(&mut self) {
-        self.subscribed = true;
+    fn subscribe(&self) {
+        self.subscribed.store(true, Ordering::Relaxed);
     }
 
     #[getter]
@@ -228,8 +230,8 @@ impl GcsLogSubscriber {
         0
     }
 
-    fn close(&mut self) {
-        self.subscribed = false;
+    fn close(&self) {
+        self.subscribed.store(false, Ordering::Relaxed);
     }
 
     #[pyo3(signature = (timeout = None))]

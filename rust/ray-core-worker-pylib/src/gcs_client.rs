@@ -16,9 +16,11 @@ use ray_proto::ray::rpc;
 use ray_rpc::client::RetryConfig;
 
 #[cfg(feature = "python")]
-use pyo3::types::{IntoPyDict, PyAnyMethods, PyStringMethods};
+use prost::Message;
 #[cfg(feature = "python")]
 use pyo3::IntoPy;
+#[cfg(feature = "python")]
+use pyo3::types::{IntoPyDict, PyAnyMethods, PyDict, PyStringMethods};
 
 /// Python-facing GCS client.
 ///
@@ -254,9 +256,7 @@ fn py_any_to_string(value: &pyo3::Bound<'_, pyo3::PyAny>) -> pyo3::PyResult<Stri
 }
 
 #[cfg(feature = "python")]
-fn py_optional_namespace(
-    value: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
-) -> pyo3::PyResult<String> {
+fn py_optional_namespace(value: Option<&pyo3::Bound<'_, pyo3::PyAny>>) -> pyo3::PyResult<String> {
     match value {
         Some(value) => py_any_to_string(value),
         None => Ok(String::new()),
@@ -271,7 +271,10 @@ where
     let asyncio = pyo3::types::PyModule::import_bound(py, "asyncio")?;
     Ok(asyncio
         .getattr("sleep")?
-        .call((0,), Some(&[("result", value.into_py(py))].into_py_dict_bound(py)))?
+        .call(
+            (0,),
+            Some(&[("result", value.into_py(py))].into_py_dict_bound(py)),
+        )?
         .unbind())
 }
 
@@ -334,7 +337,13 @@ impl PyGcsClient {
         let key = py_any_to_string(key)?;
         let value = value.extract::<Vec<u8>>()?;
         let namespace = py_optional_namespace(namespace)?;
-        Ok(if self.internal_kv_put(&namespace, &key, &value, overwrite) { 1 } else { 0 })
+        Ok(
+            if self.internal_kv_put(&namespace, &key, &value, overwrite) {
+                1
+            } else {
+                0
+            },
+        )
     }
 
     /// Delete a key from the internal KV store.
@@ -349,7 +358,11 @@ impl PyGcsClient {
         let _ = (del_by_prefix, timeout);
         let key = py_any_to_string(key)?;
         let namespace = py_optional_namespace(namespace)?;
-        Ok(if self.internal_kv_del(&namespace, &key) { 1 } else { 0 })
+        Ok(if self.internal_kv_del(&namespace, &key) {
+            1
+        } else {
+            0
+        })
     }
 
     /// List keys matching a prefix.
@@ -464,6 +477,74 @@ impl PyGcsClient {
             .collect()
     }
 
+    /// Get all node info in the legacy Cython shape.
+    ///
+    /// Ray's Python startup path expects `_raylet.GcsClient.get_all_node_info()`
+    /// to return a dict mapping NodeID objects to `ray.core.generated.gcs_pb2.GcsNodeInfo`
+    /// protobuf objects.  Convert the prost response back through Python's generated
+    /// protobuf class so callers can access fields like `node_manager_address`,
+    /// `node_name`, and `temp_dir` exactly as they do with the C++ extension.
+    #[pyo3(name = "get_all_node_info", signature = (timeout = None, node_selectors = None, state_filter = None))]
+    fn py_get_all_node_info(
+        &self,
+        py: pyo3::Python<'_>,
+        timeout: Option<f64>,
+        node_selectors: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+        state_filter: Option<i32>,
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::types::PyDict>> {
+        let _ = timeout;
+
+        let mut req = rpc::GetAllNodeInfoRequest {
+            state_filter,
+            ..Default::default()
+        };
+
+        // Best-effort support for the optional Python protobuf NodeSelector list.
+        // If conversion fails, surface a Python error rather than silently returning
+        // unfiltered data for a filtered lookup.
+        if let Some(selectors) = node_selectors {
+            for selector in selectors.iter()? {
+                let selector = selector?;
+                let serialized = selector.call_method0("SerializeToString")?;
+                let bytes = serialized.extract::<Vec<u8>>()?;
+                let selector =
+                    rpc::get_all_node_info_request::NodeSelector::decode(bytes.as_slice())
+                        .map_err(|e| {
+                            pyo3::exceptions::PyValueError::new_err(format!(
+                                "invalid NodeSelector protobuf: {}",
+                                e
+                            ))
+                        })?;
+                req.node_selectors.push(selector);
+            }
+        }
+
+        let nodes = self
+            .runtime
+            .block_on(self.client.get_all_node_info(req))
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "get_all_node_info failed: {}",
+                    e
+                ))
+            })?
+            .node_info_list;
+
+        let gcs_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;
+        let gcs_node_info_cls = gcs_pb2.getattr("GcsNodeInfo")?;
+        let result = PyDict::new_bound(py);
+
+        for node in nodes {
+            let node_id = crate::ids::PyNodeID::new(&node.node_id).into_py(py);
+            let py_node_info = gcs_node_info_cls.call0()?;
+            let bytes = pyo3::types::PyBytes::new_bound(py, &node.encode_to_vec());
+            py_node_info.call_method1("ParseFromString", (bytes,))?;
+            result.set_item(node_id, py_node_info)?;
+        }
+
+        Ok(result.unbind())
+    }
+
     /// Get all job info as a list of (job_id_bytes, is_dead) tuples.
     #[pyo3(name = "get_job_info")]
     fn py_get_job_info(&self) -> Vec<(Vec<u8>, bool)> {
@@ -517,10 +598,7 @@ impl PyGcsClient {
             .runtime
             .block_on(self.client.register_actor(req))
             .map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "register_actor failed: {}",
-                    e
-                ))
+                pyo3::exceptions::PyRuntimeError::new_err(format!("register_actor failed: {}", e))
             })?;
 
         // Check status.
@@ -654,10 +732,7 @@ impl PyGcsClient {
 
     /// Remove a placement group.
     #[pyo3(name = "remove_placement_group")]
-    fn py_remove_placement_group(
-        &self,
-        pg_id_bytes: Vec<u8>,
-    ) -> pyo3::PyResult<()> {
+    fn py_remove_placement_group(&self, pg_id_bytes: Vec<u8>) -> pyo3::PyResult<()> {
         let req = rpc::RemovePlacementGroupRequest {
             placement_group_id: pg_id_bytes,
         };
@@ -1055,10 +1130,10 @@ mod tests {
     fn test_kv_put_and_get() {
         let fake = FakeGcs::new();
         // Pre-populate
-        fake.kv_store.lock().unwrap().insert(
-            (b"ns".to_vec(), b"key1".to_vec()),
-            b"value1".to_vec(),
-        );
+        fake.kv_store
+            .lock()
+            .unwrap()
+            .insert((b"ns".to_vec(), b"key1".to_vec()), b"value1".to_vec());
         let client = PyGcsClient::with_client("fake:0".into(), Box::new(fake));
 
         let val = client.internal_kv_get("ns", "key1");

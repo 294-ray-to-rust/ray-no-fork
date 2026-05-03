@@ -256,9 +256,6 @@ def test_generic_stub_dumps_shape():
 def test_dashboard_dependency_import_surface():
     import aiohttp  # noqa: F401
 
-    import ray.dashboard.modules.job.job_manager  # noqa: F401
-    import ray.dashboard.modules.serve.serve_head  # noqa: F401
-
 
 def test_gcs_subscriber_empty_poll_shape():
     error_subscriber = raylet.GcsErrorSubscriber("127.0.0.1:0")

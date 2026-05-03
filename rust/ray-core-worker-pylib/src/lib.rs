@@ -465,11 +465,11 @@ impl GenericStub {
     #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn dumps(
-        _cls: &Bound<'_, PyType>,
+        cls: &Bound<'_, PyType>,
         _args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
-    ) -> Vec<u8> {
-        Vec::new()
+    ) -> Py<PyBytes> {
+        PyBytes::new_bound(cls.py(), &[]).unbind()
     }
 
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {

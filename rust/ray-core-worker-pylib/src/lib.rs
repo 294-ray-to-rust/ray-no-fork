@@ -458,6 +458,20 @@ impl GenericStub {
         ids::PyFunctionID::nil()
     }
 
+    fn split(&self) -> (&'static str, &'static str, &'static str) {
+        ("", "", "")
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn dumps(
+        _cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Vec<u8> {
+        Vec::new()
+    }
+
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
         py.eval_bound("lambda *a, **kw: None", None, None)
             .map(|value| value.unbind())

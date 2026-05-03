@@ -991,6 +991,26 @@ impl PyCoreWorker {
             .map(crate::ids::PyObjectID::from_inner)
             .collect())
     }
+
+    #[pyo3(name = "get_named_actor_handle")]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn py_get_named_actor_handle(
+        &self,
+        _args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+    ) -> pyo3::PyResult<()> {
+        Ok(())
+    }
+
+    #[pyo3(name = "create_placement_group")]
+    #[pyo3(signature = (*_args, **_kwargs))]
+    fn py_create_placement_group(
+        &self,
+        _args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+    ) -> pyo3::PyResult<()> {
+        Ok(())
+    }
 }
 
 // ─── DirectDispatchRayletClient ──────────────────────────────────────

@@ -249,17 +249,15 @@ def test_function_descriptor_shape_and_function_id(class_name):
 
 
 def test_generic_stub_dumps_shape():
-    from ray._private.async_compat import GenericStub
-
-    assert callable(GenericStub.dumps)
-    assert isinstance(GenericStub.dumps({"ok": True}), bytes)
+    assert callable(raylet.GenericStub.dumps)
+    assert isinstance(raylet.GenericStub.dumps({"ok": True}), bytes)
 
 
 def test_dashboard_dependency_import_surface():
     import aiohttp  # noqa: F401
 
     import ray.dashboard.modules.job.job_manager  # noqa: F401
-    import ray.dashboard.modules.serve.serve_agent  # noqa: F401
+    import ray.dashboard.modules.serve.serve_head  # noqa: F401
 
 
 def test_gcs_subscriber_empty_poll_shape():

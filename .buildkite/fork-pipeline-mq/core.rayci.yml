@@ -1,0 +1,508 @@
+group: reduced-main core tests
+# Merge-queue lane: use main pipeline structure and commands, but reduce
+# the matrix/parallelism for fast iteration before full main verification.
+depends_on:
+  - forge
+  - ray-core-build
+  - ray-dashboard-build
+steps:
+  # builds
+  - name: corebuild-multipy
+    label: "wanda: corebuild-py{{matrix}}"
+    wanda: ci/docker/core.build.wanda.yaml
+    tags: cibase
+    matrix:
+      - "3.10"
+      - "3.12"
+    env:
+      PYTHON: "{{matrix}}"
+      BASE_TYPE: "build"
+      BUILD_VARIANT: "build"
+    depends_on: oss-ci-base_build-multipy
+
+  - name: minbuild-core
+    label: "wanda: minbuild-core-py{{matrix}}"
+    wanda: ci/docker/min.build.wanda.yaml
+    depends_on: oss-ci-base_test-multipy
+    tags: cibase
+    matrix:
+      - "3.10"
+    env:
+      PYTHON_VERSION: "{{matrix}}"
+      EXTRA_DEPENDENCY: core
+
+  # tests
+  - label: ":ray: core: python tests"
+    tags:
+      - python
+      - dashboard
+    # Remaining shards are mostly 10-30 minutes once custom_setup
+    # outliers are excluded, so run them on the light queue and leave
+    # heavy slots for true long-tail jobs.
+    instance_type: medium
+    parallelism: 6
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/_common/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
+        --install-mask all-ray-libraries
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10 --build-name corebuild-py3.10
+        --except-tags custom_setup,gpu_objects
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: ray client tests"
+    tags:
+      - ray_client
+    instance_type: medium
+    parallelism: 1
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/...   core
+        --install-mask all-ray-libraries
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10 --build-name corebuild-py3.10
+        --only-tags ray_client
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: redis tests"
+    tags:
+      - python
+      - oss
+      - skip-on-premerge
+    instance_type: large
+    parallelism: 2
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dag/... //python/ray/autoscaler/v2/... core
+        --install-mask all-ray-libraries
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --test-env=TEST_EXTERNAL_REDIS=1
+        --except-tags custom_setup
+        --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: memory pressure tests"
+    tags:
+      - python
+      - oss
+      - skip-on-premerge
+    instance_type: medium
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - cleanup() { ./ci/build/upload_build_info.sh; }; trap cleanup EXIT
+      - (cd python/ray/dashboard/client && npm ci && npm run build)
+      - pip install -e python[client]
+      - bazel test --config=ci --jobs=1 $(./ci/run/bazel_export_options)
+        --test_tag_filters=mem_pressure -- //python/ray/tests/...
+    job_env: corebuild-py3.10
+    depends_on: corebuild-multipy
+
+  - label: ":ray: core: out of disk tests"
+    tags:
+      - python
+      - oss
+    instance_type: small
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+        --python-version 3.10 --build-name corebuild-py3.10
+        --only-tags=tmpfs --tmp-filesystem=tmpfs
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: out of disk redis tests"
+    tags:
+      - python
+      - oss
+      - skip-on-premerge
+    instance_type: small
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+        --test-env=TEST_EXTERNAL_REDIS=1
+        --only-tags=tmpfs --tmp-filesystem=tmpfs
+        --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  # Doc tests disabled — low priority for a Rust port, ~28min each.
+  # Re-enable if documentation accuracy becomes a concern.
+  # - label: ":ray: core: doc tests"
+  #   tags:
+  #     - python
+  #     - doc
+  #   instance_type: large
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
+  #       --only-tags doctest
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --parallelism-per-worker 2
+  #     - bazel run //ci/ray_ci:test_in_docker -- //doc/... core
+  #       --install-mask all-ray-libraries
+  #       --except-tags doctest,post_wheel_build,gpu,multi_gpu,mem_pressure
+  #       --parallelism-per-worker 2
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --skip-ray-installation
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # ---------------------------------------------------------------
+  # Dashboard tests: DISABLED on the fork.
+  #
+  # Timing-sensitive integration tests (healthz, cluster events, UI)
+  # that flake under CPU pressure. test_unified_healthz_worker hits
+  # port collisions, test_autoscaler_cluster_events times out waiting
+  # for events API (HTTP 500). Not relevant to Rust port.
+  # Re-enable if dashboard behavior needs validation.
+  # ---------------------------------------------------------------
+
+  # - label: ":ray: core: dashboard tests"
+  #   tags:
+  #     - python
+  #     - dashboard
+  #   instance_type: medium
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- python/ray/dashboard/... core
+  #       --parallelism-per-worker 2
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #     # ui tests
+  #     - docker run -i --rm --volume /tmp/artifacts:/artifact-mount --volume /var/lib/cache/bazel-repo-cache:/bazel-repo-cache --shm-size=2.5gb
+  #       "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash -iecuo pipefail
+  #       "./python/ray/dashboard/tests/run_ui_tests.sh"
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  - label: ":ray: core: debug tests"
+    tags:
+      - python
+      - skip-on-premerge
+    instance_type: medium
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+        --install-mask all-ray-libraries
+        --build-type debug
+        --parallelism-per-worker 2
+        --python-version 3.10 --build-name corebuild-py3.10
+        --only-tags debug_tests
+        --except-tags kubernetes,manual
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: asan tests"
+    tags:
+      - python
+      - skip-on-premerge
+    instance_type: large
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+        --install-mask all-ray-libraries
+        --build-type asan
+        --parallelism-per-worker 2
+        --python-version 3.10 --build-name corebuild-py3.10
+        --only-tags asan_tests
+        --except-tags kubernetes,manual
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: wheel tests"
+    key: core-wheel-tests
+    tags: linux_wheels
+    instance_type: medium
+    parallelism: 2
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //doc/... core
+        --install-mask all-ray-libraries
+        --build-type wheel
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10 --build-name corebuild-py3.10
+        --only-tags post_wheel_build
+        --except-tags isolated_post_wheel_build
+        --test-env=RAY_CI_POST_WHEEL_TESTS=True
+    depends_on:
+      - manylinux-x86_64
+      - corebuild-multipy
+      - forge
+      - ray-wheel-build
+
+  - label: ":ray: core: wheel client-mode conda test"
+    key: core-wheel-client-mode-conda-test
+    tags: linux_wheels
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_runtime_env_conda_and_pip_client_mode core
+        --install-mask all-ray-libraries
+        --build-type wheel
+        --python-version 3.10 --build-name corebuild-py3.10
+        --test-env=RAY_CI_POST_WHEEL_TESTS=True
+    depends_on:
+      - manylinux-x86_64
+      - corebuild-multipy
+      - forge
+      - ray-wheel-build
+
+  - label: ":ray: core: minimal tests"
+    tags:
+      - python
+      - dashboard
+      - oss
+      - min_build
+    instance_type: large
+    parallelism: 2
+    commands:
+      # validate minimal installation
+      - python ./ci/env/check_minimal_install.py
+      # core tests
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
+        --only-tags minimal
+        --except-tags basic_test,manual,cgroup
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
+        --only-tags minimal
+        --except-tags no_basic_test,manual
+        --skip-ray-installation
+      # core redis tests
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --test-env=TEST_EXTERNAL_REDIS=1
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
+        --only-tags minimal
+        --except-tags no_basic_test,manual
+        --skip-ray-installation
+      # serve tests
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... serve
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --only-tags minimal
+        --skip-ray-installation
+    depends_on:
+      - minbuild-core
+      - forge
+
+  - label: ":ray: core: cgroup tests"
+    tags:
+      - core_cpp
+      - python
+    instance_type: medium
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //:all
+        //python/ray/tests/resource_isolation:test_resource_isolation_integration
+        //python/ray/tests/resource_isolation:test_resource_isolation_config core
+        --privileged --cache-test-results
+        --python-version 3.10 --build-name corebuild-py3.10
+      - bazel run //ci/ray_ci:test_in_docker -- //:all //src/ray/common/cgroup2/tests/... core
+        --build-type clang --cache-test-results
+        --python-version 3.10 --build-name corebuild-py3.10
+      - docker run --privileged -i --rm --volume /tmp/artifacts:/artifact-mount --volume /var/lib/cache/bazel-repo-cache:/bazel-repo-cache --shm-size=2.5gb
+        "$${RAYCI_WORK_REPO}":"$${RAYCI_BUILD_ID}"-corebuild-py3.10 /bin/bash
+        "./src/ray/common/cgroup2/integration_tests/sysfs_cgroup_driver_integration_test_entrypoint.sh"
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  - label: ":ray: core: cpp tests"
+    tags: core_cpp
+
+    instance_type: large
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
+        //:all //src/... core --except-tags=cgroup --build-type clang
+        --python-version 3.10 --build-name corebuild-py3.10
+        --cache-test-results --parallelism-per-worker 2
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  # ---------------------------------------------------------------
+  # C++ sanitizer tests: DISABLED on the fork.
+  #
+  # ASan (memory errors), TSan (data races), and UBSan (undefined
+  # behavior) recompile Ray's C++ with instrumentation and run the
+  # full test suite — each taking 1-2+ hours.
+  #
+  # These are critical for projects that modify C++ code, but this
+  # fork (294-ray-to-rust) is porting Ray to Rust, not changing the
+  # C++ implementation. Memory safety and thread safety are enforced
+  # by Rust's type system at compile time, so the C++ sanitizers
+  # provide no value for our work while consuming the majority of
+  # build time (~3-4 hours combined).
+  #
+  # Re-enable these if C++ code is ever modified directly.
+  # ---------------------------------------------------------------
+
+  # - label: ":ray: core: cpp asan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core --except-tags=cgroup
+  #       --build-type asan-clang --cache-test-results --parallelism-per-worker 2
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # - label: ":ray: core: cpp ubsan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type ubsan --except-tags no_ubsan,cgroup
+  #       --cache-test-results --parallelism-per-worker 2
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # - label: ":ray: core: cpp tsan tests"
+  #   tags: core_cpp
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker -- //:all //src/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type tsan-clang --except-tags no_tsan,cgroup
+  #       --cache-test-results --parallelism-per-worker 2
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  - label: ":ray: core: flaky tests"
+    key: core_flaky_tests
+    tags:
+      - python
+      - flaky
+      - skip-on-premerge
+    instance_type: large
+    soft_fail: true
+    # concurrency group removed — agent spawn count is the only
+    # throughput lever.  Upstream Ray used concurrency: 4 for their
+    # cloud CI; we don't need it on dedicated hardware.
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/... //doc/... core
+        --python-version 3.10 --build-name corebuild-py3.10
+        --install-mask all-ray-libraries
+        --run-flaky-tests
+        --except-tags multi_gpu,cgroup
+    depends_on:
+      - corebuild-multipy
+      - forge
+
+  # ---------------------------------------------------------------
+  # C++ worker tests: DISABLED on the fork.
+  #
+  # These are cross-language C++ integration tests (simple_kv_store,
+  # test_submit_cpp_job, test_python_call_cpp) that consistently fail
+  # to register workers with Raylet. Pre-existing issue since build
+  # 314. We're porting Ray to Rust, not fixing C++ worker integration,
+  # so these provide no value.
+  #
+  # Re-enable if C++ cross-language worker support is ever needed.
+  # ---------------------------------------------------------------
+
+  # Fork: switched from system toolchain (clang-12 + libstdc++) to
+  # --build-type clang (LLVM + libc++) so Bazel can reuse cached actions
+  # from the other cpp test jobs. The original used oss-ci-base with a full
+  # ci/ci.sh build (~9500 uncached actions, ~20+ min). Now uses corebuild
+  # + test_in_docker like the other cpp tests. Tests //cpp:all (user-facing
+  # C++ API) rather than //src/... (internals).
+  # - label: ":ray: core: cpp worker tests"
+  #   tags:
+  #     - core_cpp
+  #     - cpp
+  #     - oss
+  #   instance_type: large
+  #   commands:
+  #     - RAYCI_DISABLE_TEST_DB=1 bazel run //ci/ray_ci:test_in_docker --
+  #       //cpp:all core --build-type clang
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --cache-test-results --parallelism-per-worker 2
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # ---------------------------------------------------------------
+  # Java worker tests: DISABLED on the fork.
+  #
+  # Java ↔ Python interop tests. Not relevant to the Rust port.
+  # Re-enable if Java worker support is ever needed.
+  # ---------------------------------------------------------------
+
+  # - label: ":ray: core: java worker tests"
+  #   tags:
+  #     - java
+  #     - python
+  #   instance_type: medium
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #       --build-type java
+  #       --only-tags needs_java
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge
+
+  # ---------------------------------------------------------------
+  # Spark-on-ray tests: DISABLED on the fork.
+  #
+  # Integration glue for launching Ray clusters from Spark. Only
+  # exercises GCS superficially (node registration, trivial ray.get).
+  # Core python tests cover all the same GCS paths. ~60 min runtime.
+  # Re-enable if Spark integration is ever needed.
+  # ---------------------------------------------------------------
+
+  # - label: ":core: core: spark-on-ray tests"
+  #   tags:
+  #     - spark_on_ray
+  #   instance_type: large
+  #   commands:
+  #     - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+  #       --build-type debug
+  #       --test-env=RAY_ON_SPARK_BACKGROUND_JOB_STARTUP_WAIT=1
+  #       --test-env=RAY_ON_SPARK_RAY_WORKER_NODE_STARTUP_INTERVAL=5
+  #       --only-tags spark_on_ray
+  #       --python-version 3.10 --build-name corebuild-py3.10
+  #   depends_on:
+  #     - corebuild-multipy
+  #     - forge

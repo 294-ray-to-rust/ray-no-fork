@@ -19,16 +19,23 @@ mkdir -p "$ARTIFACT_DIR"
 echo "--- :gear: Generating pipeline"
 
 # Select pipeline directory based on branch type.
-# PRs get lightweight forge + lint only.
-# Merge queue and main get the full test suite.
+# PRs get lightweight forge + lint/preflight only.
+# Merge queue gets the main-equivalent reduced matrix so it exercises
+# the same rayci/image/test-in-docker paths as main, but only the
+# representative Python/platform axes needed for fast iteration.
+# Main remains the full authoritative suite.
 case "${BUILDKITE_BRANCH:-}" in
-  main|gh-readonly-queue/*|get-the-build-working)
+  main|get-the-build-working)
     PIPELINE_DIR=".buildkite/fork-pipeline/"
     echo "Branch '${BUILDKITE_BRANCH}': using FULL pipeline"
     ;;
+  gh-readonly-queue/*)
+    PIPELINE_DIR=".buildkite/fork-pipeline-mq/"
+    echo "Branch '${BUILDKITE_BRANCH}': using REDUCED MAIN merge-queue pipeline"
+    ;;
   *)
     PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
-    echo "Branch '${BUILDKITE_BRANCH:-unknown}': using PR pipeline (forge + lint only)"
+    echo "Branch '${BUILDKITE_BRANCH:-unknown}': using PR pipeline (forge + lint/preflight only)"
     ;;
 esac
 

@@ -13,7 +13,6 @@ steps:
     tags: cibase
     matrix:
       - "3.10"
-      - "3.12"
     env:
       PYTHON: "{{matrix}}"
       BASE_TYPE: "build"

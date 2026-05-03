@@ -100,6 +100,7 @@ steps:
       - always
       - python
     instance_type: medium
+    parallelism: 6
     commands:
       - bazel run //ci/ray_ci:test_in_docker --
         //python/ray/dashboard:test_dashboard
@@ -111,6 +112,8 @@ steps:
         core
         --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}"
+        --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 1
     depends_on:
       - rust-raylet-compat-preflight
       - rust-corebuild-py310

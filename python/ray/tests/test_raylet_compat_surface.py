@@ -121,9 +121,11 @@ MODULE_CONSTANTS = {
 
 CLASS_MEMBERS = {
     "CoreWorker": {
+        "create_placement_group",
         "get_current_job_id",
         "get_current_node_id",
         "get_job_config",
+        "get_named_actor_handle",
         "get_worker_id",
         "kill_actor",
         "shutdown_driver",
@@ -239,6 +241,25 @@ def test_function_descriptor_shape_and_function_id(class_name):
     function_id = descriptor.function_id
     assert hasattr(function_id, "binary")
     assert isinstance(function_id.binary(), bytes)
+
+    assert hasattr(descriptor, "split")
+    split_value = descriptor.split()
+    assert isinstance(split_value, tuple)
+    assert len(split_value) >= 2
+
+
+def test_generic_stub_dumps_shape():
+    from ray._private.async_compat import GenericStub
+
+    assert callable(GenericStub.dumps)
+    assert isinstance(GenericStub.dumps({"ok": True}), bytes)
+
+
+def test_dashboard_dependency_import_surface():
+    import aiohttp  # noqa: F401
+
+    import ray.dashboard.modules.job.job_manager  # noqa: F401
+    import ray.dashboard.modules.serve.serve_agent  # noqa: F401
 
 
 def test_gcs_subscriber_empty_poll_shape():

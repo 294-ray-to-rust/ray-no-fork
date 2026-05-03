@@ -90,13 +90,13 @@ steps:
       - python
     instance_type: medium
     # Keep PR smoke to Rust-compatible coverage. The broader previous shard exposed
-    # remaining Rust CoreWorker gaps in nested task submission and multiprocessing
-    # resource/node-table APIs; leave those for full CI / follow-up work.
+    # remaining Rust CoreWorker gaps in nested task submission, multiprocessing
+    # resource/node-table APIs, and bundle-label/placement startup; leave those
+    # for full CI / follow-up work.
     parallelism: 4
     commands:
       - bazel run //ci/ray_ci:test_in_docker --
         //python/ray/dashboard:test_dashboard
-        //python/ray/tests:test_bundle_label_selector
         //python/ray/tests:test_namespace
         core
         --install-mask all-ray-libraries

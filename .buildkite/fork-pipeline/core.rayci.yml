@@ -30,6 +30,28 @@ steps:
       EXTRA_DEPENDENCY: core
 
   # tests
+  - label: ":ray: core: dashboard minimal preflight"
+    tags:
+      - python
+      - dashboard
+      - min_build
+    instance_type: small
+    commands:
+      # Pull a specific failure from main build #1653 into PR CI.
+      # This should fail fast if the minimal image is missing dashboard
+      # runtime dependencies such as aiohttp.
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/dashboard:test_dashboard core
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
+        --only-tags minimal
+        --except-tags basic_test,manual,cgroup
+    depends_on:
+      - minbuild-core
+      - forge
+
+  # tests
   - label: ":ray: core: python tests"
     tags:
       - python

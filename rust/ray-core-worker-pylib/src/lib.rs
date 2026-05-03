@@ -11,12 +11,12 @@
 //! Replaces `python/ray/_raylet.pyx` (Cython).
 //! Will be built with maturin to produce `_raylet.so`.
 
-pub mod common;
 pub mod cluster;
-pub mod ids;
-pub mod object_ref;
+pub mod common;
 pub mod core_worker;
 pub mod gcs_client;
+pub mod ids;
+pub mod object_ref;
 pub mod serialization;
 
 // Re-export primary types for Rust consumers.
@@ -32,6 +32,26 @@ pub use object_ref::PyObjectRef;
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
+#[cfg(feature = "python")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(feature = "python")]
+fn empty_subscriber_poll_delay(timeout: Option<f64>) -> std::time::Duration {
+    const DEFAULT_EMPTY_POLL_SLEEP_MS: u64 = 50;
+
+    match timeout {
+        Some(seconds) if seconds.is_finite() && seconds > 0.0 => {
+            std::time::Duration::from_secs_f64(seconds)
+        }
+        _ => std::time::Duration::from_millis(DEFAULT_EMPTY_POLL_SLEEP_MS),
+    }
+}
+
+#[cfg(feature = "python")]
+fn wait_for_empty_subscriber_poll(py: Python<'_>, timeout: Option<f64>) {
+    let delay = empty_subscriber_poll_delay(timeout);
+    py.allow_threads(|| std::thread::sleep(delay));
+}
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
@@ -127,6 +147,108 @@ impl GcsClientOptions {
 #[pyclass(module = "_raylet")]
 struct GlobalStateAccessor {
     gcs_address: String,
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GcsErrorSubscriber {
+    address: String,
+    worker_id: Option<Vec<u8>>,
+    subscribed: AtomicBool,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GcsErrorSubscriber {
+    #[new]
+    #[pyo3(signature = (address, worker_id = None))]
+    fn new(address: String, worker_id: Option<&[u8]>) -> Self {
+        Self {
+            address,
+            worker_id: worker_id.map(|id| id.to_vec()),
+            subscribed: AtomicBool::new(false),
+        }
+    }
+
+    fn subscribe(&self) {
+        self.subscribed.store(true, Ordering::Relaxed);
+    }
+
+    #[getter]
+    fn last_batch_size(&self) -> usize {
+        0
+    }
+
+    fn close(&self) {
+        self.subscribed.store(false, Ordering::Relaxed);
+    }
+
+    #[pyo3(signature = (timeout = None))]
+    fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
+        wait_for_empty_subscriber_poll(py, timeout);
+        Ok((py.None(), py.None()))
+    }
+
+    #[getter]
+    fn address(&self) -> &str {
+        &self.address
+    }
+
+    #[getter]
+    fn worker_id<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
+        self.worker_id.as_ref().map(|id| PyBytes::new_bound(py, id))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(module = "_raylet")]
+struct GcsLogSubscriber {
+    address: String,
+    worker_id: Option<Vec<u8>>,
+    subscribed: AtomicBool,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl GcsLogSubscriber {
+    #[new]
+    #[pyo3(signature = (address, worker_id = None))]
+    fn new(address: String, worker_id: Option<&[u8]>) -> Self {
+        Self {
+            address,
+            worker_id: worker_id.map(|id| id.to_vec()),
+            subscribed: AtomicBool::new(false),
+        }
+    }
+
+    fn subscribe(&self) {
+        self.subscribed.store(true, Ordering::Relaxed);
+    }
+
+    #[getter]
+    fn last_batch_size(&self) -> usize {
+        0
+    }
+
+    fn close(&self) {
+        self.subscribed.store(false, Ordering::Relaxed);
+    }
+
+    #[pyo3(signature = (timeout = None))]
+    fn poll(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Py<PyAny>> {
+        wait_for_empty_subscriber_poll(py, timeout);
+        Ok(py.None())
+    }
+
+    #[getter]
+    fn address(&self) -> &str {
+        &self.address
+    }
+
+    #[getter]
+    fn worker_id<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyBytes>> {
+        self.worker_id.as_ref().map(|id| PyBytes::new_bound(py, id))
+    }
 }
 
 #[cfg(feature = "python")]
@@ -331,6 +453,11 @@ impl GenericStub {
 
     fn reset_cache(&self) {}
 
+    #[getter]
+    fn function_id(&self) -> ids::PyFunctionID {
+        ids::PyFunctionID::nil()
+    }
+
     fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
         py.eval_bound("lambda *a, **kw: None", None, None)
             .map(|value| value.unbind())
@@ -442,6 +569,47 @@ impl GlobalStateAccessor {
         }
         dict.set_item("labels", PyDict::new_bound(py))?;
         Ok(dict.unbind().into())
+    }
+
+    fn get_node_table(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let client = PyGcsClient::new(self.gcs_address.clone());
+        let nodes = client.get_all_node_info();
+        let mut results = Vec::with_capacity(nodes.len());
+
+        for node in nodes {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("NodeID", hex::encode(&node.node_id))?;
+            dict.set_item("Alive", node.state == 0)?;
+            dict.set_item("NodeManagerAddress", node.node_manager_address.clone())?;
+            dict.set_item("NodeManagerHostname", node.node_manager_hostname.clone())?;
+            dict.set_item("NodeManagerPort", node.node_manager_port)?;
+            dict.set_item("ObjectManagerPort", node.object_manager_port)?;
+            dict.set_item("ObjectStoreSocketName", node.object_store_socket_name.clone())?;
+            dict.set_item("RayletSocketName", node.raylet_socket_name.clone())?;
+            dict.set_item("MetricsExportPort", node.metrics_export_port)?;
+            dict.set_item("MetricsAgentPort", node.metrics_agent_port)?;
+            dict.set_item("DashboardAgentListenPort", node.dashboard_agent_listen_port)?;
+            dict.set_item("NodeName", node.node_name.clone())?;
+            dict.set_item("RuntimeEnvAgentPort", node.runtime_env_agent_port)?;
+            dict.set_item("DeathReason", node.death_info.as_ref().map(|d| d.reason).unwrap_or(0))?;
+            dict.set_item(
+                "DeathReasonMessage",
+                node.death_info
+                    .as_ref()
+                    .map(|d| d.reason_message.clone())
+                    .unwrap_or_default(),
+            )?;
+            dict.set_item("alive", node.state == 0)?;
+            if node.state == 0 {
+                dict.set_item("Resources", node.resources_total.clone())?;
+            } else {
+                dict.set_item("Resources", PyDict::new_bound(py))?;
+            }
+            dict.set_item("labels", node.labels.clone())?;
+            results.push(dict.unbind().into());
+        }
+
+        Ok(results)
     }
 
     fn get_system_config(&self) -> &str {
@@ -587,6 +755,26 @@ fn wait_for_persisted_port(
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn compute_task_id(_object_ref: &object_ref::PyObjectRef) -> ids::PyTaskID {
+    ids::PyTaskID::nil()
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn maybe_initialize_job_config() {}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn serialize_retry_exception_allowlist(
+    py: Python<'_>,
+    _retry_exception_allowlist: Py<PyAny>,
+    _function_descriptor: Py<PyAny>,
+) -> Bound<'_, PyBytes> {
+    PyBytes::new_bound(py, &[])
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_session_key_from_storage(
     _host: &str,
     _port: u16,
@@ -666,6 +854,40 @@ fn unpack_pickle5_buffers<'py>(
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn _get_actor_serialized_owner_address_or_none(
+    py: Python<'_>,
+    actor_table_data: &[u8],
+) -> PyResult<Py<PyAny>> {
+    let gcs_pb2 = PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;
+    let actor_cls = gcs_pb2.getattr("ActorTableData")?;
+    let actor = actor_cls.call0()?;
+    actor.call_method1(
+        "ParseFromString",
+        (PyBytes::new_bound(py, actor_table_data),),
+    )?;
+    let address = actor.getattr("address")?;
+    let worker_id = address.getattr("worker_id")?.extract::<Vec<u8>>()?;
+    if worker_id.is_empty() {
+        Ok(py.None())
+    } else {
+        Ok(address.call_method0("SerializeToString")?.unbind())
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn raise_if_dependency_failed(arg: &Bound<'_, PyAny>) -> PyResult<()> {
+    let ray_exceptions = PyModule::import_bound(arg.py(), "ray.exceptions")?;
+    let ray_error = ray_exceptions.getattr("RayError")?;
+    if arg.is_instance(&ray_error)? {
+        Err(pyo3::PyErr::from_value_bound(arg.clone()))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn get_ray_version() -> &'static str {
     ray_common::constants::RAY_VERSION
 }
@@ -685,8 +907,7 @@ fn is_initialized() -> bool {
 }
 
 #[cfg(feature = "python")]
-static INITIALIZED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static INITIALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Mark Ray as initialized. Called internally after successful init.
 #[cfg(feature = "python")]
@@ -700,6 +921,26 @@ fn mark_initialized() {
 #[pyfunction]
 fn mark_shutdown() {
     INITIALIZED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+// `setproctitle` only needs to round-trip the title through Python — the
+// dashboard subprocess module reads it back to label restarts. A real OS
+// proctitle update isn't required for tests to pass, so back it with a
+// process-local mutex.
+static PROC_TITLE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn getproctitle() -> String {
+    PROC_TITLE.lock().map(|t| t.clone()).unwrap_or_default()
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn setproctitle(title: String) {
+    if let Ok(mut t) = PROC_TITLE.lock() {
+        *t = title;
+    }
 }
 
 #[cfg(feature = "python")]
@@ -716,6 +957,9 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_ipv6, m)?)?;
     m.add_function(wrap_pyfunction!(node_ip_address_from_perspective, m)?)?;
     m.add_function(wrap_pyfunction!(get_port_filename, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_task_id, m)?)?;
+    m.add_function(wrap_pyfunction!(maybe_initialize_job_config, m)?)?;
+    m.add_function(wrap_pyfunction!(serialize_retry_exception_allowlist, m)?)?;
     m.add_function(wrap_pyfunction!(persist_port, m)?)?;
     m.add_function(wrap_pyfunction!(wait_for_persisted_port, m)?)?;
     m.add_function(wrap_pyfunction!(get_session_key_from_storage, m)?)?;
@@ -729,6 +973,13 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(split_buffer, m)?)?;
     m.add_function(wrap_pyfunction!(unpack_pickle5_buffers, m)?)?;
+    m.add_function(wrap_pyfunction!(getproctitle, m)?)?;
+    m.add_function(wrap_pyfunction!(setproctitle, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        _get_actor_serialized_owner_address_or_none,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(raise_if_dependency_failed, m)?)?;
 
     // ─── ID types ────────────────────────────────────────────────
     m.add_class::<ids::PyObjectID>()?;
@@ -753,6 +1004,8 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<gcs_client::PyGcsClient>()?;
     m.add_class::<cluster::PyClusterHandle>()?;
     m.add_class::<GcsClientOptions>()?;
+    m.add_class::<GcsErrorSubscriber>()?;
+    m.add_class::<GcsLogSubscriber>()?;
     m.add_class::<Config>()?;
     m.add_class::<ObjectRefGenerator>()?;
     m.add_class::<DynamicObjectRefGenerator>()?;
@@ -770,6 +1023,8 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "AuthenticationTokenLoader",
         "Count",
         "CppFunctionDescriptor",
+        "Buffer",
+        "FunctionDescriptor",
         "Gauge",
         "Histogram",
         "JavaFunctionDescriptor",
@@ -784,6 +1039,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     ] {
         m.add(name, m.getattr("GenericStub")?)?;
     }
+    m.add(
+        "NumReturnsWarning",
+        m.py().eval_bound("type('NumReturnsWarning', (UserWarning,), {})", None, None)?,
+    )?;
     m.add(
         "AuthenticationMode",
         m.py().eval_bound(
@@ -800,11 +1059,17 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("RAY_VERSION", ray_common::constants::RAY_VERSION)?;
     m.add("WORKER_PROCESS_SETUP_HOOK_KEY_NAME_GCS", "FunctionsToRun")?;
     m.add("RESOURCE_UNIT_SCALING", 10000)?;
-    m.add("IMPLICIT_RESOURCE_PREFIX", "node:__internal_implicit_resource_")?;
+    m.add(
+        "IMPLICIT_RESOURCE_PREFIX",
+        "node:__internal_implicit_resource_",
+    )?;
     m.add("STREAMING_GENERATOR_RETURN", -2)?;
     m.add("GCS_AUTOSCALER_STATE_NAMESPACE", "__autoscaler")?;
     m.add("GCS_AUTOSCALER_V2_ENABLED_KEY", "__autoscaler_v2_enabled")?;
-    m.add("GCS_AUTOSCALER_CLUSTER_CONFIG_KEY", "__autoscaler_cluster_config")?;
+    m.add(
+        "GCS_AUTOSCALER_CLUSTER_CONFIG_KEY",
+        "__autoscaler_cluster_config",
+    )?;
     m.add("GCS_PID_KEY", "gcs_pid")?;
     m.add("NODE_TYPE_NAME_ENV", "RAY_NODE_TYPE_NAME")?;
     m.add("NODE_MARKET_TYPE_ENV", "RAY_NODE_MARKET_TYPE")?;
@@ -823,9 +1088,29 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("RUNTIME_ENV_AGENT_PORT_NAME", "runtime_env_agent_port")?;
     m.add("METRICS_AGENT_PORT_NAME", "metrics_agent_port")?;
     m.add("METRICS_EXPORT_PORT_NAME", "metrics_export_port")?;
-    m.add("DASHBOARD_AGENT_LISTEN_PORT_NAME", "dashboard_agent_listen_port")?;
+    m.add(
+        "DASHBOARD_AGENT_LISTEN_PORT_NAME",
+        "dashboard_agent_listen_port",
+    )?;
     m.add("GCS_SERVER_PORT_NAME", "gcs_server_port")?;
-    m.add("RAY_INTERNAL_DASHBOARD_NAMESPACE", "_ray_internal_dashboard")?;
+    m.add(
+        "RAY_INTERNAL_DASHBOARD_NAMESPACE",
+        "_ray_internal_dashboard",
+    )?;
+    m.add("OPTIMIZED", true)?;
+    m.add("GRPC_STATUS_CODE_UNAVAILABLE", 14)?;
+    m.add("GRPC_STATUS_CODE_UNKNOWN", 2)?;
+    m.add("GRPC_STATUS_CODE_DEADLINE_EXCEEDED", 4)?;
+    m.add("GRPC_STATUS_CODE_RESOURCE_EXHAUSTED", 8)?;
+    m.add("GRPC_STATUS_CODE_UNIMPLEMENTED", 12)?;
+    m.add(
+        "async_task_id",
+        m.py().eval_bound(
+            "__import__('contextvars').ContextVar('async_task_id', default=None)",
+            None,
+            None,
+        )?,
+    )?;
 
     // ─── Name aliases matching the original Cython _raylet module ─
     m.add("ObjectID", m.getattr("PyObjectID")?)?;
@@ -840,6 +1125,7 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("UniqueID", m.getattr("PyUniqueID")?)?;
     m.add("ClusterID", m.getattr("PyClusterID")?)?;
     m.add("ObjectRef", m.getattr("PyObjectRef")?)?;
+    m.add("CoreWorker", m.getattr("PyCoreWorker")?)?;
     m.add("Language", m.getattr("PyLanguage")?)?;
     m.add("WorkerType", m.getattr("PyWorkerType")?)?;
     m.add("GcsClient", m.getattr("PyGcsClient")?)?;

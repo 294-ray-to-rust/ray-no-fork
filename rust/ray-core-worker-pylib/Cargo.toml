@@ -32,3 +32,4 @@ tracing = { workspace = true }
 bytes = { workspace = true }
 hex = { workspace = true }
 async-trait = { workspace = true }
+prost = { workspace = true }

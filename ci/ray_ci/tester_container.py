@@ -227,8 +227,24 @@ class TesterContainer(Container):
         cache_test_results: bool = False,
     ) -> subprocess.Popen:
         logger.info("Running tests: %s", test_targets)
+        # Random suffix so concurrent shards don't clobber each other's tar.
+        testlogs_suffix = "".join(
+            random.choice(string.ascii_lowercase) for _ in range(8)
+        )
         commands = [
-            f'cleanup() {{ chmod -R a+r "{self.bazel_log_dir}"; }}',
+            (
+                "cleanup() {\n"
+                "  set +e;\n"
+                f'  chmod -R a+r "{self.bazel_log_dir}" 2>/dev/null;\n'
+                "  if [ -e bazel-testlogs ]; then\n"
+                f'    echo "Archiving bazel-testlogs to /artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz" >&2;\n'
+                f'    tar -czhf "/artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz" bazel-testlogs;\n'
+                f'    echo "Archive exit: $?, size: $(stat -c %s \\"/artifact-mount/bazel-testlogs-{testlogs_suffix}.tar.gz\\" 2>/dev/null)" >&2;\n'
+                "  else\n"
+                '    echo "No bazel-testlogs symlink at workspace root; skipping archive" >&2;\n'
+                "  fi;\n"
+                "}"
+            ),
             "trap cleanup EXIT",
         ]
         if platform.system() == "Windows":

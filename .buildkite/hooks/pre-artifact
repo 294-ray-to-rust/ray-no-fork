@@ -12,3 +12,28 @@ set -e
 ARTIFACT_DIR="${RAYCI_ARTIFACT_DIR:-/tmp/artifacts}"
 export BUILDKITE_ARTIFACT_PATHS="${ARTIFACT_DIR}/**/*"
 echo "Artifact upload path set to: ${BUILDKITE_ARTIFACT_PATHS}"
+
+# rayci's YAML hardcodes /tmp/artifacts:/artifact-mount, and the
+# BUILDKITE_PLUGIN_DOCKER_VOLUMES_1 override doesn't take effect (see
+# pre-command for the gory details). Tests that write to /artifact-mount
+# from inside their docker plugin container land in /tmp/artifacts on the
+# host, while buildkite-agent's artifact upload reads from $ARTIFACT_DIR.
+#
+# The buildkite-agent runs with systemd PrivateTmp=true, so its /tmp/artifacts
+# is a private empty directory — invisible to docker, which mounts from the
+# real host /tmp. Reach the real /tmp/artifacts only through docker.
+if [[ "${OSTYPE:-}" == linux* ]]; then
+  echo "Bridging /tmp/artifacts -> ${ARTIFACT_DIR} (host PrivateTmp workaround)"
+  docker run --rm \
+    -v /tmp/artifacts:/from \
+    -v "${ARTIFACT_DIR}":/to \
+    alpine:latest sh -c '
+      ls -la /from 2>&1 || true
+      copied=0
+      for f in /from/*.tar.gz /from/*.tar; do
+        [ -f "$f" ] || continue
+        cp "$f" /to/ && copied=$((copied+1))
+      done
+      echo "bridged $copied tarball(s) into per-slot artifact dir"
+    ' || true
+fi

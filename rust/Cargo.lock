@@ -1522,6 +1522,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "hex",
+ "prost",
  "pyo3",
  "ray-common",
  "ray-core-worker",

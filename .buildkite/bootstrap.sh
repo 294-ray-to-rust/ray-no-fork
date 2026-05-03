@@ -125,6 +125,24 @@ else
       FLAT_STEP_COUNT=$ORIG_STEP_COUNT
     fi
 
+    echo "--- :no_entry: Disabling automatic retries for Rust PR preflight steps"
+    if yq '
+      .steps |= map(
+        if ((.label // "") | test("^(wanda: rust|:ray: rust )")) then
+          .retry.automatic = false
+        else
+          .
+        end
+      )
+    ' "$ARTIFACT_DIR/pipeline_flat.yaml" > "$ARTIFACT_DIR/pipeline_no_retries.yaml" 2>"$ARTIFACT_DIR/retry_yq_stderr.txt"; then
+      mv "$ARTIFACT_DIR/pipeline_no_retries.yaml" "$ARTIFACT_DIR/pipeline_flat.yaml"
+    else
+      echo "WARNING: could not disable Rust step retries; leaving pipeline unchanged."
+      if [ -s "$ARTIFACT_DIR/retry_yq_stderr.txt" ]; then
+        cat "$ARTIFACT_DIR/retry_yq_stderr.txt"
+      fi
+    fi
+
     DID_FLATTEN=1
 
     echo "--- :page_facing_up: Diagnostic diff (first step before/after flattening)"

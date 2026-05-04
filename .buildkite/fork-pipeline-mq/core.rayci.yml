@@ -170,6 +170,8 @@ steps:
     depends_on:
       - corebuild-multipy
       - forge
+      - ray-core-build
+      - ray-dashboard-build
   - label: ":ray: core: out of disk redis tests"
     tags:
       - python

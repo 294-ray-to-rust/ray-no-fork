@@ -104,6 +104,7 @@ steps:
     instance_type: small
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
+        --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
         --only-tags=tmpfs --tmp-filesystem=tmpfs
     depends_on:
@@ -121,6 +122,7 @@ steps:
     parallelism: 2
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //doc/... core
+        --install-mask all-ray-libraries
         --build-type wheel
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}"
         --worker-id "$${BUILDKITE_PARALLEL_JOB}"
@@ -142,6 +144,7 @@ steps:
     instance_type: medium
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_runtime_env_conda_and_pip_client_mode core
+        --install-mask all-ray-libraries
         --build-type wheel
         --python-version 3.10 --build-name corebuild-py3.10
         --test-env=RAY_CI_POST_WHEEL_TESTS=True

@@ -70,7 +70,7 @@ steps:
         --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
         --test-env=EXPECTED_PYTHON_VERSION=3.10
-        --skip-ray-installation
+        --install-mask all-ray-libraries
     depends_on:
       - forge
       - mq-hot-minbuild-core-py310

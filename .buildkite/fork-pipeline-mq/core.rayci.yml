@@ -290,6 +290,7 @@ steps:
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
       - corebuild-multipy
+      - forge
       - ray-wheel-build
 
   - label: ":ray: core: wheel client-mode conda test"

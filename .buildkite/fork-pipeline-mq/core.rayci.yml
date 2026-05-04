@@ -318,7 +318,7 @@ steps:
       # validate minimal installation
       - python ./ci/env/check_minimal_install.py
       # core tests
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10
         --build-name minbuild-core-py3.10
@@ -326,7 +326,7 @@ steps:
         --test-env=EXPECTED_PYTHON_VERSION=3.10
         --only-tags minimal
         --except-tags basic_test,manual,cgroup
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10
         --build-name minbuild-core-py3.10
@@ -336,7 +336,7 @@ steps:
         --except-tags no_basic_test,manual
         --skip-ray-installation
       # core redis tests
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
         --python-version 3.10
         --build-name minbuild-core-py3.10

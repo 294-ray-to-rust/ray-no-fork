@@ -16,9 +16,15 @@ steps:
       PYTHON: "{{matrix}}"
       BASE_TYPE: "build"
       BUILD_VARIANT: "build"
+    # Main's core group has group-level dependencies on the split Ray
+    # binary/dashboard images. Keep that ordering for merge queue too: without
+    # it, tmpfs/out-of-disk tests can run against a corebuild image whose
+    # Python extension ABI does not match the checked-out Python sources.
     depends_on:
       - oss-ci-base_build-multipy
       - forge
+      - ray-core-build
+      - ray-dashboard-build
 
   - name: minbuild-core
     label: "wanda: minbuild-core-py{{matrix}}"

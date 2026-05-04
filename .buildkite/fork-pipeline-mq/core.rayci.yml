@@ -181,7 +181,6 @@ steps:
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --python-version 3.10 --build-name corebuild-py3.10
-        --install-mask all-ray-libraries
         --only-tags=tmpfs --tmp-filesystem=tmpfs
     depends_on:
       - corebuild-multipy
@@ -200,7 +199,6 @@ steps:
     commands:
       - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... core
         --test-env=TEST_EXTERNAL_REDIS=1
-        --install-mask all-ray-libraries
         --only-tags=tmpfs --tmp-filesystem=tmpfs
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:

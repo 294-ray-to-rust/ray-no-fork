@@ -29,6 +29,32 @@ steps:
       PYTHON_VERSION: "{{matrix}}"
       EXTRA_DEPENDENCY: core
 
+  # Minimal tests install Ray into the minbuild image. The installer
+  # expects the split wheel-build images to exist even though the reduced
+  # merge-queue lane does not build wheels.
+  - name: ray-core-build
+    label: "wanda: core binary parts py{{matrix}} (x86_64)"
+    wanda: ci/docker/ray-core.wanda.yaml
+    matrix:
+      - "3.10"
+    env_file: rayci.env
+    env:
+      PYTHON_VERSION: "{{matrix}}"
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - release_wheels
+
+  - name: ray-dashboard-build
+    label: "wanda: dashboard (x86_64)"
+    wanda: ci/docker/ray-dashboard.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - release_wheels
+
   # tests
   - label: ":ray: core: python tests"
     tags:
@@ -299,6 +325,8 @@ steps:
         --skip-ray-installation
     depends_on:
       - minbuild-core
+      - ray-core-build
+      - ray-dashboard-build
 
   - label: ":ray: core: cgroup tests"
     tags:

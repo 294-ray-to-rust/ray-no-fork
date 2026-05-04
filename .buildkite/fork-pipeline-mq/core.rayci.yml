@@ -29,9 +29,9 @@ steps:
       PYTHON_VERSION: "{{matrix}}"
       EXTRA_DEPENDENCY: core
 
-  # Minimal tests install Ray into the minbuild image. The installer
+  # Minimal and wheel tests install Ray into the test image. The installer
   # expects the split wheel-build images to exist even though the reduced
-  # merge-queue lane does not build wheels.
+  # merge-queue lane only tests Python 3.10.
   - name: ray-core-build
     label: "wanda: core binary parts py{{matrix}} (x86_64)"
     wanda: ci/docker/ray-core.wanda.yaml
@@ -54,6 +54,35 @@ steps:
       HOSTTYPE: "x86_64"
     tags:
       - release_wheels
+
+  - name: ray-java-build
+    label: "wanda: java build (x86_64)"
+    wanda: ci/docker/ray-java.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - release_wheels
+      - java
+
+  - name: ray-wheel-build
+    label: "wanda: wheel py{{matrix}} (x86_64)"
+    wanda: ci/docker/ray-wheel.wanda.yaml
+    matrix:
+      - "3.10"
+    env_file: rayci.env
+    env:
+      PYTHON_VERSION: "{{matrix}}"
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - release_wheels
+      - linux_wheels
+    depends_on:
+      - ray-core-build
+      - ray-java-build
+      - ray-dashboard-build
 
   # tests
   - label: ":ray: core: python tests"
@@ -261,6 +290,7 @@ steps:
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
       - corebuild-multipy
+      - ray-wheel-build
 
   - label: ":ray: core: wheel client-mode conda test"
     key: core-wheel-client-mode-conda-test
@@ -274,6 +304,7 @@ steps:
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
       - corebuild-multipy
+      - ray-wheel-build
 
   - label: ":ray: core: minimal tests"
     tags:

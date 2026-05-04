@@ -80,6 +80,7 @@ steps:
       - release_wheels
       - linux_wheels
     depends_on:
+      - forge
       - ray-core-build
       - ray-java-build
       - ray-dashboard-build
@@ -307,6 +308,7 @@ steps:
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
       - corebuild-multipy
+      - forge
       - ray-wheel-build
 
   - label: ":ray: core: minimal tests"

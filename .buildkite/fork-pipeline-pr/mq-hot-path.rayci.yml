@@ -122,7 +122,7 @@ steps:
       - linux_wheels
     instance_type: medium
     commands:
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_runtime_env_conda_and_pip_client_mode core
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_raylet_compat_surface core
         --install-mask all-ray-libraries
         --build-type wheel
         --python-version 3.10 --build-name corebuild-py3.10

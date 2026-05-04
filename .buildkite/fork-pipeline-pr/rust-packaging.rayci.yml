@@ -47,8 +47,15 @@ steps:
       PYTHON: "3.10"
       BASE_TYPE: "build"
       BUILD_VARIANT: "build"
+    # Match main/MQ ordering: corebuild must be produced after forge and the
+    # split Ray binary/dashboard images, or test_in_docker can run Python
+    # sources against stale native extensions and fail with _raylet ABI
+    # mismatches (GenericStub.dumps / PyCoreWorker.submit_task signatures).
     depends_on:
       - rust-oss-ci-base-build-py310
+      - forge
+      - rust-ray-core-py310
+      - rust-ray-dashboard
     tags:
       - always
       - cibase

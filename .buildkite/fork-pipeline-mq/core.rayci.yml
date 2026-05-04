@@ -16,7 +16,9 @@ steps:
       PYTHON: "{{matrix}}"
       BASE_TYPE: "build"
       BUILD_VARIANT: "build"
-    depends_on: oss-ci-base_build-multipy
+    depends_on:
+      - oss-ci-base_build-multipy
+      - forge
 
   - name: minbuild-core
     label: "wanda: minbuild-core-py{{matrix}}"
@@ -44,6 +46,8 @@ steps:
       HOSTTYPE: "x86_64"
     tags:
       - release_wheels
+    depends_on:
+      - forge
 
   - name: ray-dashboard-build
     label: "wanda: dashboard (x86_64)"
@@ -54,6 +58,8 @@ steps:
       HOSTTYPE: "x86_64"
     tags:
       - release_wheels
+    depends_on:
+      - forge
 
   - name: ray-java-build
     label: "wanda: java build (x86_64)"
@@ -65,6 +71,8 @@ steps:
     tags:
       - release_wheels
       - java
+    depends_on:
+      - forge
 
   - name: ray-wheel-build
     label: "wanda: wheel py{{matrix}} (x86_64)"
@@ -189,6 +197,9 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
       - corebuild-multipy
+      - forge
+      - ray-core-build
+      - ray-dashboard-build
 
   # Doc tests disabled — low priority for a Rust port, ~28min each.
   # Re-enable if documentation accuracy becomes a concern.

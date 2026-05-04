@@ -169,7 +169,7 @@ steps:
         --only-tags=tmpfs --tmp-filesystem=tmpfs
     depends_on:
       - corebuild-multipy
-
+      - forge
   - label: ":ray: core: out of disk redis tests"
     tags:
       - python

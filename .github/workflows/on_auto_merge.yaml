@@ -3,6 +3,10 @@ on:
   pull_request_target:
     types:
       - auto_merge_enabled
+
+permissions:
+  issues: write
+  pull-requests: write
 jobs:
   add-go-label:
     runs-on: ubuntu-latest

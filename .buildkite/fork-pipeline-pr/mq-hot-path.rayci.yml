@@ -1,0 +1,133 @@
+group: merge-queue hot path preflight
+sort_key: mq-hot-path-preflight
+steps:
+  # Rehearse the reduced merge-queue stages that have repeatedly blocked
+  # PR #345 before the branch enters the serialized merge queue. Keep this
+  # explicit instead of copying the full core pipeline so every dependency
+  # required by test_in_docker is visible in the PR build.
+  - name: mq-hot-minbuild-core-py310
+    label: "wanda: mq-hot minbuild-core py3.10"
+    wanda: ci/docker/min.build.wanda.yaml
+    depends_on:
+      - rust-oss-ci-base-test-py310
+    tags:
+      - always
+      - cibase
+    env:
+      PYTHON_VERSION: "3.10"
+      EXTRA_DEPENDENCY: core
+
+  - name: mq-hot-ray-java-build
+    label: "wanda: mq-hot java build (x86_64)"
+    wanda: ci/docker/ray-java.wanda.yaml
+    env_file: rayci.env
+    env:
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - always
+      - release_wheels
+      - java
+    depends_on:
+      - forge
+
+  - name: mq-hot-ray-wheel-build-py310
+    label: "wanda: mq-hot wheel py3.10 (x86_64)"
+    wanda: ci/docker/ray-wheel.wanda.yaml
+    env_file: rayci.env
+    env:
+      PYTHON_VERSION: "3.10"
+      ARCH_SUFFIX: ""
+      HOSTTYPE: "x86_64"
+    tags:
+      - always
+      - release_wheels
+      - linux_wheels
+    depends_on:
+      - forge
+      - rust-ray-core-py310
+      - mq-hot-ray-java-build
+      - rust-ray-dashboard
+
+  - label: ":ray: mq-hot: minimal tests"
+    key: mq-hot-minimal-tests
+    tags:
+      - always
+      - python
+      - dashboard
+      - min_build
+    instance_type: large
+    commands:
+      - python ./ci/env/check_minimal_install.py
+      # Keep this PR preflight focused on install/image compatibility. The full
+      # minimal-tag shard currently exercises Rust CoreWorker APIs that are known
+      # incomplete and are covered by MQ/main, making PR CI fail before it can
+      # validate the image dependency/order regressions this lane is meant to catch.
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/tests:test_raylet_compat_surface
+        core
+        --python-version 3.10
+        --build-name minbuild-core-py3.10
+        --test-env=RAY_MINIMAL=1
+        --test-env=EXPECTED_PYTHON_VERSION=3.10
+        --install-mask all-ray-libraries
+    depends_on:
+      - forge
+      - mq-hot-minbuild-core-py310
+      - rust-ray-core-py310
+      - rust-ray-dashboard
+
+  - label: ":ray: mq-hot: out of disk tests"
+    key: mq-hot-out-of-disk-tests
+    tags:
+      - always
+      - python
+    instance_type: small
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/tests:test_raylet_compat_surface
+        core
+        --install-mask all-ray-libraries
+        --python-version 3.10 --build-name corebuild-py3.10
+        --tmp-filesystem=tmpfs
+    depends_on:
+      - forge
+      - rust-corebuild-py310
+      - rust-ray-core-py310
+      - rust-ray-dashboard
+
+  - label: ":ray: mq-hot: wheel tests"
+    key: mq-hot-wheel-tests
+    tags:
+      - always
+      - linux_wheels
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/tests:test_raylet_compat_surface
+        core
+        --install-mask all-ray-libraries
+        --build-type wheel
+        --python-version 3.10 --build-name corebuild-py3.10
+        --test-env=RAY_CI_POST_WHEEL_TESTS=True
+    depends_on:
+      - forge
+      - rust-corebuild-py310
+      - mq-hot-ray-wheel-build-py310
+
+  - label: ":ray: mq-hot: wheel client-mode conda test"
+    key: mq-hot-wheel-client-mode-conda-test
+    tags:
+      - always
+      - linux_wheels
+    instance_type: medium
+    commands:
+      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests:test_raylet_compat_surface core
+        --install-mask all-ray-libraries
+        --build-type wheel
+        --python-version 3.10 --build-name corebuild-py3.10
+        --test-env=RAY_CI_POST_WHEEL_TESTS=True
+    depends_on:
+      - forge
+      - rust-corebuild-py310
+      - mq-hot-ray-wheel-build-py310

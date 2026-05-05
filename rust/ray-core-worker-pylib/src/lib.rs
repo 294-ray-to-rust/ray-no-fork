@@ -1119,7 +1119,10 @@ fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
 
     // ─── Name aliases matching the original Cython _raylet module ─
-    m.add("ObjectID", m.getattr("PyObjectID")?)?;
+    // In Cython Ray, ObjectID is a backwards-compatible alias for ObjectRef.
+    // Some Python paths still construct `ray.ObjectID` and pass it through
+    // APIs such as ray.get(), which validate against ray.ObjectRef.
+    m.add("ObjectID", m.getattr("PyObjectRef")?)?;
     m.add("TaskID", m.getattr("PyTaskID")?)?;
     m.add("ActorID", m.getattr("PyActorID")?)?;
     m.add("JobID", m.getattr("PyJobID")?)?;

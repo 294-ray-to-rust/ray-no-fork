@@ -84,10 +84,38 @@ impl PyObjectRef {
         Self::new(ObjectID::from_binary(object_id_bytes), None, String::new())
     }
 
+    /// Return a nil (all-zeroes) object reference.
+    #[staticmethod]
+    #[pyo3(name = "nil")]
+    fn py_nil() -> Self {
+        Self::new(ObjectID::nil(), None, String::new())
+    }
+
+    /// Construct from a hex object ID string.
+    #[staticmethod]
+    #[pyo3(name = "from_hex")]
+    fn py_from_hex(hex_str: &str) -> Self {
+        Self::new(ObjectID::from_hex(hex_str), None, String::new())
+    }
+
+    /// Construct a random object reference.
+    #[staticmethod]
+    #[pyo3(name = "from_random")]
+    fn py_from_random() -> Self {
+        Self::new(ObjectID::from_random(), None, String::new())
+    }
+
+    /// Return the byte size of an ObjectRef/ObjectID.
+    #[staticmethod]
+    #[pyo3(name = "size")]
+    fn py_size() -> usize {
+        ObjectID::SIZE
+    }
+
     /// Return the raw bytes of the object ID.
     #[pyo3(name = "binary")]
-    fn py_binary(&self) -> Vec<u8> {
-        self.binary()
+    fn py_binary<'py>(&self, py: pyo3::Python<'py>) -> pyo3::Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new_bound(py, &self.binary())
     }
 
     /// Return the hex string of the object ID.

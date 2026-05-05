@@ -913,7 +913,7 @@ impl PyCoreWorker {
         // Python shards to fail before task execution with
         // "takes from 2 to 7 positional arguments but 17 were given".
         let (name, raw_args, num_returns, max_retries): (String, pyo3::Bound<'_, pyo3::PyAny>, u64, i32) =
-            if args.len() >= 17 {
+            if args.len()? >= 17 {
                 let explicit_name = args.get_item(3)?.extract::<String>().unwrap_or_default();
                 let descriptor_name = args
                     .get_item(1)?
@@ -947,7 +947,7 @@ impl PyCoreWorker {
             .collect();
 
         let task_args: Vec<task_rpc::TaskArg> = raw_args
-            .try_iter()?
+            .iter()?
             .filter_map(|item| item.ok())
             .map(|item| task_rpc::TaskArg {
                 data: item.extract::<Vec<u8>>().unwrap_or_default(),

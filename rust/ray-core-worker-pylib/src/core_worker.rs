@@ -23,7 +23,7 @@ use ray_core_worker::options::CoreWorkerOptions;
 use ray_core_worker::CoreWorker;
 
 #[cfg(feature = "python")]
-use pyo3::types::PyAnyMethods;
+use pyo3::types::{PyAnyMethods, PyTuple};
 
 /// Python-facing wrapper around `CoreWorker`.
 #[cfg_attr(feature = "python", pyo3::pyclass(module = "_raylet"))]
@@ -896,57 +896,70 @@ impl PyCoreWorker {
     ///   placement_group_capture_child_tasks: inherit PG in child tasks (default false)
     ///
     /// Returns a list of ObjectIDs for the return values.
-    #[pyo3(name = "submit_task", signature = (
-        name, args, num_returns=1, max_retries=0,
-        placement_group_id=None, placement_group_bundle_index=-1,
-        placement_group_capture_child_tasks=false
-    ))]
+    #[pyo3(name = "submit_task", signature = (*args))]
     fn py_submit_task(
         &self,
         py: pyo3::Python<'_>,
-        name: &str,
-        args: Vec<Vec<u8>>,
-        num_returns: u64,
-        max_retries: i32,
-        placement_group_id: Option<Vec<u8>>,
-        placement_group_bundle_index: i64,
-        placement_group_capture_child_tasks: bool,
+        args: &pyo3::Bound<'_, PyTuple>,
     ) -> pyo3::PyResult<Vec<crate::ids::PyObjectID>> {
         use ray_proto::ray::rpc as task_rpc;
+
+        // Support both the small Rust-native compatibility form
+        //   submit_task(name, args, num_returns=..., max_retries=...)
+        // and Ray's legacy Cython CoreWorker ABI used by remote_function.py:
+        //   submit_task(language, function_descriptor, list_args, name,
+        //               num_returns, resources, max_retries, ...)
+        // The initial Rust binding only accepted the former, causing broad
+        // Python shards to fail before task execution with
+        // "takes from 2 to 7 positional arguments but 17 were given".
+        let (name, raw_args, num_returns, max_retries): (String, pyo3::Bound<'_, pyo3::PyAny>, u64, i32) =
+            if args.len() >= 17 {
+                let explicit_name = args.get_item(3)?.extract::<String>().unwrap_or_default();
+                let descriptor_name = args
+                    .get_item(1)?
+                    .getattr("function_name")
+                    .ok()
+                    .and_then(|value| value.extract::<String>().ok())
+                    .unwrap_or_default();
+                let name = if explicit_name.is_empty() {
+                    descriptor_name
+                } else {
+                    explicit_name
+                };
+                (
+                    name,
+                    args.get_item(2)?,
+                    args.get_item(4)?.extract::<u64>().unwrap_or(1),
+                    args.get_item(6)?.extract::<i32>().unwrap_or(0),
+                )
+            } else {
+                (
+                    args.get_item(0)?.extract::<String>()?,
+                    args.get_item(1)?,
+                    args.get_item(2).and_then(|v| v.extract::<u64>()).unwrap_or(1),
+                    args.get_item(3).and_then(|v| v.extract::<i32>()).unwrap_or(0),
+                )
+            };
 
         let task_id = TaskID::from_random();
         let return_oids: Vec<ObjectID> = (1..=num_returns as u32)
             .map(|i| ObjectID::from_index(&task_id, i))
             .collect();
 
-        let task_args: Vec<task_rpc::TaskArg> = args
-            .into_iter()
-            .map(|data| task_rpc::TaskArg {
-                data,
+        let task_args: Vec<task_rpc::TaskArg> = raw_args
+            .try_iter()?
+            .filter_map(|item| item.ok())
+            .map(|item| task_rpc::TaskArg {
+                data: item.extract::<Vec<u8>>().unwrap_or_default(),
                 ..Default::default()
             })
             .collect();
 
-        let scheduling_strategy = placement_group_id.as_ref().map(|pg_bytes| {
-            task_rpc::SchedulingStrategy {
-                scheduling_strategy: Some(
-                    task_rpc::scheduling_strategy::SchedulingStrategy::PlacementGroupSchedulingStrategy(
-                        task_rpc::PlacementGroupSchedulingStrategy {
-                            placement_group_id: pg_bytes.clone(),
-                            placement_group_bundle_index,
-                            placement_group_capture_child_tasks,
-                        },
-                    ),
-                ),
-            }
-        });
-
         let spec = task_rpc::TaskSpec {
             task_id: task_id.binary(),
-            name: name.to_string(),
+            name,
             num_returns: num_returns,
             args: task_args,
-            scheduling_strategy,
             ..Default::default()
         };
 

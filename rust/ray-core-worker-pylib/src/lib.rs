@@ -458,7 +458,13 @@ impl GenericStub {
         ids::PyFunctionID::nil()
     }
 
-    fn __getattr__(&self, py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        // Some Python call paths treat legacy descriptor attributes as data
+        // fields (for example `class_name.split(...)`).  Return inert strings
+        // for those known fields instead of a callable placeholder.
+        if matches!(name, "class_name" | "function_name" | "module_name") {
+            return Ok("".into_py(py));
+        }
         py.eval_bound("lambda *a, **kw: None", None, None)
             .map(|value| value.unbind())
     }

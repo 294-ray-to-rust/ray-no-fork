@@ -488,6 +488,16 @@ impl PyCoreWorker {
         false
     }
 
+    /// Cython-compatible CoreWorker.current_actor_is_asyncio() API.
+    ///
+    /// The Rust shim does not yet execute Python actor methods, so it is never
+    /// inside an asyncio actor event loop from the Python compatibility layer's
+    /// point of view. Return false to match the legacy driver/non-actor path.
+    #[pyo3(name = "current_actor_is_asyncio")]
+    fn py_current_actor_is_asyncio(&self) -> bool {
+        false
+    }
+
     /// Cython-compatible driver shutdown hook.
     ///
     /// The Rust shim does not yet own external worker resources that need an

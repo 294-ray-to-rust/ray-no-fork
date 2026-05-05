@@ -498,6 +498,20 @@ impl PyCoreWorker {
         false
     }
 
+    /// Cython-compatible CoreWorker.get_all_reference_counts() API.
+    ///
+    /// Return the currently known local/submitted reference counts in the same
+    /// shape as the legacy Cython binding. The Rust compatibility shim does not
+    /// yet expose distributed reference accounting, so start with an empty map
+    /// instead of raising AttributeError; this matches the no-live-refs baseline
+    /// used by early driver/dashboard paths.
+    #[pyo3(name = "get_all_reference_counts")]
+    fn py_get_all_reference_counts(
+        &self,
+    ) -> std::collections::HashMap<String, std::collections::HashMap<String, usize>> {
+        std::collections::HashMap::new()
+    }
+
     /// Cython-compatible driver shutdown hook.
     ///
     /// The Rust shim does not yet own external worker resources that need an

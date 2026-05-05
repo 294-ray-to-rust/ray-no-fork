@@ -104,6 +104,7 @@ pub fn start_cluster() -> pyo3::PyResult<PyClusterHandle> {
             resources: HashMap::from([("CPU".to_string(), 4.0)]),
             labels: HashMap::new(),
             session_name: "python-actor-demo".to_string(),
+            dashboard_agent_command: None,
             auth_token: None,
         }));
         let nm_clone = Arc::clone(&nm);

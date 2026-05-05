@@ -58,6 +58,7 @@ async fn main() {
             resources: HashMap::from([("CPU".to_string(), 4.0)]),
             labels: HashMap::new(),
             session_name: "actor-counter".to_string(),
+            dashboard_agent_command: None,
             auth_token: None,
         },
     ));

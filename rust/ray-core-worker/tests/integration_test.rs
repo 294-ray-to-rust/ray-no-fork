@@ -437,6 +437,7 @@ async fn test_full_stack_gcs_raylet_worker() {
         resources: HashMap::from([("CPU".to_string(), 4.0)]),
         labels: HashMap::new(),
         session_name: "e2e-test".to_string(),
+        dashboard_agent_command: None,
         auth_token: None,
     };
     let nm = Arc::new(ray_raylet::node_manager::NodeManager::new(raylet_config));

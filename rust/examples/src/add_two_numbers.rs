@@ -57,6 +57,7 @@ async fn main() {
         resources: HashMap::from([("CPU".to_string(), 4.0)]),
         labels: HashMap::new(),
         session_name: "add-two-numbers".to_string(),
+        dashboard_agent_command: None,
         auth_token: None,
     };
     let nm = Arc::new(ray_raylet::node_manager::NodeManager::new(raylet_config));

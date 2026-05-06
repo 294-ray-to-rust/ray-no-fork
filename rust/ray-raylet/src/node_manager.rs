@@ -76,13 +76,62 @@ pub struct RayletConfig {
 ///
 /// The C++ raylet launches these agents as direct children so dashboard tests
 /// and fate-sharing paths can discover them under the raylet process. Keep the
-/// same parent/child shape for the Rust raylet. The command is already quoted
-/// by subprocess.list2cmdline on the Python side, so execute it through a shell
-/// after substituting the bound node-manager port.
+/// same parent/child shape for the Rust raylet.
 ///
-/// Use `exec` so the shell is replaced by the Python dashboard agent process.
-/// Dashboard tests inspect `raylet_proc.children()` and expect the agent itself
-/// to be a direct raylet child, not a grandchild under `/bin/sh`.
+/// The dashboard agent command is built by Python services.py and serialized by
+/// subprocess.list2cmdline on the Python side, so parse it back into argv after
+/// substituting the bound node-manager port. Mirror C++'s AgentManager by
+/// spawning the parsed argv directly instead of going through a shell. Even
+/// `sh -c 'exec ...'` is fragile here: if shell parsing or quoting differs from
+/// C++ ParseCommandLine, psutil may observe the shell/launcher or a mis-argv'd
+/// Python process rather than the dashboard agent title.
+fn split_agent_command(command: &str) -> std::io::Result<Vec<String>> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    let mut in_quotes = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            '\\' => {
+                if let Some(next) = chars.peek().copied() {
+                    if in_quotes && (next == '"' || next == '\\') {
+                        current.push(chars.next().unwrap());
+                    } else {
+                        current.push(ch);
+                    }
+                } else {
+                    current.push(ch);
+                }
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    args.push(std::mem::take(&mut current));
+                }
+            }
+            c => current.push(c),
+        }
+    }
+
+    if in_quotes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "unterminated quote in dashboard agent command",
+        ));
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+    if args.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "empty dashboard agent command",
+        ));
+    }
+    Ok(args)
+}
+
 fn spawn_agent_command(
     command: &str,
     bound_port: u16,
@@ -93,11 +142,10 @@ fn spawn_agent_command(
         "RAY_NODE_MANAGER_PORT_PLACEHOLDER",
         &bound_port.to_string(),
     );
-    let command = format!("exec {command}");
-    tracing::info!(process_name, command = %command, "Starting raylet child agent");
-    std::process::Command::new("/bin/sh")
-        .arg("-c")
-        .arg(command)
+    let argv = split_agent_command(&command)?;
+    tracing::info!(process_name, argv = ?argv, "Starting raylet child agent");
+    std::process::Command::new(&argv[0])
+        .args(&argv[1..])
         .env("RAY_NODE_ID", node_id)
         .env("RAY_RAYLET_PID", std::process::id().to_string())
         .env("RAY_enable_pipe_based_agent_to_parent_health_check", "1")
@@ -468,6 +516,27 @@ mod tests {
         let nm = NodeManager::new(make_config());
         assert_eq!(nm.config().node_id, "test-node-1");
         assert_eq!(nm.config().port, 0);
+    }
+
+    #[test]
+    fn test_split_agent_command_preserves_quoted_args() {
+        let args = split_agent_command(
+            r#"/usr/bin/python -u /ray/agent.py --node-manager-port=RAY_NODE_MANAGER_PORT_PLACEHOLDER --logging-format="%(asctime)s dashboard_agent %(message)s" --minimal"#,
+        )
+        .unwrap();
+        assert_eq!(args[0], "/usr/bin/python");
+        assert_eq!(args[2], "/ray/agent.py");
+        assert_eq!(args[3], "--node-manager-port=RAY_NODE_MANAGER_PORT_PLACEHOLDER");
+        assert_eq!(
+            args[4],
+            "--logging-format=%(asctime)s dashboard_agent %(message)s"
+        );
+        assert_eq!(args[5], "--minimal");
+    }
+
+    #[test]
+    fn test_split_agent_command_rejects_unterminated_quote() {
+        assert!(split_agent_command(r#"python "unterminated"#).is_err());
     }
 
     #[test]

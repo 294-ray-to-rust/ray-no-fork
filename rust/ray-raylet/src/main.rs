@@ -83,14 +83,14 @@ fn parse_kv_pairs(s: &str) -> HashMap<String, f64> {
         .map(str::trim)
         .filter(|p| !p.is_empty())
         .collect();
-    if fields.len() >= 2
-        && fields.len() % 2 == 0
-        && fields.iter().step_by(2).all(|k| !k.contains(':'))
-    {
-        return fields
+    if fields.len() >= 2 && fields.len() % 2 == 0 {
+        let comma_pairs: Option<HashMap<String, f64>> = fields
             .chunks(2)
-            .filter_map(|kv| kv[1].parse::<f64>().ok().map(|v| (kv[0].to_string(), v)))
+            .map(|kv| kv[1].parse::<f64>().ok().map(|v| (kv[0].to_string(), v)))
             .collect();
+        if let Some(resources) = comma_pairs {
+            return resources;
+        }
     }
 
     s.split(',')
@@ -123,6 +123,35 @@ fn parse_label_pairs(s: &str) -> HashMap<String, String> {
             Some((key, value))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_python_static_resource_list_with_colon_keys() {
+        let resources = parse_kv_pairs("node:172.17.0.12,1.0,CPU,4.0,object_store_memory,100.0");
+
+        assert_eq!(resources.get("node:172.17.0.12"), Some(&1.0));
+        assert_eq!(resources.get("CPU"), Some(&4.0));
+        assert_eq!(resources.get("object_store_memory"), Some(&100.0));
+    }
+
+    #[test]
+    fn keeps_legacy_colon_resource_format() {
+        let resources = parse_kv_pairs("CPU:4,GPU:2");
+
+        assert_eq!(resources.get("CPU"), Some(&4.0));
+        assert_eq!(resources.get("GPU"), Some(&2.0));
+    }
+
+    #[test]
+    fn parses_python_json_labels() {
+        let labels = parse_label_pairs(r#"{"ray.io/accelerator-type":"A100"}"#);
+
+        assert_eq!(labels.get("ray.io/accelerator-type"), Some(&"A100".to_string()));
+    }
 }
 
 #[tokio::main]

@@ -438,7 +438,7 @@ impl NodeManager {
                 .as_ref()
                 .map(|(_, node_id)| node_id.hex())
                 .unwrap_or_else(|| self.config.node_id.clone());
-            match spawn_agent_command(command, bound_port, &agent_node_id, "dashboard_agent") {
+            match spawn_agent_command(command, bound_port, &agent_node_id, "ray::DashboardAgent") {
                 Ok(child) => child_agents.push(child),
                 Err(e) => tracing::warn!(error = %e, "Failed to start dashboard agent"),
             }

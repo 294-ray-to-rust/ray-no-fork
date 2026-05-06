@@ -67,7 +67,56 @@ struct Args {
     /// Dashboard agent command supplied by Python services.py
     #[arg(long, alias = "dashboard_agent_command")]
     dashboard_agent_command: Option<String>,
+
+    /// C++ raylet compatibility flags accepted from Python services.py but not
+    /// used yet by the Rust raylet. Keeping these explicit avoids clap exiting
+    /// before the node can register with GCS on normal Python startup paths.
+    #[arg(long, default_value_t = 0)]
+    _object_manager_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _min_worker_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _max_worker_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _maximum_startup_concurrency: u32,
+    #[arg(long, default_value = "")]
+    _python_worker_command: String,
+    #[arg(long, default_value = "")]
+    _java_worker_command: String,
+    #[arg(long, default_value = "")]
+    _cpp_worker_command: String,
+    #[arg(long, default_value = "")]
+    _native_library_path: String,
+    #[arg(long, default_value = "")]
+    _temp_dir: String,
+    #[arg(long, default_value = "", alias = "session_dir")]
+    _session_dir: String,
+    #[arg(long, default_value = "")]
+    _resource_dir: String,
+    #[arg(long = "metrics-agent-port", default_value_t = 0)]
+    _metrics_agent_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _metrics_export_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _runtime_env_agent_port: u16,
+    #[arg(long, default_value_t = 0)]
+    _object_store_memory: u64,
+    #[arg(long, default_value = "")]
+    _plasma_directory: String,
+    #[arg(long, default_value = "")]
+    _fallback_directory: String,
+    #[arg(long = "ray-debugger-external", default_value_t = 0)]
+    _ray_debugger_external: u8,
+    #[arg(long = "cluster-id", default_value = "")]
+    _cluster_id: String,
+    #[arg(long = "enable-resource-isolation", default_value_t = false)]
+    _enable_resource_isolation: bool,
+    #[arg(long = "huge_pages", default_value_t = false)]
+    _huge_pages: bool,
+    #[arg(long = "node-name", default_value = "")]
+    _node_name: String,
 }
+
 
 fn parse_kv_pairs(s: &str) -> HashMap<String, f64> {
     if s.is_empty() {

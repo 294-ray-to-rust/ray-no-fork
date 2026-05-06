@@ -134,6 +134,29 @@ fn split_agent_command(command: &str) -> std::io::Result<Vec<String>> {
     Ok(args)
 }
 
+fn dashboard_agent_visible_executable(
+    executable: &str,
+    process_name: &str,
+) -> std::io::Result<std::path::PathBuf> {
+    #[cfg(unix)]
+    {
+        let safe_name = process_name.replace('/', "_");
+        let link_path = std::env::temp_dir().join(format!(
+            "rayrust-agent-exec-{}-{safe_name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&link_path);
+        std::os::unix::fs::symlink(executable, &link_path)?;
+        Ok(link_path)
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = process_name;
+        Ok(std::path::PathBuf::from(executable))
+    }
+}
+
 fn spawn_agent_command(
     command: &str,
     bound_port: u16,
@@ -146,7 +169,8 @@ fn spawn_agent_command(
     );
     let argv = split_agent_command(&command)?;
     tracing::info!(process_name, argv = ?argv, "Starting raylet child agent");
-    let mut cmd = std::process::Command::new(&argv[0]);
+    let executable = dashboard_agent_visible_executable(&argv[0], process_name)?;
+    let mut cmd = std::process::Command::new(executable);
     #[cfg(unix)]
     cmd.arg0(process_name);
     cmd.args(&argv[1..])

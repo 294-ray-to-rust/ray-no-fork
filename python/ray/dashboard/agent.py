@@ -474,6 +474,13 @@ if __name__ == "__main__":
             logging_rotation_backup_count,
         )
 
+        # Mark the process as the dashboard agent before potentially slow or
+        # blocking initialization. Tests and supervisors discover the agent by
+        # process title under the raylet; the Rust raylet starts the same Python
+        # agent as C++ but initialization can take long enough in minimal-test
+        # containers that waiting for the post-initialization title races.
+        ray._raylet.setproctitle(ray_constants.AGENT_PROCESS_TYPE_DASHBOARD_AGENT)
+
         # Initialize event loop, see Dashboard init code for caveat
         # w.r.t grpc server init in the DashboardAgent initializer.
         loop = get_or_create_event_loop()
@@ -496,8 +503,6 @@ if __name__ == "__main__":
             is_head=args.head,
             session_name=args.session_name,
         )
-
-        ray._raylet.setproctitle(ray_constants.AGENT_PROCESS_TYPE_DASHBOARD_AGENT)
 
         def sigterm_handler():
             logger.warning("Exiting with SIGTERM immediately...")

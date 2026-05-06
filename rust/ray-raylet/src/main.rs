@@ -59,6 +59,10 @@ struct Args {
     /// Session name
     #[arg(long, default_value = "")]
     session_name: String,
+
+    /// Dashboard agent command supplied by Python services.py
+    #[arg(long, alias = "dashboard_agent_command")]
+    dashboard_agent_command: Option<String>,
 }
 
 fn parse_kv_pairs(s: &str) -> HashMap<String, f64> {
@@ -118,6 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         resources,
         labels,
         session_name: args.session_name,
+        dashboard_agent_command: args.dashboard_agent_command,
         auth_token: None,
     };
 

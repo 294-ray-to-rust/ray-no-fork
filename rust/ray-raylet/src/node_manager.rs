@@ -11,6 +11,7 @@
 //! Replaces `src/ray/raylet/node_manager.h/cc`.
 
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::Arc;
 
 use ray_common::config::RayConfig;
@@ -63,8 +64,38 @@ pub struct RayletConfig {
     pub resources: HashMap<String, f64>,
     pub labels: HashMap<String, String>,
     pub session_name: String,
+    /// Command line used to launch the dashboard agent subprocess. Python
+    /// passes this as a single shell-escaped string with
+    /// RAY_NODE_MANAGER_PORT_PLACEHOLDER embedded until the raylet has bound.
+    pub dashboard_agent_command: Option<String>,
     /// Cluster auth token. When set, all gRPC requests must include a matching Bearer token.
     pub auth_token: Option<String>,
+}
+
+/// Start an agent command supplied by Python's services.py.
+///
+/// The C++ raylet launches these agents as direct children so dashboard tests
+/// and fate-sharing paths can discover them under the raylet process. Keep the
+/// same parent/child shape for the Rust raylet. The command is already quoted
+/// by subprocess.list2cmdline on the Python side, so execute it through a shell
+/// after substituting the bound node-manager port.
+fn spawn_agent_command(
+    command: &str,
+    bound_port: u16,
+    process_name: &str,
+) -> std::io::Result<std::process::Child> {
+    let command = command.replace(
+        "RAY_NODE_MANAGER_PORT_PLACEHOLDER",
+        &bound_port.to_string(),
+    );
+    tracing::info!(process_name, command = %command, "Starting raylet child agent");
+    std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(command)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
 }
 
 /// The main raylet node manager.
@@ -326,6 +357,14 @@ impl NodeManager {
                 cgroup_manager,
             ));
 
+        let mut child_agents = Vec::new();
+        if let Some(command) = &self.config.dashboard_agent_command {
+            match spawn_agent_command(command, bound_port, "dashboard_agent") {
+                Ok(child) => child_agents.push(child),
+                Err(e) => tracing::warn!(error = %e, "Failed to start dashboard agent"),
+            }
+        }
+
         // Register with GCS if an address is configured.
         let gcs_state = if !self.config.gcs_address.is_empty() {
             match self.register_with_gcs(bound_port).await {
@@ -375,6 +414,13 @@ impl NodeManager {
             Self::unregister_from_gcs(gcs_client, node_id).await;
         }
 
+        for mut child in child_agents {
+            if let Err(e) = child.kill() {
+                tracing::debug!(error = %e, "Failed to kill raylet child agent");
+            }
+            let _ = child.wait();
+        }
+
         tracing::info!("Raylet shutting down");
         Ok(())
     }
@@ -399,6 +445,7 @@ mod tests {
             ]),
             labels: HashMap::from([("region".to_string(), "us-east".to_string())]),
             session_name: "test-session".to_string(),
+            dashboard_agent_command: None,
             auth_token: None,
         }
     }

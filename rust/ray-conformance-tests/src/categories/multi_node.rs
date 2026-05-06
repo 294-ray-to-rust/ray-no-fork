@@ -119,6 +119,7 @@ fn make_raylet_config(node_id: &NodeID, gcs_address: &str) -> RayletConfig {
         resources: HashMap::from([("CPU".to_string(), 4.0)]),
         labels: HashMap::new(),
         session_name: "multi-node-test".to_string(),
+        dashboard_agent_command: None,
         auth_token: None,
     }
 }

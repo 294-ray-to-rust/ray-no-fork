@@ -25,12 +25,16 @@ struct Args {
     node_ip_address: String,
 
     /// Raylet port
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, alias = "node_manager_port", default_value_t = 0)]
     port: u16,
 
     /// Object store socket path
-    #[arg(long)]
+    #[arg(long, alias = "store_socket_name")]
     object_store_socket_name: String,
+
+    /// Raylet socket path (accepted for C++ CLI compatibility)
+    #[arg(long, default_value = "", alias = "raylet_socket_name")]
+    _raylet_socket_name: String,
 
     /// GCS address (host:port)
     #[arg(long)]
@@ -49,7 +53,7 @@ struct Args {
     node_id: String,
 
     /// Resources as comma-separated key:value pairs (e.g. "CPU:4,GPU:2")
-    #[arg(long, default_value = "")]
+    #[arg(long, default_value = "", alias = "static_resource_list")]
     resources: String,
 
     /// Labels as comma-separated key:value pairs
@@ -69,6 +73,26 @@ fn parse_kv_pairs(s: &str) -> HashMap<String, f64> {
     if s.is_empty() {
         return HashMap::new();
     }
+
+    // Python services.py passes C++ raylet resources as
+    // `CPU,4.0,node:<ip>,1.0,...`, while older Rust tests used
+    // `CPU:4.0,GPU:2`. Accept both so the Rust raylet can faithfully replace
+    // the C++ binary on the normal startup path.
+    let fields: Vec<_> = s
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    if fields.len() >= 2
+        && fields.len() % 2 == 0
+        && fields.iter().step_by(2).all(|k| !k.contains(':'))
+    {
+        return fields
+            .chunks(2)
+            .filter_map(|kv| kv[1].parse::<f64>().ok().map(|v| (kv[0].to_string(), v)))
+            .collect();
+    }
+
     s.split(',')
         .filter_map(|pair| {
             let mut parts = pair.splitn(2, ':');
@@ -83,6 +107,14 @@ fn parse_label_pairs(s: &str) -> HashMap<String, String> {
     if s.is_empty() {
         return HashMap::new();
     }
+
+    // Python services.py serializes node labels as JSON for the C++ raylet.
+    // Preserve exact label keys such as `ray.io/accelerator-type`; the fallback
+    // keeps compatibility with earlier `key:value,key2:value2` Rust tests.
+    if let Ok(labels) = serde_json::from_str::<HashMap<String, String>>(s) {
+        return labels;
+    }
+
     s.split(',')
         .filter_map(|pair| {
             let mut parts = pair.splitn(2, ':');

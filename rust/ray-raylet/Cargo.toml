@@ -35,9 +35,9 @@ anyhow = { workspace = true }
 rand = "0.8"
 hex = { workspace = true }
 nix = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
 ray-test-utils = { workspace = true }
 tonic-health = { workspace = true }
-serde_json = { workspace = true }

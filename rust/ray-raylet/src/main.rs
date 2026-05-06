@@ -115,6 +115,26 @@ struct Args {
     _huge_pages: bool,
     #[arg(long = "node-name", default_value = "")]
     _node_name: String,
+    #[arg(long = "stdout_filepath", default_value = "")]
+    _stdout_filepath: String,
+    #[arg(long = "stderr_filepath", default_value = "")]
+    _stderr_filepath: String,
+    #[arg(long = "head", default_value_t = false)]
+    _head: bool,
+    #[arg(long = "worker_port_list", default_value = "")]
+    _worker_port_list: String,
+    #[arg(long = "num_prestart_python_workers", default_value_t = 0)]
+    _num_prestart_python_workers: u32,
+    #[arg(long = "runtime_env_agent_command", default_value = "")]
+    _runtime_env_agent_command: String,
+    #[arg(long = "cgroup-path", default_value = "")]
+    _cgroup_path: String,
+    #[arg(long = "system-reserved-cpu-weight", default_value_t = 0)]
+    _system_reserved_cpu_weight: u64,
+    #[arg(long = "system-reserved-memory-bytes", default_value_t = 0)]
+    _system_reserved_memory_bytes: u64,
+    #[arg(long = "system-pids", default_value = "")]
+    _system_pids: String,
 }
 
 

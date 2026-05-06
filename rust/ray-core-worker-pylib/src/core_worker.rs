@@ -382,6 +382,39 @@ impl PyCoreWorker {
         Ok(out)
     }
 
+    /// Cython-compatible CoreWorker.get_objects() API used by
+    /// ray._private.worker.Worker.get_objects().
+    ///
+    /// Python expects a list of SerializedRayObject-compatible triples:
+    /// (data, metadata, tensor_transport). For the Rust in-memory object
+    /// store path, tensor transport is not implemented yet, so return None.
+    #[pyo3(name = "get_objects")]
+    fn py_get_objects(
+        &self,
+        py: pyo3::Python<'_>,
+        object_refs: Vec<pyo3::PyRef<'_, crate::object_ref::PyObjectRef>>,
+        timeout_ms: i64,
+    ) -> pyo3::PyResult<Vec<(pyo3::PyObject, pyo3::PyObject, pyo3::PyObject)>> {
+        let oids: Vec<ObjectID> = object_refs.iter().map(|r| *r.object_id()).collect();
+        let timeout_ms = if timeout_ms < 0 { u64::MAX } else { timeout_ms as u64 };
+        let results = py
+            .allow_threads(|| self.get_objects(&oids, timeout_ms))
+            .map_err(crate::common::to_py_err)?;
+        let none = py.None();
+        let mut out = Vec::with_capacity(results.len());
+        for opt in results {
+            match opt {
+                Some(obj) => {
+                    let data = pyo3::types::PyBytes::new_bound(py, &obj.data).into();
+                    let metadata = pyo3::types::PyBytes::new_bound(py, &obj.metadata).into();
+                    out.push((data, metadata, none.clone_ref(py)));
+                }
+                None => out.push((none.clone_ref(py), none.clone_ref(py), none.clone_ref(py))),
+            }
+        }
+        Ok(out)
+    }
+
     /// Wait for at least num_objects to be ready.
     ///
     /// Returns a list of booleans indicating which objects are ready.

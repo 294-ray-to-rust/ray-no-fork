@@ -11,6 +11,8 @@
 //! Replaces `src/ray/raylet/node_manager.h/cc`.
 
 use std::collections::HashMap;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -144,8 +146,10 @@ fn spawn_agent_command(
     );
     let argv = split_agent_command(&command)?;
     tracing::info!(process_name, argv = ?argv, "Starting raylet child agent");
-    std::process::Command::new(&argv[0])
-        .args(&argv[1..])
+    let mut cmd = std::process::Command::new(&argv[0]);
+    #[cfg(unix)]
+    cmd.arg0(process_name);
+    cmd.args(&argv[1..])
         .env("RAY_NODE_ID", node_id)
         .env("RAY_RAYLET_PID", std::process::id().to_string())
         .env("RAY_enable_pipe_based_agent_to_parent_health_check", "1")

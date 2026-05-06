@@ -925,7 +925,7 @@ impl PyCoreWorker {
         &self,
         py: pyo3::Python<'_>,
         args: &pyo3::Bound<'_, PyTuple>,
-    ) -> pyo3::PyResult<Vec<crate::ids::PyObjectID>> {
+    ) -> pyo3::PyResult<Vec<crate::object_ref::PyObjectRef>> {
         use ray_proto::ray::rpc as task_rpc;
 
         // Support both the small Rust-native compatibility form
@@ -1025,7 +1025,7 @@ impl PyCoreWorker {
 
         Ok(return_oids
             .into_iter()
-            .map(crate::ids::PyObjectID::from_inner)
+            .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
             .collect())
     }
 }

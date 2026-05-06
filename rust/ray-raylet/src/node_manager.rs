@@ -86,6 +86,7 @@ pub struct RayletConfig {
 fn spawn_agent_command(
     command: &str,
     bound_port: u16,
+    node_id: &str,
     process_name: &str,
 ) -> std::io::Result<std::process::Child> {
     let command = command.replace(
@@ -97,6 +98,8 @@ fn spawn_agent_command(
     std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(command)
+        .env("RAY_NODE_ID", node_id)
+        .env("RAY_RAYLET_PID", std::process::id().to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -364,7 +367,12 @@ impl NodeManager {
 
         let mut child_agents = Vec::new();
         if let Some(command) = &self.config.dashboard_agent_command {
-            match spawn_agent_command(command, bound_port, "dashboard_agent") {
+            match spawn_agent_command(
+                command,
+                bound_port,
+                &self.config.node_id,
+                "dashboard_agent",
+            ) {
                 Ok(child) => child_agents.push(child),
                 Err(e) => tracing::warn!(error = %e, "Failed to start dashboard agent"),
             }

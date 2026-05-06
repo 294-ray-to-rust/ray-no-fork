@@ -61,27 +61,19 @@ steps:
     commands:
       # Validate minimal installation.
       - python ./ci/env/check_minimal_install.py
-      # Pull the full minimal shard into PR preflight. Recent post-merge main
-      # failures have repeatedly escaped the reduced raylet compatibility
-      # surface and failed in minimal-only targets such as label scheduling and
-      # bundle label selector tests.
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
+      # Pull the currently failing post-merge main targets into PR preflight.
+      # A full minimal shard is too broad for this hot path: it pulls in many
+      # unrelated minimal-tag failures. Keep this lane focused on the concrete
+      # main failures that escaped merge queue.
+      - bazel run //ci/ray_ci:test_in_docker --
+        //python/ray/tests:test_label_scheduling
+        //python/ray/tests:test_bundle_label_selector
+        core
+        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 1
         --python-version 3.10
         --build-name minbuild-core-py3.10
         --test-env=RAY_MINIMAL=1
         --test-env=EXPECTED_PYTHON_VERSION=3.10
-        --only-tags minimal
-        --except-tags basic_test,manual,cgroup
-      - bazel run //ci/ray_ci:test_in_docker -- //python/ray/tests/... //python/ray/dashboard/... core
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 2
-        --python-version 3.10
-        --build-name minbuild-core-py3.10
-        --test-env=RAY_MINIMAL=1
-        --test-env=EXPECTED_PYTHON_VERSION=3.10
-        --only-tags minimal
-        --except-tags no_basic_test,manual
-        --skip-ray-installation
     depends_on:
       - forge
       - mq-hot-minbuild-core-py310

@@ -365,19 +365,6 @@ impl NodeManager {
                 cgroup_manager,
             ));
 
-        let mut child_agents = Vec::new();
-        if let Some(command) = &self.config.dashboard_agent_command {
-            match spawn_agent_command(
-                command,
-                bound_port,
-                &self.config.node_id,
-                "dashboard_agent",
-            ) {
-                Ok(child) => child_agents.push(child),
-                Err(e) => tracing::warn!(error = %e, "Failed to start dashboard agent"),
-            }
-        }
-
         // Register with GCS if an address is configured.
         let gcs_state = if !self.config.gcs_address.is_empty() {
             match self.register_with_gcs(bound_port).await {
@@ -391,6 +378,18 @@ impl NodeManager {
             tracing::warn!("No GCS address configured, skipping registration");
             None
         };
+
+        let mut child_agents = Vec::new();
+        if let Some(command) = &self.config.dashboard_agent_command {
+            let agent_node_id = gcs_state
+                .as_ref()
+                .map(|(_, node_id)| node_id.hex())
+                .unwrap_or_else(|| self.config.node_id.clone());
+            match spawn_agent_command(command, bound_port, &agent_node_id, "dashboard_agent") {
+                Ok(child) => child_agents.push(child),
+                Err(e) => tracing::warn!(error = %e, "Failed to start dashboard agent"),
+            }
+        }
 
         let svc = crate::grpc_service::NodeManagerServiceImpl {
             node_manager: Arc::clone(&self),

@@ -79,6 +79,10 @@ pub struct RayletConfig {
 /// same parent/child shape for the Rust raylet. The command is already quoted
 /// by subprocess.list2cmdline on the Python side, so execute it through a shell
 /// after substituting the bound node-manager port.
+///
+/// Use `exec` so the shell is replaced by the Python dashboard agent process.
+/// Dashboard tests inspect `raylet_proc.children()` and expect the agent itself
+/// to be a direct raylet child, not a grandchild under `/bin/sh`.
 fn spawn_agent_command(
     command: &str,
     bound_port: u16,
@@ -88,6 +92,7 @@ fn spawn_agent_command(
         "RAY_NODE_MANAGER_PORT_PLACEHOLDER",
         &bound_port.to_string(),
     );
+    let command = format!("exec {command}");
     tracing::info!(process_name, command = %command, "Starting raylet child agent");
     std::process::Command::new("/bin/sh")
         .arg("-c")

@@ -34,7 +34,7 @@ struct Args {
 
     /// Raylet socket path (accepted for C++ CLI compatibility)
     #[arg(long, default_value = "", alias = "raylet_socket_name")]
-    _raylet_socket_name: String,
+    raylet_socket_name: String,
 
     /// GCS address (host:port)
     #[arg(long)]
@@ -72,7 +72,7 @@ struct Args {
     /// used yet by the Rust raylet. Keeping these explicit avoids clap exiting
     /// before the node can register with GCS on normal Python startup paths.
     #[arg(long = "object_manager_port", default_value_t = 0)]
-    _object_manager_port: u16,
+    object_manager_port: u16,
     #[arg(long = "min_worker_port", default_value_t = 0)]
     _min_worker_port: u16,
     #[arg(long = "max_worker_port", default_value_t = 0)]
@@ -94,11 +94,11 @@ struct Args {
     #[arg(long = "resource_dir", default_value = "")]
     _resource_dir: String,
     #[arg(long = "metrics-agent-port", default_value_t = 0)]
-    _metrics_agent_port: u16,
+    metrics_agent_port: u16,
     #[arg(long = "metrics_export_port", default_value_t = 0)]
-    _metrics_export_port: u16,
+    metrics_export_port: u16,
     #[arg(long = "runtime_env_agent_port", default_value_t = 0)]
-    _runtime_env_agent_port: u16,
+    runtime_env_agent_port: u16,
     #[arg(long = "object_store_memory", default_value_t = 0)]
     _object_store_memory: u64,
     #[arg(long = "plasma_directory", default_value = "")]
@@ -245,6 +245,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         node_ip_address: args.node_ip_address,
         port: args.port,
         object_store_socket: args.object_store_socket_name,
+        raylet_socket: args.raylet_socket_name,
+        object_manager_port: args.object_manager_port,
+        metrics_export_port: args.metrics_export_port,
+        runtime_env_agent_port: args.runtime_env_agent_port,
+        metrics_agent_port: args.metrics_agent_port,
         gcs_address: args.gcs_address,
         log_dir: args.log_dir,
         ray_config,

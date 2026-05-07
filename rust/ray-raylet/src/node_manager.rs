@@ -490,13 +490,24 @@ impl NodeManager {
                 .await
         });
 
-        // Register with GCS if an address is configured.
+        // Register with GCS if an address is configured. Match the C++
+        // startup contract by retrying registration during node startup:
+        // Python cluster helpers treat GCS visibility as the signal that the
+        // raylet is ready, so a one-shot transient RegisterNode failure leaves
+        // the process alive but permanently absent from the node table.
         let gcs_state = if !self.config.gcs_address.is_empty() {
-            match self.register_with_gcs(bound_port).await {
-                Ok((client, node_id)) => Some((client, node_id)),
-                Err(e) => {
-                    tracing::error!(error = %e, "Failed to register with GCS, continuing without");
-                    None
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                match self.register_with_gcs(bound_port).await {
+                    Ok((client, node_id)) => break Some((client, node_id)),
+                    Err(e) if std::time::Instant::now() < deadline => {
+                        tracing::warn!(error = %e, "Failed to register with GCS, retrying");
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to register with GCS after retries, continuing without");
+                        break None;
+                    }
                 }
             }
         } else {

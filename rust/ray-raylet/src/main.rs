@@ -21,7 +21,7 @@ use ray_raylet::node_manager::{NodeManager, RayletConfig};
 #[command(name = "raylet", about = "Ray Raylet (Rust)")]
 struct Args {
     /// Node IP address
-    #[arg(long)]
+    #[arg(long, alias = "node_ip_address")]
     node_ip_address: String,
 
     /// Raylet port
@@ -41,15 +41,15 @@ struct Args {
     gcs_address: String,
 
     /// Log directory
-    #[arg(long)]
+    #[arg(long, alias = "log_dir")]
     log_dir: Option<String>,
 
     /// Base64-encoded Ray config
-    #[arg(long)]
+    #[arg(long, alias = "ray_config")]
     ray_config: Option<String>,
 
     /// Node ID (hex string)
-    #[arg(long, default_value = "")]
+    #[arg(long, alias = "node_id", default_value = "")]
     node_id: String,
 
     /// Resources as comma-separated key:value pairs (e.g. "CPU:4,GPU:2")
@@ -71,39 +71,39 @@ struct Args {
     /// C++ raylet compatibility flags accepted from Python services.py but not
     /// used yet by the Rust raylet. Keeping these explicit avoids clap exiting
     /// before the node can register with GCS on normal Python startup paths.
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "object_manager_port", default_value_t = 0)]
     _object_manager_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "min_worker_port", default_value_t = 0)]
     _min_worker_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "max_worker_port", default_value_t = 0)]
     _max_worker_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "maximum_startup_concurrency", default_value_t = 0)]
     _maximum_startup_concurrency: u32,
-    #[arg(long, default_value = "")]
+    #[arg(long = "python_worker_command", default_value = "")]
     _python_worker_command: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "java_worker_command", default_value = "")]
     _java_worker_command: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "cpp_worker_command", default_value = "")]
     _cpp_worker_command: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "native_library_path", default_value = "")]
     _native_library_path: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "temp_dir", default_value = "")]
     _temp_dir: String,
     #[arg(long, default_value = "", alias = "session_dir")]
     _session_dir: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "resource_dir", default_value = "")]
     _resource_dir: String,
     #[arg(long = "metrics-agent-port", default_value_t = 0)]
     _metrics_agent_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "metrics_export_port", default_value_t = 0)]
     _metrics_export_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "runtime_env_agent_port", default_value_t = 0)]
     _runtime_env_agent_port: u16,
-    #[arg(long, default_value_t = 0)]
+    #[arg(long = "object_store_memory", default_value_t = 0)]
     _object_store_memory: u64,
-    #[arg(long, default_value = "")]
+    #[arg(long = "plasma_directory", default_value = "")]
     _plasma_directory: String,
-    #[arg(long, default_value = "")]
+    #[arg(long = "fallback_directory", default_value = "")]
     _fallback_directory: String,
     #[arg(long = "ray-debugger-external", default_value_t = 0)]
     _ray_debugger_external: u8,
@@ -115,6 +115,26 @@ struct Args {
     _huge_pages: bool,
     #[arg(long = "node-name", default_value = "")]
     _node_name: String,
+    #[arg(long = "stdout_filepath", default_value = "")]
+    _stdout_filepath: String,
+    #[arg(long = "stderr_filepath", default_value = "")]
+    _stderr_filepath: String,
+    #[arg(long = "head", default_value_t = false)]
+    _head: bool,
+    #[arg(long = "worker_port_list", default_value = "")]
+    _worker_port_list: String,
+    #[arg(long = "num_prestart_python_workers", default_value_t = 0)]
+    _num_prestart_python_workers: u32,
+    #[arg(long = "runtime_env_agent_command", default_value = "")]
+    _runtime_env_agent_command: String,
+    #[arg(long = "cgroup-path", default_value = "")]
+    _cgroup_path: String,
+    #[arg(long = "system-reserved-cpu-weight", default_value_t = 0)]
+    _system_reserved_cpu_weight: u64,
+    #[arg(long = "system-reserved-memory-bytes", default_value_t = 0)]
+    _system_reserved_memory_bytes: u64,
+    #[arg(long = "system-pids", default_value = "")]
+    _system_pids: String,
 }
 
 

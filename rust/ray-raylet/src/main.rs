@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use ray_common::config::RayConfig;
+use ray_common::id::NodeID;
 use ray_raylet::node_manager::{NodeManager, RayletConfig};
 
 #[derive(Parser, Debug)]
@@ -252,6 +253,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let resources = parse_kv_pairs(&args.resources);
     let labels = parse_label_pairs(&args.labels);
+    let node_id = if args.node_id.len() == NodeID::SIZE * 2
+        && !NodeID::from_hex(&args.node_id).is_nil()
+    {
+        args.node_id
+    } else {
+        NodeID::from_random().hex()
+    };
 
     let config = RayletConfig {
         node_ip_address: args.node_ip_address,
@@ -265,7 +273,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         gcs_address: args.gcs_address,
         log_dir: args.log_dir,
         ray_config,
-        node_id: args.node_id,
+        node_id,
         resources,
         labels,
         session_name: args.session_name,

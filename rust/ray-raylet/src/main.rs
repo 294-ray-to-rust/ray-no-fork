@@ -29,7 +29,7 @@ struct Args {
     port: u16,
 
     /// Object store socket path
-    #[arg(long, alias = "store_socket_name")]
+    #[arg(long, alias = "store_socket_name", alias = "object_store_socket_name")]
     object_store_socket_name: String,
 
     /// Raylet socket path (accepted for C++ CLI compatibility)
@@ -109,6 +109,18 @@ struct Args {
     _ray_debugger_external: u8,
     #[arg(long = "cluster-id", default_value = "")]
     _cluster_id: String,
+    #[arg(long = "config_list", default_value = "")]
+    _config_list: String,
+    #[arg(long = "redis_address", default_value = "")]
+    _redis_address: String,
+    #[arg(long = "redis_port", default_value_t = 0)]
+    _redis_port: u16,
+    #[arg(long = "redis_enable_ssl", default_value_t = false)]
+    _redis_enable_ssl: bool,
+    #[arg(long = "redis_username", default_value = "")]
+    _redis_username: String,
+    #[arg(long = "redis_password", default_value = "")]
+    _redis_password: String,
     #[arg(long = "enable-resource-isolation", default_value_t = false)]
     _enable_resource_isolation: bool,
     #[arg(long = "huge_pages", default_value_t = false)]

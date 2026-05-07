@@ -453,6 +453,43 @@ impl NodeManager {
                 cgroup_manager,
             ));
 
+        let svc = crate::grpc_service::NodeManagerServiceImpl {
+            node_manager: Arc::clone(&self),
+        };
+        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+        health_reporter
+            .set_serving::<rpc::node_manager_service_server::NodeManagerServiceServer<
+                crate::grpc_service::NodeManagerServiceImpl,
+            >>()
+            .await;
+
+        // Build the auth interceptor from config.
+        let auth_mode = if self.config.auth_token.is_some() {
+            ray_rpc::auth::AuthenticationMode::ClusterAuth
+        } else {
+            ray_rpc::auth::AuthenticationMode::Disabled
+        };
+        let auth = ray_rpc::auth::AuthInterceptor::new(auth_mode, self.config.auth_token.clone());
+
+        // Start serving before registering with GCS. Python's cluster tests wait
+        // for the registered node to appear via the GCS node table, and the C++
+        // raylet has its node-manager RPC service available by the time GCS
+        // observes the node as alive. If the Rust raylet registers first and
+        // only starts serving afterwards, GCS/node-info consumers can miss or
+        // demote the just-registered node during startup.
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+        let server_task = tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(
+                    rpc::node_manager_service_server::NodeManagerServiceServer::with_interceptor(
+                        svc, auth,
+                    ),
+                )
+                .add_service(health_service)
+                .serve_with_incoming_shutdown(incoming, shutdown_signal())
+                .await
+        });
+
         // Register with GCS if an address is configured.
         let gcs_state = if !self.config.gcs_address.is_empty() {
             match self.register_with_gcs(bound_port).await {
@@ -479,35 +516,7 @@ impl NodeManager {
             }
         }
 
-        let svc = crate::grpc_service::NodeManagerServiceImpl {
-            node_manager: Arc::clone(&self),
-        };
-        let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
-        health_reporter
-            .set_serving::<rpc::node_manager_service_server::NodeManagerServiceServer<
-                crate::grpc_service::NodeManagerServiceImpl,
-            >>()
-            .await;
-
-        // Build the auth interceptor from config.
-        let auth_mode = if self.config.auth_token.is_some() {
-            ray_rpc::auth::AuthenticationMode::ClusterAuth
-        } else {
-            ray_rpc::auth::AuthenticationMode::Disabled
-        };
-        let auth = ray_rpc::auth::AuthInterceptor::new(
-            auth_mode,
-            self.config.auth_token.clone(),
-        );
-
-        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        tonic::transport::Server::builder()
-            .add_service(
-                rpc::node_manager_service_server::NodeManagerServiceServer::with_interceptor(svc, auth),
-            )
-            .add_service(health_service)
-            .serve_with_incoming_shutdown(incoming, shutdown_signal())
-            .await?;
+        server_task.await??;
 
         // Clean up: unregister from GCS.
         if let Some((gcs_client, node_id)) = &gcs_state {

@@ -1239,7 +1239,10 @@ impl PyCoreWorker {
                         // the PyListIterator object itself. Passing the iterator object
                         // produced calls like f(<list_iterator>) for zero-arg tasks and
                         // sleep(<list_iterator>) for wait tests.
-                        let py_args_vec: Vec<pyo3::Bound<'_, pyo3::PyAny>> = py_args.iter().collect();
+                        let py_args_vec: Vec<pyo3::Bound<'_, pyo3::PyAny>> = py_args
+                            .iter()?
+                            .filter_map(|item| item.ok())
+                            .collect();
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
                         let value = func.call(&py_args_tuple, Some(&py_kwargs))?;
                         let context = global_worker.call_method0("get_serialization_context")?;

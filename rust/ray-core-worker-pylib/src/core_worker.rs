@@ -1215,8 +1215,8 @@ impl PyCoreWorker {
                         }
                         Ok(serialized_returns)
                     })();
-                    if let Ok(serialized_returns) = maybe_result {
-                        if serialized_returns.len() == return_oids.len() {
+                    match maybe_result {
+                        Ok(serialized_returns) if serialized_returns.len() == return_oids.len() => {
                             for (oid, (data, metadata)) in return_oids.iter().zip(serialized_returns) {
                                 let ray_obj = ray_core_worker::memory_store::RayObject::new(
                                     bytes::Bytes::from(data),
@@ -1230,6 +1230,13 @@ impl PyCoreWorker {
                                 .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
                                 .collect());
                         }
+                        Ok(serialized_returns) => {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err(format!("local Python task bridge produced {} returns for {} ObjectRefs",
+                                serialized_returns.len(),
+                                return_oids.len()
+                            )));
+                        }
+                        Err(err) => return Err(err),
                     }
                 }
             }

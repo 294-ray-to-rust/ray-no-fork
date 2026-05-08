@@ -405,7 +405,7 @@ struct GenericStub {
 #[pymethods]
 impl GenericStub {
     #[new]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn new(
         args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
@@ -435,7 +435,7 @@ impl GenericStub {
     }
 
     #[classmethod]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn from_class(
         _cls: &Bound<'_, PyType>,
         args: &Bound<'_, pyo3::types::PyTuple>,
@@ -456,7 +456,7 @@ impl GenericStub {
     }
 
     #[classmethod]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn from_function(
         _cls: &Bound<'_, PyType>,
         args: &Bound<'_, pyo3::types::PyTuple>,

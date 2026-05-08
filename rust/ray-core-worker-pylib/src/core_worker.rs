@@ -1134,11 +1134,11 @@ impl PyCoreWorker {
             .collect();
 
         // Legacy Python tests currently run before the Rust raylet has a real
-        // Python worker pool to return from RequestWorkerLease. For zero-arg
-        // remote functions, execute the descriptor in the driver as a temporary
-        // compatibility bridge so basic ray.get/ray.wait semantics make
-        // progress instead of timing out forever on an unfulfilled lease.
-        if args.len()? >= 17 && task_args.is_empty() {
+        // Python worker pool to return from RequestWorkerLease. Execute simple
+        // Python remote functions in the driver as a temporary compatibility
+        // bridge so basic ray.get/ray.wait semantics make progress instead of
+        // timing out forever on an unfulfilled lease.
+        if args.len()? >= 17 {
             if let Ok(function_descriptor) = args.get_item(1) {
                 if let Some((module_name, function_name)) = function_descriptor
                     .getattr("module_name")
@@ -1174,7 +1174,12 @@ impl PyCoreWorker {
                                 module.getattr(function_name.as_str())
                             })?;
 
-                        let value = func.call0()?;
+                        let py_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
+                            .iter()?
+                            .filter_map(|item| item.ok())
+                            .collect();
+                        let py_args = pyo3::types::PyTuple::new_bound(py, py_args);
+                        let value = func.call1(py_args)?;
                         let context = global_worker.call_method0("get_serialization_context")?;
                         let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> = if num_returns > 1 {
                             value.iter()?.filter_map(|item| item.ok()).collect()

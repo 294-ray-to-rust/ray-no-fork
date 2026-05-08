@@ -1192,9 +1192,22 @@ impl PyCoreWorker {
                         // exported via GCS rather than importable as module attrs.
                         let function_manager = global_worker.getattr("function_actor_manager")?;
                         let job_id = global_worker.getattr("current_job_id")?;
-                        let func = function_manager
-                            .call_method1("get_execution_info", (job_id, function_descriptor.clone()))
-                            .and_then(|info| info.getattr("function"))
+                        let func = function_descriptor
+                            .getattr("function")
+                            .and_then(|maybe_func| {
+                                if maybe_func.is_none() {
+                                    Err(pyo3::exceptions::PyAttributeError::new_err(
+                                        "descriptor has no local function",
+                                    ))
+                                } else {
+                                    Ok(maybe_func)
+                                }
+                            })
+                            .or_else(|_| {
+                                function_manager
+                                    .call_method1("get_execution_info", (job_id, function_descriptor.clone()))
+                                    .and_then(|info| info.getattr("function"))
+                            })
                             .or_else(|_| {
                                 let module = pyo3::types::PyModule::import_bound(
                                     py,

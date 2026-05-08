@@ -399,6 +399,7 @@ struct GenericStub {
     function_name: String,
     class_name: String,
     function_hash: String,
+    function: Option<pyo3::PyObject>,
 }
 
 #[cfg(feature = "python")]
@@ -426,12 +427,12 @@ impl GenericStub {
             .get_item(3)
             .and_then(|v| v.extract::<String>())
             .unwrap_or_default();
-        GenericStub { module_name, function_name, class_name, function_hash }
+        GenericStub { module_name, function_name, class_name, function_hash, function: None }
     }
 
     #[classmethod]
     fn instance(_cls: &Bound<'_, PyType>) -> Self {
-        GenericStub { module_name: String::new(), function_name: String::new(), class_name: String::new(), function_hash: String::new() }
+        GenericStub { module_name: String::new(), function_name: String::new(), class_name: String::new(), function_hash: String::new(), function: None }
     }
 
     #[classmethod]
@@ -452,7 +453,7 @@ impl GenericStub {
             .and_then(|c| c.getattr("__qualname__").ok())
             .and_then(|m| m.extract::<String>().ok())
             .unwrap_or_default();
-        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new() }
+        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new(), function: None }
     }
 
     #[classmethod]
@@ -479,7 +480,7 @@ impl GenericStub {
             .and_then(|u| u.getattr("hex").ok())
             .and_then(|h| h.extract::<String>().ok())
             .unwrap_or_default();
-        GenericStub { module_name, function_name, class_name: String::new(), function_hash }
+        GenericStub { module_name, function_name, class_name: String::new(), function_hash, function: function.map(|f| f.into()) }
     }
 
 
@@ -494,6 +495,11 @@ impl GenericStub {
 
     #[getter]
     fn function_hash(&self) -> &str { &self.function_hash }
+
+    #[getter]
+    fn function(&self, py: pyo3::Python<'_>) -> Option<pyo3::PyObject> {
+        self.function.as_ref().map(|f| f.clone_ref(py))
+    }
 
     #[getter]
     fn repr(&self) -> String { format!("{}.{}", self.module_name, self.function_name) }

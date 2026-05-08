@@ -1,0 +1,11 @@
+group: merge queue sanity
+sort_key: merge-queue-sanity
+steps:
+  - label: ":white_check_mark: merge queue sanity"
+    key: merge-queue-sanity
+    tags:
+      - always
+    instance_type: small
+    commands:
+      - echo "Merge queue is intentionally lightweight; RayRust PR CI runs the representative canary manifest and main remains the full authoritative suite."
+      - git rev-parse --verify HEAD

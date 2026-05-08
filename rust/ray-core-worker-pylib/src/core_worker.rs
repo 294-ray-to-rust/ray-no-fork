@@ -1176,19 +1176,30 @@ impl PyCoreWorker {
 
                         let value = func.call0()?;
                         let context = global_worker.call_method0("get_serialization_context")?;
-                        let serialized = context.call_method1("serialize", (value,))?;
-                        let data: Vec<u8> = serialized.call_method0("to_bytes")?.extract()?;
-                        let metadata: Vec<u8> = serialized.getattr("metadata")?.extract()?;
-                        Ok((data, metadata))
+                        let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> = if num_returns > 1 {
+                            value.iter()?.filter_map(|item| item.ok()).collect()
+                        } else {
+                            vec![value]
+                        };
+                        let mut serialized_returns = Vec::with_capacity(values.len());
+                        for value in values {
+                            let serialized = context.call_method1("serialize", (value,))?;
+                            let data: Vec<u8> = serialized.call_method0("to_bytes")?.extract()?;
+                            let metadata: Vec<u8> = serialized.getattr("metadata")?.extract()?;
+                            serialized_returns.push((data, metadata));
+                        }
+                        Ok(serialized_returns)
                     })();
-                    if let Ok((data, metadata)) = maybe_result {
-                        if let Some(oid) = return_oids.first() {
-                            let ray_obj = ray_core_worker::memory_store::RayObject::new(
-                                bytes::Bytes::from(data),
-                                bytes::Bytes::from(metadata),
-                                Vec::new(),
-                            );
-                            let _ = self.inner.memory_store().put(*oid, ray_obj);
+                    if let Ok(serialized_returns) = maybe_result {
+                        if serialized_returns.len() == return_oids.len() {
+                            for (oid, (data, metadata)) in return_oids.iter().zip(serialized_returns) {
+                                let ray_obj = ray_core_worker::memory_store::RayObject::new(
+                                    bytes::Bytes::from(data),
+                                    bytes::Bytes::from(metadata),
+                                    Vec::new(),
+                                );
+                                let _ = self.inner.memory_store().put(*oid, ray_obj);
+                            }
                             return Ok(return_oids
                                 .into_iter()
                                 .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))

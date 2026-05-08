@@ -1205,7 +1205,12 @@ impl PyCoreWorker {
                         for value in values {
                             let serialized = context.call_method1("serialize", (value,))?;
                             let data: Vec<u8> = serialized.call_method0("to_bytes")?.extract()?;
-                            let metadata: Vec<u8> = serialized.getattr("metadata")?.extract()?;
+                            let metadata = serialized.getattr("metadata")?;
+                            let metadata: Vec<u8> = if metadata.is_none() {
+                                Vec::new()
+                            } else {
+                                metadata.extract()?
+                            };
                             serialized_returns.push((data, metadata));
                         }
                         Ok(serialized_returns)

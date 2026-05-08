@@ -1152,14 +1152,29 @@ impl PyCoreWorker {
                     )
                 {
                     let maybe_result = (|| -> pyo3::PyResult<(Vec<u8>, Vec<u8>)> {
-                        let module = pyo3::types::PyModule::import_bound(py, module_name.as_str())?;
-                        let func = module.getattr(function_name.as_str())?;
-                        let value = func.call0()?;
                         let worker_mod = pyo3::types::PyModule::import_bound(
                             py,
                             "ray._private.worker",
                         )?;
                         let global_worker = worker_mod.getattr("global_worker")?;
+
+                        // Prefer Ray's own FunctionActorManager because many test
+                        // remote functions are nested (e.g. test_*.f) and are
+                        // exported via GCS rather than importable as module attrs.
+                        let function_manager = global_worker.getattr("function_actor_manager")?;
+                        let job_id = global_worker.getattr("current_job_id")?;
+                        let func = function_manager
+                            .call_method1("get_execution_info", (job_id, function_descriptor.clone()))
+                            .and_then(|info| info.getattr("function"))
+                            .or_else(|_| {
+                                let module = pyo3::types::PyModule::import_bound(
+                                    py,
+                                    module_name.as_str(),
+                                )?;
+                                module.getattr(function_name.as_str())
+                            })?;
+
+                        let value = func.call0()?;
                         let context = global_worker.call_method0("get_serialization_context")?;
                         let serialized = context.call_method1("serialize", (value,))?;
                         let data: Vec<u8> = serialized.call_method0("to_bytes")?.extract()?;

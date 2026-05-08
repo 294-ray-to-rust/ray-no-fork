@@ -1152,8 +1152,8 @@ impl PyCoreWorker {
                     )
                 {
                     let maybe_result = (|| -> pyo3::PyResult<(Vec<u8>, Vec<u8>)> {
-                        let module = pyo3::types::PyModule::import_bound(py, &module_name)?;
-                        let func = module.getattr(&function_name)?;
+                        let module = pyo3::types::PyModule::import_bound(py, module_name.as_str())?;
+                        let func = module.getattr(function_name.as_str())?;
                         let value = func.call0()?;
                         let worker_mod = pyo3::types::PyModule::import_bound(
                             py,

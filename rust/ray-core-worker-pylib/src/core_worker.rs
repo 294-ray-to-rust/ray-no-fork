@@ -1151,7 +1151,7 @@ impl PyCoreWorker {
                             .and_then(|f| f.extract::<String>().ok()),
                     )
                 {
-                    let maybe_result = (|| -> pyo3::PyResult<(Vec<u8>, Vec<u8>)> {
+                    let maybe_result = (|| -> pyo3::PyResult<Vec<(Vec<u8>, Vec<u8>)>> {
                         let worker_mod = pyo3::types::PyModule::import_bound(
                             py,
                             "ray._private.worker",

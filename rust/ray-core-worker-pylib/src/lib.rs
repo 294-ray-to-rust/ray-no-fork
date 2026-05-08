@@ -381,9 +381,12 @@ impl MessagePackSerializedObject {
 
     fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let mut out = vec![0_u8; self.total_bytes()];
-        // This is enough for Python-side smoke tests and preserves the Cython
-        // layout: msgpack payload starts at MESSAGE_PACK_OFFSET, followed by
-        // any nested serialized object bytes.
+        // Match Ray's serialized msgpack buffer layout closely enough for
+        // Python deserialization: the first 8 bytes store the msgpack payload
+        // length, byte 8 is reserved, then msgpack bytes are followed by the
+        // nested Pickle5 payload bytes.
+        let msgpack_len = self.msgpack_data.len() as u64;
+        out[..8].copy_from_slice(&msgpack_len.to_le_bytes());
         let start = ray_common::constants::MESSAGE_PACK_OFFSET;
         out[start..start + self.msgpack_data.len()].copy_from_slice(&self.msgpack_data);
         if let Some(nested) = &self.nested_bytes {
@@ -939,10 +942,18 @@ fn split_buffer<'py>(
     data: &Bound<'_, PyAny>,
 ) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyBytes>)> {
     let bytes: Vec<u8> = data.extract()?;
-    let offset = ray_common::constants::MESSAGE_PACK_OFFSET.min(bytes.len());
+    let offset = ray_common::constants::MESSAGE_PACK_OFFSET;
+    if bytes.len() < offset {
+        return Ok((PyBytes::new_bound(py, &[]), PyBytes::new_bound(py, &[])));
+    }
+
+    let mut len_bytes = [0_u8; 8];
+    len_bytes.copy_from_slice(&bytes[..8]);
+    let msgpack_len = usize::try_from(u64::from_le_bytes(len_bytes)).unwrap_or(0);
+    let msgpack_end = offset.saturating_add(msgpack_len).min(bytes.len());
     Ok((
-        PyBytes::new_bound(py, &bytes[offset..]),
-        PyBytes::new_bound(py, &[]),
+        PyBytes::new_bound(py, &bytes[offset..msgpack_end]),
+        PyBytes::new_bound(py, &bytes[msgpack_end..]),
     ))
 }
 

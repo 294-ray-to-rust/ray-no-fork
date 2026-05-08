@@ -1174,12 +1174,27 @@ impl PyCoreWorker {
                                 module.getattr(function_name.as_str())
                             })?;
 
-                        let py_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
+                        // Ray's Python submit_task ABI passes the *flattened* argument
+                        // list produced by ray._common.signature.flatten_args:
+                        // [DUMMY_TYPE, positional_arg, keyword, keyword_arg, ...].
+                        // Recover real (*args, **kwargs) before executing the local
+                        // compatibility bridge; passing the flattened list directly
+                        // makes ordinary f.remote(1) call f(DUMMY_TYPE, 1), which falls
+                        // back to the nonfunctional lease path and times out.
+                        let flat_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
                             .iter()?
                             .filter_map(|item| item.ok())
                             .collect();
-                        let py_args = pyo3::types::PyTuple::new_bound(py, py_args);
-                        let value = func.call1(py_args)?;
+                        let signature_mod =
+                            pyo3::types::PyModule::import_bound(py, "ray._common.signature")?;
+                        let recovered = signature_mod.call_method1(
+                            "recover_args",
+                            (pyo3::types::PyList::new_bound(py, flat_args),),
+                        )?;
+                        let py_args = recovered.get_item(0)?.downcast_into::<pyo3::types::PyList>()?;
+                        let py_kwargs = recovered.get_item(1)?.downcast_into::<pyo3::types::PyDict>()?;
+                        let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args.iter());
+                        let value = func.call(&py_args_tuple, Some(&py_kwargs))?;
                         let context = global_worker.call_method0("get_serialization_context")?;
                         let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> = if num_returns > 1 {
                             value.iter()?.filter_map(|item| item.ok()).collect()

@@ -415,24 +415,40 @@ impl PyCoreWorker {
         Ok(out)
     }
 
-    /// Wait for at least num_objects to be ready.
+    /// Cython-compatible CoreWorker.wait() API used by ray.wait().
     ///
-    /// Returns a list of booleans indicating which objects are ready.
+    /// Python passes ObjectRef instances and expects the input refs split into
+    /// `(ready, remaining)` lists while preserving input order.
     #[pyo3(name = "wait")]
     fn py_wait(
         &self,
         py: pyo3::Python<'_>,
-        object_ids: Vec<Vec<u8>>,
+        object_refs: Vec<pyo3::Py<crate::object_ref::PyObjectRef>>,
         num_objects: usize,
         timeout_ms: u64,
-    ) -> pyo3::PyResult<Vec<bool>> {
-        let oids: Vec<ObjectID> = object_ids
+        _fetch_local: bool,
+    ) -> pyo3::PyResult<(
+        Vec<pyo3::Py<crate::object_ref::PyObjectRef>>,
+        Vec<pyo3::Py<crate::object_ref::PyObjectRef>>,
+    )> {
+        let oids: Vec<ObjectID> = object_refs
             .iter()
-            .map(|b| ObjectID::from_binary(b))
+            .map(|r| *r.bind(py).borrow().object_id())
             .collect();
         // Release the GIL while waiting.
-        py.allow_threads(|| self.wait(&oids, num_objects, timeout_ms))
-            .map_err(crate::common::to_py_err)
+        let ready_mask = py
+            .allow_threads(|| self.wait(&oids, num_objects, timeout_ms))
+            .map_err(crate::common::to_py_err)?;
+        let mut ready = Vec::new();
+        let mut remaining = Vec::new();
+        for (object_ref, is_ready) in object_refs.into_iter().zip(ready_mask.into_iter()) {
+            if is_ready {
+                ready.push(object_ref);
+            } else {
+                remaining.push(object_ref);
+            }
+        }
+        Ok((ready, remaining))
     }
 
     /// Delete (free) objects by their binary IDs.

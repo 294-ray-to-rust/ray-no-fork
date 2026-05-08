@@ -394,7 +394,12 @@ struct RawSerializedObject {
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
-struct GenericStub;
+struct GenericStub {
+    module_name: String,
+    function_name: String,
+    class_name: String,
+    function_hash: String,
+}
 
 #[cfg(feature = "python")]
 #[pymethods]
@@ -402,35 +407,114 @@ impl GenericStub {
     #[new]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn new(
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let module_name = args
+            .get_item(0)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let function_name = args
+            .get_item(1)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let class_name = args
+            .get_item(2)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let function_hash = args
+            .get_item(3)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name, class_name, function_hash }
     }
 
     #[classmethod]
     fn instance(_cls: &Bound<'_, PyType>) -> Self {
-        GenericStub
+        GenericStub { module_name: String::new(), function_name: String::new(), class_name: String::new(), function_hash: String::new() }
     }
 
     #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn from_class(
         _cls: &Bound<'_, PyType>,
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let target_class = args.get_item(0).ok();
+        let module_name = target_class
+            .as_ref()
+            .and_then(|c| c.getattr("__module__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let class_name = target_class
+            .as_ref()
+            .and_then(|c| c.getattr("__qualname__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new() }
     }
 
     #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn from_function(
         _cls: &Bound<'_, PyType>,
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let function = args.get_item(0).ok();
+        let function_uuid = args.get_item(1).ok();
+        let module_name = function
+            .as_ref()
+            .and_then(|f| f.getattr("__module__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let function_name = function
+            .as_ref()
+            .and_then(|f| f.getattr("__qualname__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let function_hash = function_uuid
+            .as_ref()
+            .and_then(|u| u.getattr("hex").ok())
+            .and_then(|h| h.extract::<String>().ok())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name, class_name: String::new(), function_hash }
+    }
+
+
+    #[getter]
+    fn module_name(&self) -> &str { &self.module_name }
+
+    #[getter]
+    fn function_name(&self) -> &str { &self.function_name }
+
+    #[getter]
+    fn class_name(&self) -> &str { &self.class_name }
+
+    #[getter]
+    fn function_hash(&self) -> &str { &self.function_hash }
+
+    #[getter]
+    fn repr(&self) -> String { format!("{}.{}", self.module_name, self.function_name) }
+
+    fn __repr__(&self) -> String { self.repr() }
+
+    #[classmethod]
+    #[pyo3(signature = (value, python_serializer=None))]
+    fn dumps(
+        _cls: &Bound<'_, PyType>,
+        py: pyo3::Python<'_>,
+        value: &Bound<'_, pyo3::types::PyAny>,
+        python_serializer: Option<&Bound<'_, pyo3::types::PyAny>>,
+    ) -> pyo3::PyResult<pyo3::PyObject> {
+        if let Some(serializer) = python_serializer {
+            let index = serializer.call1((value,))?;
+            let msgpack = pyo3::types::PyModule::import_bound(py, "msgpack")?;
+            return Ok(msgpack.call_method1("packb", (index,))?.into());
+        }
+        let pickle = pyo3::types::PyModule::import_bound(py, "pickle")?;
+        Ok(pickle.call_method1("dumps", (value,))?.into())
     }
 
     #[classmethod]

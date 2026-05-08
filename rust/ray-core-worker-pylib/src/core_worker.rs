@@ -675,6 +675,35 @@ impl PyCoreWorker {
         Ok(crate::ids::PyActorID::from_inner(ActorID::from_random()))
     }
 
+    /// Cython-compatible CoreWorker.submit_actor_task() API.
+    ///
+    /// Actor execution is not complete yet, but Python's actor layer calls this
+    /// exact method name with the legacy Cython signature. Surface the method
+    /// and return ObjectRefs so actor smoke tests can progress to the next
+    /// concrete actor/runtime gap instead of stopping at AttributeError.
+    #[pyo3(name = "submit_actor_task", signature = (*args))]
+    fn py_submit_actor_task_legacy(
+        &self,
+        args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+    ) -> pyo3::PyResult<Vec<crate::object_ref::PyObjectRef>> {
+        let num_returns = args
+            .get_item(5)
+            .and_then(|v| v.extract::<i64>())
+            .unwrap_or(1);
+        let num_returns = std::cmp::max(num_returns, 1) as u32;
+        let task_id = TaskID::from_random();
+        let refs = (1..=num_returns)
+            .map(|i| {
+                crate::object_ref::PyObjectRef::new(
+                    ObjectID::from_index(&task_id, i),
+                    None,
+                    String::new(),
+                )
+            })
+            .collect();
+        Ok(refs)
+    }
+
     /// Kill an actor by binary actor ID.
     #[pyo3(name = "kill_actor")]
     fn py_kill_actor(

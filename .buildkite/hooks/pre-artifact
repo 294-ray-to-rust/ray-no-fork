@@ -30,10 +30,19 @@ if [[ "${OSTYPE:-}" == linux* ]]; then
     alpine:latest sh -c '
       ls -la /from 2>&1 || true
       copied=0
-      for f in /from/*.tar.gz /from/*.tar; do
+      skipped=0
+      max_files="${RAYCI_BRIDGE_MAX_ARTIFACTS:-100}"
+      recent_minutes="${RAYCI_BRIDGE_ARTIFACT_MINUTES:-360}"
+      while IFS= read -r f; do
         [ -f "$f" ] || continue
+        if [ "$copied" -ge "$max_files" ]; then
+          skipped=$((skipped+1))
+          continue
+        fi
         cp "$f" /to/ && copied=$((copied+1))
-      done
-      echo "bridged $copied tarball(s) into per-slot artifact dir"
+      done <<EOF
+$(find /from -maxdepth 1 \( -name "*.tar.gz" -o -name "*.tar" \) -mmin -"$recent_minutes" -type f 2>/dev/null | sort)
+EOF
+      echo "bridged $copied recent tarball(s) into per-slot artifact dir; skipped $skipped over cap ${max_files}"
     ' || true
 fi

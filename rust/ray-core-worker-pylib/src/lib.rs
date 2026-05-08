@@ -330,6 +330,14 @@ impl Pickle5SerializedObject {
     fn total_bytes(&self) -> usize {
         self.inband.len()
     }
+
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        // Minimal Python-compatible surface for local task return storage.
+        // The Rust shim does not yet model Pickle5Writer's out-of-band buffers,
+        // but in-band pickle bytes are enough for the primitive objects covered
+        // by the RayRust canary tests.
+        PyBytes::new_bound(py, &self.inband)
+    }
 }
 
 #[cfg(feature = "python")]

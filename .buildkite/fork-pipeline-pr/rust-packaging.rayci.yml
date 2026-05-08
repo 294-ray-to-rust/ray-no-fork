@@ -102,9 +102,9 @@ steps:
     parallelism: 4
     commands:
       - |
-        RAYRUST_CANARY_TARGETS="$(grep -Ev '^[[:space:]]*(#|$)' .buildkite/rayrust-pr-canary-targets.txt | tr '\n' ' ')"
-        echo "RayRust PR canary targets: $RAYRUST_CANARY_TARGETS"
-        bazel run //ci/ray_ci:test_in_docker -- $RAYRUST_CANARY_TARGETS core \
+        RAYRUST_CANARY_TARGETS="$$(grep -Ev '^[[:space:]]*(#|$$)' .buildkite/rayrust-pr-canary-targets.txt | tr '\n' ' ')"
+        echo "RayRust PR canary targets: $$RAYRUST_CANARY_TARGETS"
+        bazel run //ci/ray_ci:test_in_docker -- $$RAYRUST_CANARY_TARGETS core \
           --install-mask all-ray-libraries \
           --python-version 3.10 --build-name corebuild-py3.10 \
           --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" \

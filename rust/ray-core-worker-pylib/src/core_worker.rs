@@ -150,6 +150,86 @@ impl PyCoreWorker {
     pub fn inner(&self) -> &Arc<CoreWorker> {
         &self.inner
     }
+
+    #[cfg(feature = "python")]
+    fn install_push_task_dispatch_callback(&self) {
+        let driver_store = Arc::clone(self.inner.memory_store());
+        self.inner
+            .normal_task_submitter()
+            .set_dispatch_callback(Box::new(move |spec, addr| {
+                let endpoint = format!("http://{}:{}", addr.ip_address, addr.port);
+                let spec_clone = spec.clone();
+                let wid_bytes = addr.worker_id.clone();
+                let store = Arc::clone(&driver_store);
+                let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
+                tokio::spawn(async move {
+                    let result = async {
+                        let channel = tonic::transport::Endpoint::from_shared(endpoint)
+                            .map_err(|e| format!("invalid endpoint: {}", e))?
+                            .connect()
+                            .await
+                            .map_err(|e| format!("connect failed: {}", e))?;
+                        let mut client =
+                            ray_proto::ray::rpc::core_worker_service_client::CoreWorkerServiceClient::new(
+                                channel,
+                            );
+                        let response = client
+                            .push_task(ray_proto::ray::rpc::PushTaskRequest {
+                                intended_worker_id: wid_bytes,
+                                task_spec: Some(spec_clone),
+                                ..Default::default()
+                            })
+                            .await
+                            .map_err(|e| format!("push_task failed: {}", e))?;
+                        let reply = response.into_inner();
+                        if !reply.task_execution_error.is_empty() && reply.return_objects.is_empty() {
+                            return Err(format!("TASK_ERROR:{}", reply.task_execution_error));
+                        }
+                        for ret_obj in &reply.return_objects {
+                            let oid = ObjectID::from_binary(&ret_obj.object_id);
+                            let ray_obj = RayObject::new(
+                                Bytes::copy_from_slice(&ret_obj.data),
+                                Bytes::copy_from_slice(&ret_obj.metadata),
+                                Vec::new(),
+                            );
+                            let _ = store.put(oid, ray_obj);
+                        }
+                        Ok(())
+                    }
+                    .await;
+                    let _ = tx.send(result);
+                });
+                rx.recv()
+                    .map_err(|_| {
+                        ray_core_worker::error::CoreWorkerError::Internal(
+                            "task dispatch channel closed".into(),
+                        )
+                    })?
+                    .map_err(ray_core_worker::error::CoreWorkerError::Internal)
+            }));
+    }
+
+    #[cfg(feature = "python")]
+    fn configure_raylet_dispatch(&self, node_ip_address: &str, node_manager_port: u16) -> pyo3::PyResult<()> {
+        let address = format!("http://{}:{}", node_ip_address, node_manager_port);
+        let client = self
+            .runtime
+            .block_on(ray_raylet_rpc_client::client::RayletRpcClient::connect(
+                &address,
+                ray_rpc::client::RetryConfig::default(),
+            ))
+            .map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "failed to connect to raylet at {}: {}",
+                    address, e
+                ))
+            })?;
+        self.inner
+            .normal_task_submitter()
+            .set_raylet_client(Arc::new(client));
+        self.install_push_task_dispatch_callback();
+        Ok(())
+    }
 }
 
 // ─── PyO3 methods (only when "python" feature is enabled) ────────────
@@ -185,6 +265,7 @@ impl PyCoreWorker {
             node_id,
             max_concurrency,
             serialized_job_config,
+            node_manager_port,
         ) = if argc >= 19 {
             // Legacy form from ray._private.worker.Worker.connect(). Most of
             // these arguments describe C++ worker internals that the Rust
@@ -216,6 +297,7 @@ impl PyCoreWorker {
                 )
             };
             let serialized_job_config = args.get_item(9)?.extract::<Vec<u8>>()?;
+            let node_manager_port = args.get_item(7)?.extract::<i32>().ok();
             (
                 worker_type,
                 node_ip_address,
@@ -225,6 +307,7 @@ impl PyCoreWorker {
                 None,
                 0,
                 serialized_job_config,
+                node_manager_port,
             )
         } else {
             let worker_type = args.get_item(0)?.extract::<i32>()?;
@@ -290,6 +373,7 @@ impl PyCoreWorker {
                 node_id,
                 max_concurrency,
                 Vec::new(),
+                None,
             )
         };
 
@@ -298,7 +382,7 @@ impl PyCoreWorker {
         })?;
         let options = CoreWorkerOptions {
             worker_type: wt.to_core(),
-            node_ip_address,
+            node_ip_address: node_ip_address.clone(),
             gcs_address,
             job_id: JobID::from_int(job_id_int),
             worker_id: worker_id.unwrap_or_else(WorkerID::from_random),
@@ -308,6 +392,9 @@ impl PyCoreWorker {
         };
         let mut worker = Self::new(options);
         worker.serialized_job_config = serialized_job_config;
+        if let Some(port) = node_manager_port.filter(|port| *port > 0) {
+            worker.configure_raylet_dispatch(&node_ip_address, port as u16)?;
+        }
         Ok(worker)
     }
 

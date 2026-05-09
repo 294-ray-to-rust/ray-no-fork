@@ -29,8 +29,7 @@
 # When in doubt: smaller is better. The canary is the durable coverage;
 # this list is just the tripwire.
 
-# Currently-watched targets (recent task-dispatch / wait fixes — remove
+# Currently-watched targets (recent task-dispatch / ObjectRef fixes — remove
 # as soon as the fix makes them green here; normal canary/main coverage
 # still covers them afterward).
 //python/ray/tests:test_mini
-//python/ray/tests:test_wait

@@ -857,7 +857,11 @@ impl PyCoreWorker {
     ) -> pyo3::PyResult<crate::ids::PyPlacementGroupID> {
         let pg_id = crate::ids::PyPlacementGroupID::from_random();
         let mut proto_bundles = Vec::new();
-        if let Ok(bundles) = args.get_item(0) {
+        // Legacy Python calls create_placement_group(name, bundles, strategy,
+        // is_detached, soft_target_node_id, bundle_label_selector). Earlier
+        // Rust shim code inspected args[0], which is the name string, so bundle
+        // validation/table recording silently saw an empty bundle list.
+        if let Ok(bundles) = args.get_item(1) {
             if let Ok(iter) = bundles.iter() {
                 for (i, bundle) in iter.flatten().enumerate() {
                     if let Ok(dict) = bundle.downcast::<pyo3::types::PyDict>() {

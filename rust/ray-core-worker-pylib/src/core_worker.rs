@@ -25,6 +25,8 @@ use ray_core_worker::CoreWorker;
 
 #[cfg(feature = "python")]
 use pyo3::types::{PyAnyMethods, PyTuple};
+#[cfg(feature = "python")]
+use pyo3::IntoPy;
 
 /// Python-facing wrapper around `CoreWorker`.
 #[cfg_attr(feature = "python", pyo3::pyclass(module = "_raylet"))]
@@ -535,6 +537,21 @@ impl PyCoreWorker {
             }
         }
         Ok(out)
+    }
+
+    /// Cython-compatible CoreWorker.serialize_object_ref() API used by Ray's
+    /// Python serialization context when an ObjectRef is nested inside another
+    /// object. Return the ObjectRef itself plus optional owner metadata and an
+    /// object status. The current Rust in-memory compatibility bridge does not
+    /// need owner borrowing, so owner_address=None is sufficient and the status
+    /// is ignored by the deserializer on that path.
+    #[pyo3(name = "serialize_object_ref")]
+    fn py_serialize_object_ref(
+        &self,
+        py: pyo3::Python<'_>,
+        object_ref: pyo3::Py<crate::object_ref::PyObjectRef>,
+    ) -> pyo3::PyResult<(pyo3::PyObject, pyo3::PyObject, i32)> {
+        Ok((object_ref.into_py(py), py.None(), 0))
     }
 
     /// Cython-compatible CoreWorker.wait() API used by ray.wait().

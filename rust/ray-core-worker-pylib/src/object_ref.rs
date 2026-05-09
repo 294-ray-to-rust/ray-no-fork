@@ -136,6 +136,17 @@ impl PyObjectRef {
         self.call_site.clone()
     }
 
+    /// Return tensor transport metadata for this ObjectRef.
+    ///
+    /// The Rust compatibility path does not implement GPU tensor transport yet;
+    /// Ray's Python serializer still calls this unconditionally when reducing an
+    /// ObjectRef contained inside another object, so expose the normal non-GPU
+    /// value.
+    #[pyo3(name = "tensor_transport")]
+    fn py_tensor_transport(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        py.None()
+    }
+
     /// Get the owner IP address (if set).
     fn owner_ip(&self) -> Option<String> {
         self.owner_address.as_ref().map(|a| a.ip_address.clone())

@@ -944,7 +944,7 @@ impl GlobalStateAccessor {
     }
 
     fn get_system_config(&self) -> &str {
-        "{}"
+        r#"{"automatic_object_spilling_enabled":false,"object_spilling_config":"{}"}"#
     }
 
     fn get_next_job_id(&self) -> u32 {

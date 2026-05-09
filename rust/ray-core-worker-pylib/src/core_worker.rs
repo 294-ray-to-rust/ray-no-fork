@@ -11,7 +11,8 @@
 //! Owns an `Arc<CoreWorker>` and a `tokio::runtime::Runtime`, bridging
 //! sync Python calls into async Rust via `runtime.block_on()`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -31,6 +32,8 @@ pub struct PyCoreWorker {
     inner: Arc<CoreWorker>,
     runtime: tokio::runtime::Runtime,
     serialized_job_config: Vec<u8>,
+    #[cfg(feature = "python")]
+    local_actors: Mutex<HashMap<ActorID, pyo3::PyObject>>,
 }
 
 impl PyCoreWorker {
@@ -45,6 +48,8 @@ impl PyCoreWorker {
             inner,
             runtime,
             serialized_job_config: Vec::new(),
+            #[cfg(feature = "python")]
+            local_actors: Mutex::new(HashMap::new()),
         }
     }
 
@@ -694,15 +699,58 @@ impl PyCoreWorker {
     /// implement full distributed actor scheduling here, but exposing the method
     /// avoids failing immediately with AttributeError and lets the existing actor
     /// compatibility path progress to the next missing behavior.
-    #[pyo3(name = "create_actor", signature = (*_args, **_kwargs))]
+    #[pyo3(name = "create_actor", signature = (*args, **_kwargs))]
     fn py_create_actor(
         &self,
-        _args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
     ) -> pyo3::PyResult<crate::ids::PyActorID> {
         use ray_common::id::ActorID;
 
-        Ok(crate::ids::PyActorID::from_inner(ActorID::from_random()))
+        let actor_id = ActorID::from_random();
+        if args.len()? >= 3 {
+            let maybe_instance = (|| -> pyo3::PyResult<Option<pyo3::PyObject>> {
+                let py = args.py();
+                let actor_descriptor = args.get_item(1)?;
+                let raw_args = args.get_item(2)?;
+                let class_obj = actor_descriptor
+                    .getattr("function")
+                    .and_then(|maybe_class| {
+                        if maybe_class.is_none() {
+                            Err(pyo3::exceptions::PyAttributeError::new_err(
+                                "actor descriptor has no local class",
+                            ))
+                        } else {
+                            Ok(maybe_class)
+                        }
+                    })?;
+                let flat_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
+                    .iter()?
+                    .filter_map(|item| item.ok())
+                    .collect();
+                let signature_mod = pyo3::types::PyModule::import_bound(py, "ray._common.signature")?;
+                let recovered = signature_mod.call_method1(
+                    "recover_args",
+                    (pyo3::types::PyList::new_bound(py, flat_args),),
+                )?;
+                let py_args = recovered.get_item(0)?.downcast_into::<pyo3::types::PyList>()?;
+                let py_kwargs = recovered.get_item(1)?.downcast_into::<pyo3::types::PyDict>()?;
+                let py_args_vec: Vec<pyo3::Bound<'_, pyo3::PyAny>> = py_args
+                    .iter()?
+                    .filter_map(|item| item.ok())
+                    .collect();
+                let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
+                let instance = class_obj.call(&py_args_tuple, Some(&py_kwargs))?;
+                Ok(Some(instance.into()))
+            })();
+            if let Ok(Some(instance)) = maybe_instance {
+                if let Ok(mut actors) = self.local_actors.lock() {
+                    actors.insert(actor_id, instance);
+                }
+            }
+        }
+
+        Ok(crate::ids::PyActorID::from_inner(actor_id))
     }
 
     /// Cython-compatible CoreWorker.submit_actor_task() API.
@@ -722,15 +770,86 @@ impl PyCoreWorker {
             .unwrap_or(1);
         let num_returns = std::cmp::max(num_returns, 1) as u32;
         let task_id = TaskID::from_random();
-        let refs = (1..=num_returns)
-            .map(|i| {
-                crate::object_ref::PyObjectRef::new(
-                    ObjectID::from_index(&task_id, i),
-                    None,
-                    String::new(),
-                )
-            })
+        let return_oids: Vec<ObjectID> = (1..=num_returns)
+            .map(|i| ObjectID::from_index(&task_id, i))
             .collect();
+        let refs: Vec<crate::object_ref::PyObjectRef> = return_oids
+            .iter()
+            .map(|oid| crate::object_ref::PyObjectRef::new(*oid, None, String::new()))
+            .collect();
+
+        if args.len()? >= 6 {
+            let maybe_result = (|| -> pyo3::PyResult<Vec<(Vec<u8>, Vec<u8>)>> {
+                let py = args.py();
+                let actor_id_obj = args.get_item(1)?;
+                let actor_id_bytes: Vec<u8> = actor_id_obj.call_method0("binary")?.extract()?;
+                let actor_id = ActorID::from_binary(&actor_id_bytes);
+                let method_descriptor = args.get_item(2)?;
+                let method_name: String = method_descriptor.getattr("function_name")?.extract()?;
+                let raw_args = args.get_item(3)?;
+                let actor = {
+                    let actors = self.local_actors.lock().map_err(|_| {
+                        pyo3::exceptions::PyRuntimeError::new_err("local actor table lock poisoned")
+                    })?;
+                    actors.get(&actor_id).map(|actor| actor.clone_ref(py)).ok_or_else(|| {
+                        pyo3::exceptions::PyKeyError::new_err("unknown local actor")
+                    })?
+                };
+
+                let flat_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
+                    .iter()?
+                    .filter_map(|item| item.ok())
+                    .collect();
+                let signature_mod = pyo3::types::PyModule::import_bound(py, "ray._common.signature")?;
+                let recovered = signature_mod.call_method1(
+                    "recover_args",
+                    (pyo3::types::PyList::new_bound(py, flat_args),),
+                )?;
+                let py_args = recovered.get_item(0)?.downcast_into::<pyo3::types::PyList>()?;
+                let py_kwargs = recovered.get_item(1)?.downcast_into::<pyo3::types::PyDict>()?;
+                let py_args_vec: Vec<pyo3::Bound<'_, pyo3::PyAny>> = py_args
+                    .iter()?
+                    .filter_map(|item| item.ok())
+                    .collect();
+                let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
+                let method = actor.bind(py).getattr(method_name.as_str())?;
+                let value = method.call(&py_args_tuple, Some(&py_kwargs))?;
+                let worker_mod = pyo3::types::PyModule::import_bound(py, "ray._private.worker")?;
+                let global_worker = worker_mod.getattr("global_worker")?;
+                let context = global_worker.call_method0("get_serialization_context")?;
+                let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> = if num_returns > 1 {
+                    value.iter()?.filter_map(|item| item.ok()).collect()
+                } else {
+                    vec![value]
+                };
+                let mut serialized_returns = Vec::with_capacity(values.len());
+                for value in values {
+                    let serialized = context.call_method1("serialize", (value,))?;
+                    let data: Vec<u8> = serialized.call_method0("to_bytes")?.extract()?;
+                    let metadata = serialized.getattr("metadata")?;
+                    let metadata: Vec<u8> = if metadata.is_none() {
+                        Vec::new()
+                    } else {
+                        metadata.extract()?
+                    };
+                    serialized_returns.push((data, metadata));
+                }
+                Ok(serialized_returns)
+            })();
+            if let Ok(serialized_returns) = maybe_result {
+                if serialized_returns.len() == return_oids.len() {
+                    for (oid, (data, metadata)) in return_oids.iter().zip(serialized_returns.into_iter()) {
+                        let ray_obj = ray_core_worker::memory_store::RayObject::new(
+                            bytes::Bytes::from(data),
+                            bytes::Bytes::from(metadata),
+                            Vec::new(),
+                        );
+                        let _ = self.inner.memory_store().put(*oid, ray_obj);
+                    }
+                }
+            }
+        }
+
         Ok(refs)
     }
 

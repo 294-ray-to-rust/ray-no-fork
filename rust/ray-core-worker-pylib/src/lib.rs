@@ -464,7 +464,7 @@ impl GenericStub {
             .and_then(|c| c.getattr("__qualname__").ok())
             .and_then(|m| m.extract::<String>().ok())
             .unwrap_or_default();
-        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new(), function: None }
+        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new(), function: target_class.map(|c| c.into()) }
     }
 
     #[classmethod]

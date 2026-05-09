@@ -535,6 +535,23 @@ impl GenericStub {
     }
 
     #[classmethod]
+    #[pyo3(signature = (data, python_deserializer=None))]
+    fn loads(
+        _cls: &Bound<'_, PyType>,
+        py: pyo3::Python<'_>,
+        data: &Bound<'_, pyo3::types::PyAny>,
+        python_deserializer: Option<&Bound<'_, pyo3::types::PyAny>>,
+    ) -> pyo3::PyResult<pyo3::PyObject> {
+        if let Some(deserializer) = python_deserializer {
+            let msgpack = pyo3::types::PyModule::import_bound(py, "msgpack")?;
+            let unpacked = msgpack.call_method1("unpackb", (data,))?;
+            return Ok(deserializer.call1((unpacked,))?.into());
+        }
+        let pickle = pyo3::types::PyModule::import_bound(py, "pickle")?;
+        Ok(pickle.call_method1("loads", (data,))?.into())
+    }
+
+    #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn redirect_stdout(
         _cls: &Bound<'_, PyType>,

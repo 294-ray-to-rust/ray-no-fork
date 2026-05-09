@@ -1078,6 +1078,12 @@ fn setproctitle(title: String) {
 #[cfg(feature = "python")]
 #[pymodule]
 fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Cython exposes this extension as both ray._raylet and _raylet in a few
+    // pickle/module-name paths.  The Rust module is imported as ray._raylet,
+    // so install the top-level alias before any classes are pickled.
+    let sys = m.py().import_bound("sys")?;
+    sys.getattr("modules")?.set_item("_raylet", m)?;
+
     // ─── Module-level functions ──────────────────────────────────
     m.add_function(wrap_pyfunction!(get_ray_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_ray_commit, m)?)?;

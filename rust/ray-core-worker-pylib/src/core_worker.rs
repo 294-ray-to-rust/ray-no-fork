@@ -302,6 +302,36 @@ impl PyCoreWorker {
         Ok(result)
     }
 
+    fn job_runtime_env_vars(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<Vec<(String, String)>> {
+        if self.serialized_job_config.is_empty() {
+            return Ok(Vec::new());
+        }
+        let common_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.common_pb2")?;
+        let json_format = pyo3::types::PyModule::import_bound(py, "google.protobuf.json_format")?;
+        let job_config = common_pb2.getattr("JobConfig")?.call0()?;
+        let bytes = pyo3::types::PyBytes::new_bound(py, &self.serialized_job_config);
+        job_config.call_method1("ParseFromString", (bytes,))?;
+        let runtime_env_info = job_config.getattr("runtime_env_info")?;
+        let dict = json_format.call_method1("MessageToDict", (runtime_env_info,))?;
+        let json = pyo3::types::PyModule::import_bound(py, "json")?;
+        let serialized = json.call_method1("dumps", (dict,))?;
+        Self::runtime_env_vars_from_json(py, Some(&serialized))
+    }
+
+    fn merge_env_vars(
+        mut base: Vec<(String, String)>,
+        overrides: Vec<(String, String)>,
+    ) -> Vec<(String, String)> {
+        for (key, value) in overrides {
+            if let Some((_, existing)) = base.iter_mut().find(|(existing_key, _)| *existing_key == key) {
+                *existing = value;
+            } else {
+                base.push((key, value));
+            }
+        }
+        base
+    }
+
     fn call_with_env_vars<'py>(
         py: pyo3::Python<'py>,
         callable: &pyo3::Bound<'py, pyo3::PyAny>,
@@ -922,7 +952,10 @@ impl PyCoreWorker {
                     .collect();
                 let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
                 let runtime_env_info = kwargs.and_then(|kwargs| kwargs.get_item("serialized_runtime_env_info").ok());
-                let env_vars = Self::runtime_env_vars_from_json(py, runtime_env_info.as_ref())?;
+                let env_vars = Self::merge_env_vars(
+                    self.job_runtime_env_vars(py)?,
+                    Self::runtime_env_vars_from_json(py, runtime_env_info.as_ref())?,
+                );
                 let instance = Self::call_with_env_vars(
                     py,
                     &class_obj,
@@ -1633,7 +1666,10 @@ impl PyCoreWorker {
                         }
 
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
-                        let env_vars = Self::runtime_env_vars_from_json(py, args.get_item(11).ok().as_ref())?;
+                        let env_vars = Self::merge_env_vars(
+                            self.job_runtime_env_vars(py)?,
+                            Self::runtime_env_vars_from_json(py, args.get_item(11).ok().as_ref())?,
+                        );
                         let value = Self::call_with_env_vars(
                             py,
                             &func,

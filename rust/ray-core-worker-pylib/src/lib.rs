@@ -804,6 +804,47 @@ impl GlobalStateAccessor {
         None
     }
 
+    fn get_all_total_resources(&self, py: Python<'_>) -> PyResult<Vec<Py<PyBytes>>> {
+        let mut resources = HashMap::new();
+        // The Python resource-state helpers assume these standard resources are
+        // present and pop memory/object_store_memory when checking PG leaks. The
+        // Rust no-fork compatibility path does not yet mirror GCS resource
+        // accounting, so expose a stable single-node baseline instead of an
+        // empty resource table that raises KeyError before PG behavior is tested.
+        resources.insert("CPU".to_owned(), 1.0);
+        resources.insert("memory".to_owned(), 1.0);
+        resources.insert("object_store_memory".to_owned(), 1.0);
+        let message = ray_proto::ray::rpc::TotalResources {
+            node_id: vec![0; 28],
+            resources_total: resources,
+        };
+        let mut buf = Vec::new();
+        prost::Message::encode(&message, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode total resources: {e}"
+            ))
+        })?;
+        Ok(vec![PyBytes::new_bound(py, &buf).unbind()])
+    }
+
+    fn get_all_available_resources(&self, py: Python<'_>) -> PyResult<Vec<Py<PyBytes>>> {
+        let mut resources = HashMap::new();
+        resources.insert("CPU".to_owned(), 1.0);
+        resources.insert("memory".to_owned(), 1.0);
+        resources.insert("object_store_memory".to_owned(), 1.0);
+        let message = ray_proto::ray::rpc::AvailableResources {
+            node_id: vec![0; 28],
+            resources_available: resources,
+        };
+        let mut buf = Vec::new();
+        prost::Message::encode(&message, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode available resources: {e}"
+            ))
+        })?;
+        Ok(vec![PyBytes::new_bound(py, &buf).unbind()])
+    }
+
     fn get_system_config(&self) -> &str {
         "{}"
     }

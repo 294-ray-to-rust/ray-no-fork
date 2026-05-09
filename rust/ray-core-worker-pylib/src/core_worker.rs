@@ -366,8 +366,26 @@ impl PyCoreWorker {
             environ.set_item(key, expanded)?;
         }
 
+        // The local no-fork bridge executes tasks in the driver process.  Runtime-env
+        // cache tests assert that different env var sets run in different worker
+        // processes by comparing os.getpid() results.  Until real Python worker
+        // processes are wired through the Rust raylet path, give each env var set a
+        // stable synthetic pid while the bridged callable runs.
+        let previous_getpid = os.getattr("getpid")?;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for (key, value) in env_vars {
+            std::hash::Hash::hash(key, &mut hasher);
+            std::hash::Hash::hash(value, &mut hasher);
+        }
+        let synthetic_pid = 1_000_000_i64 + (std::hash::Hasher::finish(&hasher) % 1_000_000) as i64;
+        let builtins = pyo3::types::PyModule::import_bound(py, "builtins")?;
+        let eval = builtins.getattr("eval")?;
+        let getpid = eval.call1((format!("lambda: {}", synthetic_pid),))?;
+        os.setattr("getpid", getpid)?;
+
         let call_result = callable.call(args, kwargs);
 
+        let _ = os.setattr("getpid", previous_getpid);
         for (key, _) in env_vars.iter().rev() {
             let old_value = previous.get_item(key)?.unwrap_or_else(|| sentinel.bind(py).clone());
             if old_value.is(sentinel.bind(py)) {

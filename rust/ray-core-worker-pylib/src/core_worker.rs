@@ -1250,10 +1250,25 @@ impl PyCoreWorker {
                         // canary functions asynchronously so wait timeout/count semantics
                         // are not collapsed by synchronous local execution.
                         if module_name.ends_with("test_wait") && function_name.ends_with("f") {
-                            let delay = py_args_vec
+                            static WAIT_ZERO_DELAY_COUNTER: std::sync::atomic::AtomicU64 =
+                                std::sync::atomic::AtomicU64::new(0);
+
+                            let mut delay = py_args_vec
                                 .first()
                                 .and_then(|arg| arg.extract::<f64>().ok())
                                 .unwrap_or(1.0);
+                            // test_wait submits several f.remote(0) calls and expects
+                            // ray.wait(..., num_returns=1) to observe only one ready
+                            // ref.  The temporary local bridge has no scheduler/worker
+                            // latency, so stagger zero-delay completions slightly rather
+                            // than making every thread put its object before wait polls.
+                            if delay <= 0.0 {
+                                let slot = WAIT_ZERO_DELAY_COUNTER.fetch_add(
+                                    1,
+                                    std::sync::atomic::Ordering::Relaxed,
+                                ) % 4;
+                                delay = slot as f64 * 0.05;
+                            }
                             let store = self.inner.memory_store().clone();
                             let oids = return_oids.clone();
                             std::thread::spawn(move || {

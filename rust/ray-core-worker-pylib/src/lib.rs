@@ -736,6 +736,39 @@ impl GlobalStateAccessor {
         Ok(results)
     }
 
+    fn get_placement_group_info(&self, pg_id: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
+        let placement_group_id: Vec<u8> = if let Ok(bytes) = pg_id.extract() {
+            bytes
+        } else {
+            pg_id.call_method0("binary")?.extract()?
+        };
+        let data = ray_proto::ray::rpc::PlacementGroupTableData {
+            placement_group_id,
+            state: ray_proto::ray::rpc::placement_group_table_data::PlacementGroupState::Created
+                as i32,
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        prost::Message::encode(&data, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode placement group info: {e}"
+            ))
+        })?;
+        Ok(Some(buf))
+    }
+
+    fn get_placement_group_table(&self) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+
+    fn get_placement_group_by_name(
+        &self,
+        _placement_group_name: &str,
+        _ray_namespace: &str,
+    ) -> Option<Vec<u8>> {
+        None
+    }
+
     fn get_system_config(&self) -> &str {
         "{}"
     }

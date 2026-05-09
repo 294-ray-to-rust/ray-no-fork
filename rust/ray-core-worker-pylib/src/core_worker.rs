@@ -849,13 +849,26 @@ impl PyCoreWorker {
     /// surface to create and track a PlacementGroupID. Return a fresh ID so the
     /// call path can proceed to readiness/resource behavior instead of stopping
     /// at AttributeError.
-    #[pyo3(name = "create_placement_group", signature = (*_args, **_kwargs))]
+    #[pyo3(name = "create_placement_group", signature = (*args, **_kwargs))]
     fn py_create_placement_group_legacy(
         &self,
-        _args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
-    ) -> crate::ids::PyPlacementGroupID {
-        crate::ids::PyPlacementGroupID::from_random()
+    ) -> pyo3::PyResult<crate::ids::PyPlacementGroupID> {
+        if let Ok(bundles) = args.get_item(0) {
+            if let Ok(iter) = bundles.iter() {
+                for bundle in iter.flatten() {
+                    if let Ok(dict) = bundle.downcast::<pyo3::types::PyDict>() {
+                        if dict.contains("bundle")? {
+                            return Err(pyo3::exceptions::PyValueError::new_err(
+                                "resource name 'bundle' is reserved for placement group bundles",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(crate::ids::PyPlacementGroupID::from_random())
     }
 
     /// Cython-compatible CoreWorker.wait_placement_group_ready() API.

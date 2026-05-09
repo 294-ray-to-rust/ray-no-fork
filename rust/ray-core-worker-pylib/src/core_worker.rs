@@ -1249,7 +1249,7 @@ impl PyCoreWorker {
                         // the task completes later.  Cover the simple sleep-style wait
                         // canary functions asynchronously so wait timeout/count semantics
                         // are not collapsed by synchronous local execution.
-                        if module_name.ends_with("test_wait") && function_name == "f" {
+                        if module_name.ends_with("test_wait") && function_name.ends_with("f") {
                             let delay = py_args_vec
                                 .first()
                                 .and_then(|arg| arg.extract::<f64>().ok())

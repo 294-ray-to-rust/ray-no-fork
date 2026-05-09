@@ -736,7 +736,11 @@ impl GlobalStateAccessor {
         Ok(results)
     }
 
-    fn get_placement_group_info(&self, pg_id: &Bound<'_, PyAny>) -> PyResult<Option<Vec<u8>>> {
+    fn get_placement_group_info(
+        &self,
+        py: Python<'_>,
+        pg_id: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<Py<PyBytes>>> {
         let placement_group_id: Vec<u8> = if let Ok(bytes) = pg_id.extract() {
             bytes
         } else {
@@ -754,18 +758,19 @@ impl GlobalStateAccessor {
                 "failed to encode placement group info: {e}"
             ))
         })?;
-        Ok(Some(buf))
+        Ok(Some(PyBytes::new_bound(py, &buf).unbind()))
     }
 
-    fn get_placement_group_table(&self) -> Vec<Vec<u8>> {
-        Vec::new()
+    fn get_placement_group_table(&self, py: Python<'_>) -> Py<PyList> {
+        PyList::empty_bound(py).unbind()
     }
 
     fn get_placement_group_by_name(
         &self,
+        _py: Python<'_>,
         _placement_group_name: &str,
         _ray_namespace: &str,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<Py<PyBytes>> {
         None
     }
 

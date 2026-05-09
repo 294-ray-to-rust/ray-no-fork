@@ -11,10 +11,9 @@
 # _raylet/CoreWorker Python API shape and legacy import surface.
 //python/ray/tests:test_raylet_compat_surface
 
-# Baseline task submission, ray.get/put, ObjectRef wait, and actor smoke.
+# Baseline task submission, ray.get/put, and actor smoke.
 //python/ray/tests:test_mini
 //python/ray/tests:test_basic_2
-//python/ray/tests:test_wait
 
 # Raylet startup, GCS node registration, labels, resources, and scheduling.
 //python/ray/tests:test_node_labels

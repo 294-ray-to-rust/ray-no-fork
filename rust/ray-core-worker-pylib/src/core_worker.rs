@@ -1180,7 +1180,7 @@ impl PyCoreWorker {
                             .and_then(|f| f.extract::<String>().ok()),
                     )
                 {
-                    let maybe_result = (|| -> pyo3::PyResult<Vec<(Vec<u8>, Vec<u8>)>> {
+                    let maybe_result = (|| -> pyo3::PyResult<Option<Vec<(Vec<u8>, Vec<u8>)>>> {
                         let worker_mod = pyo3::types::PyModule::import_bound(
                             py,
                             "ray._private.worker",
@@ -1267,10 +1267,7 @@ impl PyCoreWorker {
                                     let _ = store.put(oid, ray_obj);
                                 }
                             });
-                            return Ok(return_oids
-                                .into_iter()
-                                .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
-                                .collect());
+                            return Ok(None);
                         }
 
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
@@ -1293,10 +1290,16 @@ impl PyCoreWorker {
                             };
                             serialized_returns.push((data, metadata));
                         }
-                        Ok(serialized_returns)
+                        Ok(Some(serialized_returns))
                     })();
                     match maybe_result {
-                        Ok(serialized_returns) if serialized_returns.len() == return_oids.len() => {
+                        Ok(None) => {
+                            return Ok(return_oids
+                                .into_iter()
+                                .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
+                                .collect());
+                        }
+                        Ok(Some(serialized_returns)) if serialized_returns.len() == return_oids.len() => {
                             for (oid, (data, metadata)) in return_oids.iter().zip(serialized_returns) {
                                 let ray_obj = ray_core_worker::memory_store::RayObject::new(
                                     bytes::Bytes::from(data),
@@ -1310,7 +1313,7 @@ impl PyCoreWorker {
                                 .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
                                 .collect());
                         }
-                        Ok(serialized_returns) => {
+                        Ok(Some(serialized_returns)) => {
                             return Err(pyo3::exceptions::PyRuntimeError::new_err(format!("local Python task bridge produced {} returns for {} ObjectRefs",
                                 serialized_returns.len(),
                                 return_oids.len()

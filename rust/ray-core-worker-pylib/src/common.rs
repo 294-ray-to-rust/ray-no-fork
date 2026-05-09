@@ -52,6 +52,29 @@ impl PyLanguage {
             PyLanguage::Cpp => "Language.CPP",
         }
     }
+
+    fn __reduce__(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::PyObject> {
+        use pyo3::types::{PyAnyMethods, PyModule, PyTuple};
+        use pyo3::IntoPy;
+
+        let builtins = PyModule::import_bound(py, "builtins")?;
+        let getattr = builtins.getattr("getattr")?;
+        let raylet = PyModule::import_bound(py, "_raylet")?;
+        let language = raylet.getattr("Language")?;
+        let name = match self {
+            PyLanguage::Python => "PYTHON",
+            PyLanguage::Java => "JAVA",
+            PyLanguage::Cpp => "CPP",
+        };
+        Ok(PyTuple::new_bound(
+            py,
+            [
+                getattr.into_py(py),
+                PyTuple::new_bound(py, [language.into_py(py), name.into_py(py)]).into_py(py),
+            ],
+        )
+        .into_py(py))
+    }
 }
 
 /// Python-facing worker type enum.

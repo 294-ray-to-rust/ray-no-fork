@@ -252,7 +252,11 @@ impl PyCoreWorker {
         let Some(serialized_runtime_env_info) = serialized_runtime_env_info else {
             return Ok(Vec::new());
         };
-        let Ok(serialized_runtime_env_info) = serialized_runtime_env_info.extract::<String>() else {
+        let serialized_runtime_env_info = if let Ok(value) = serialized_runtime_env_info.extract::<String>() {
+            value
+        } else if let Ok(value) = serialized_runtime_env_info.extract::<Vec<u8>>() {
+            String::from_utf8_lossy(&value).into_owned()
+        } else {
             return Ok(Vec::new());
         };
         if serialized_runtime_env_info.trim().is_empty() || serialized_runtime_env_info == "{}" {
@@ -297,7 +301,19 @@ impl PyCoreWorker {
         let previous = pyo3::types::PyDict::new_bound(py);
         for (key, value) in env_vars {
             previous.set_item(key, environ.call_method1("get", (key, sentinel.clone_ref(py)))?)?;
-            environ.set_item(key, value)?;
+            // Match Ray's runtime-env append syntax used by env var tests, e.g.
+            // {"PATH": "${PATH}:/custom"}. The local bridge executes in the
+            // driver process, so expand against the current temporary environ.
+            let placeholder = format!("${{{}}}", key);
+            let expanded = if value.contains(&placeholder) {
+                let current = environ
+                    .call_method1("get", (key, ""))?
+                    .extract::<String>()?;
+                value.replace(&placeholder, &current)
+            } else {
+                value.clone()
+            };
+            environ.set_item(key, expanded)?;
         }
 
         let call_result = callable.call(args, kwargs);

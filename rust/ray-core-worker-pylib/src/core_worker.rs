@@ -35,7 +35,7 @@ pub struct PyCoreWorker {
     runtime: tokio::runtime::Runtime,
     serialized_job_config: Vec<u8>,
     #[cfg(feature = "python")]
-    local_actors: Mutex<HashMap<ActorID, pyo3::PyObject>>,
+    local_actors: Mutex<HashMap<ActorID, (pyo3::PyObject, Vec<(String, String)>)>>,
 }
 
 impl PyCoreWorker {
@@ -240,6 +240,80 @@ impl PyCoreWorker {
 }
 
 // ─── PyO3 methods (only when "python" feature is enabled) ────────────
+
+#[cfg(feature = "python")]
+impl PyCoreWorker {
+    fn runtime_env_vars_from_json(
+        py: pyo3::Python<'_>,
+        serialized_runtime_env_info: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+    ) -> pyo3::PyResult<Vec<(String, String)>> {
+        use pyo3::types::{PyAnyMethods, PyDictMethods};
+
+        let Some(serialized_runtime_env_info) = serialized_runtime_env_info else {
+            return Ok(Vec::new());
+        };
+        let Ok(serialized_runtime_env_info) = serialized_runtime_env_info.extract::<String>() else {
+            return Ok(Vec::new());
+        };
+        if serialized_runtime_env_info.trim().is_empty() || serialized_runtime_env_info == "{}" {
+            return Ok(Vec::new());
+        }
+
+        let json = pyo3::types::PyModule::import_bound(py, "json")?;
+        let parsed = json.call_method1("loads", (serialized_runtime_env_info,))?;
+        let runtime_env = parsed
+            .get_item("runtime_env")
+            .ok()
+            .filter(|value| !value.is_none())
+            .unwrap_or_else(|| parsed.clone());
+        let env_vars = runtime_env.get_item("env_vars").ok().filter(|value| !value.is_none());
+        let Some(env_vars) = env_vars else {
+            return Ok(Vec::new());
+        };
+        let env_vars = env_vars.downcast::<pyo3::types::PyDict>()?;
+        let mut result = Vec::with_capacity(env_vars.len());
+        for (key, value) in env_vars.iter() {
+            result.push((key.extract::<String>()?, value.extract::<String>()?));
+        }
+        Ok(result)
+    }
+
+    fn call_with_env_vars<'py>(
+        py: pyo3::Python<'py>,
+        callable: &pyo3::Bound<'py, pyo3::PyAny>,
+        args: &pyo3::Bound<'py, pyo3::types::PyTuple>,
+        kwargs: Option<&pyo3::Bound<'py, pyo3::types::PyDict>>,
+        env_vars: &[(String, String)],
+    ) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::PyAny>> {
+        use pyo3::types::{PyAnyMethods, PyDictMethods};
+
+        if env_vars.is_empty() {
+            return callable.call(args, kwargs);
+        }
+
+        let os = pyo3::types::PyModule::import_bound(py, "os")?;
+        let environ = os.getattr("environ")?;
+        let sentinel = py.None();
+        let previous = pyo3::types::PyDict::new_bound(py);
+        for (key, value) in env_vars {
+            previous.set_item(key, environ.call_method1("get", (key, sentinel.clone_ref(py)))?)?;
+            environ.set_item(key, value)?;
+        }
+
+        let call_result = callable.call(args, kwargs);
+
+        for (key, _) in env_vars.iter().rev() {
+            let old_value = previous.get_item(key)?.unwrap_or_else(|| sentinel.bind(py).clone());
+            if old_value.is(sentinel.bind(py)) {
+                let _ = environ.call_method1("pop", (key, sentinel.clone_ref(py)));
+            } else {
+                let _ = environ.set_item(key, old_value);
+            }
+        }
+
+        call_result
+    }
+}
 
 #[cfg(feature = "python")]
 #[pyo3::pymethods]
@@ -716,17 +790,17 @@ impl PyCoreWorker {
     /// implement full distributed actor scheduling here, but exposing the method
     /// avoids failing immediately with AttributeError and lets the existing actor
     /// compatibility path progress to the next missing behavior.
-    #[pyo3(name = "create_actor", signature = (*args, **_kwargs))]
+    #[pyo3(name = "create_actor", signature = (*args, **kwargs))]
     fn py_create_actor(
         &self,
         args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
-        _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+        kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
     ) -> pyo3::PyResult<crate::ids::PyActorID> {
         use ray_common::id::ActorID;
 
         let actor_id = ActorID::from_random();
         if args.len()? >= 3 {
-            let maybe_instance = (|| -> pyo3::PyResult<Option<pyo3::PyObject>> {
+            let maybe_instance = (|| -> pyo3::PyResult<Option<(pyo3::PyObject, Vec<(String, String)>)>> {
                 let py = args.py();
                 let actor_descriptor = args.get_item(1)?;
                 let raw_args = args.get_item(2)?;
@@ -757,8 +831,16 @@ impl PyCoreWorker {
                     .filter_map(|item| item.ok())
                     .collect();
                 let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
-                let instance = class_obj.call(&py_args_tuple, Some(&py_kwargs))?;
-                Ok(Some(instance.into()))
+                let runtime_env_info = kwargs.and_then(|kwargs| kwargs.get_item("serialized_runtime_env_info").ok());
+                let env_vars = Self::runtime_env_vars_from_json(py, runtime_env_info.as_ref())?;
+                let instance = Self::call_with_env_vars(
+                    py,
+                    &class_obj,
+                    &py_args_tuple,
+                    Some(&py_kwargs),
+                    &env_vars,
+                )?;
+                Ok(Some((instance.into(), env_vars)))
             })();
             if let Ok(Some(instance)) = maybe_instance {
                 if let Ok(mut actors) = self.local_actors.lock() {
@@ -804,13 +886,16 @@ impl PyCoreWorker {
                 let method_descriptor = args.get_item(2)?;
                 let method_name: String = method_descriptor.getattr("function_name")?.extract()?;
                 let raw_args = args.get_item(3)?;
-                let actor = {
+                let (actor, actor_env_vars) = {
                     let actors = self.local_actors.lock().map_err(|_| {
                         pyo3::exceptions::PyRuntimeError::new_err("local actor table lock poisoned")
                     })?;
-                    actors.get(&actor_id).map(|actor| actor.clone_ref(py)).ok_or_else(|| {
-                        pyo3::exceptions::PyKeyError::new_err("unknown local actor")
-                    })?
+                    actors
+                        .get(&actor_id)
+                        .map(|(actor, env_vars)| (actor.clone_ref(py), env_vars.clone()))
+                        .ok_or_else(|| {
+                            pyo3::exceptions::PyKeyError::new_err("unknown local actor")
+                        })?
                 };
 
                 let flat_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = raw_args
@@ -830,7 +915,13 @@ impl PyCoreWorker {
                     .collect();
                 let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
                 let method = actor.bind(py).getattr(method_name.as_str())?;
-                let value = method.call(&py_args_tuple, Some(&py_kwargs))?;
+                let value = Self::call_with_env_vars(
+                    py,
+                    &method,
+                    &py_args_tuple,
+                    Some(&py_kwargs),
+                    &actor_env_vars,
+                )?;
                 let worker_mod = pyo3::types::PyModule::import_bound(py, "ray._private.worker")?;
                 let global_worker = worker_mod.getattr("global_worker")?;
                 let context = global_worker.call_method0("get_serialization_context")?;
@@ -1452,7 +1543,14 @@ impl PyCoreWorker {
                         }
 
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
-                        let value = func.call(&py_args_tuple, Some(&py_kwargs))?;
+                        let env_vars = Self::runtime_env_vars_from_json(py, args.get_item(11).ok().as_ref())?;
+                        let value = Self::call_with_env_vars(
+                            py,
+                            &func,
+                            &py_args_tuple,
+                            Some(&py_kwargs),
+                            &env_vars,
+                        )?;
                         let context = global_worker.call_method0("get_serialization_context")?;
                         let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> = if num_returns > 1 {
                             value.iter()?.filter_map(|item| item.ok()).collect()

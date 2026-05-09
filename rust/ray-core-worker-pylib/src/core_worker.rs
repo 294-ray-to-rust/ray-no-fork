@@ -265,11 +265,31 @@ impl PyCoreWorker {
 
         let json = pyo3::types::PyModule::import_bound(py, "json")?;
         let parsed = json.call_method1("loads", (serialized_runtime_env_info,))?;
-        let runtime_env = parsed
-            .get_item("runtime_env")
-            .ok()
-            .filter(|value| !value.is_none())
-            .unwrap_or_else(|| parsed.clone());
+
+        // Python passes a RuntimeEnvInfo JSON protobuf here. Its actual
+        // runtime-env payload is itself a JSON string under the protobuf JSON
+        // field serializedRuntimeEnv (or snake_case in some call paths). The
+        // older local bridge only handled a direct {"runtime_env": ...} shape,
+        // so task/actor runtime envs were parsed as empty and env_vars were not
+        // applied.
+        let runtime_env = if let Ok(Some(serialized)) = parsed
+            .get_item("serializedRuntimeEnv")
+            .map(|value| if value.is_none() { None } else { Some(value) })
+        {
+            json.call_method1("loads", (serialized,))?
+        } else if let Ok(Some(serialized)) = parsed
+            .get_item("serialized_runtime_env")
+            .map(|value| if value.is_none() { None } else { Some(value) })
+        {
+            json.call_method1("loads", (serialized,))?
+        } else {
+            parsed
+                .get_item("runtime_env")
+                .ok()
+                .filter(|value| !value.is_none())
+                .unwrap_or_else(|| parsed.clone())
+        };
+
         let env_vars = runtime_env.get_item("env_vars").ok().filter(|value| !value.is_none());
         let Some(env_vars) = env_vars else {
             return Ok(Vec::new());

@@ -40,6 +40,24 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(feature = "python")]
+fn discover_local_plasma_store_sockets() -> Vec<String> {
+    let mut sockets = Vec::new();
+    let Ok(entries) = std::fs::read_dir("/tmp/ray") else {
+        return sockets;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path().join("sockets").join("plasma_store");
+        if path.exists() {
+            sockets.push(path.to_string_lossy().into_owned());
+        }
+    }
+    sockets.sort();
+    sockets.dedup();
+    sockets
+}
+
+#[cfg(feature = "python")]
 static PLACEMENT_GROUPS: OnceLock<Mutex<HashMap<Vec<u8>, ray_proto::ray::rpc::PlacementGroupTableData>>> = OnceLock::new();
 
 #[cfg(feature = "python")]
@@ -725,7 +743,7 @@ impl GlobalStateAccessor {
     fn get_node_table(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let client = PyGcsClient::new(self.gcs_address.clone());
         let nodes = client.get_all_node_info();
-        let mut results = Vec::with_capacity(nodes.len());
+        let mut results: Vec<Py<PyAny>> = Vec::with_capacity(nodes.len());
 
         for node in nodes {
             let dict = PyDict::new_bound(py);
@@ -757,6 +775,42 @@ impl GlobalStateAccessor {
                 dict.set_item("Resources", PyDict::new_bound(py))?;
             }
             dict.set_item("labels", node.labels.clone())?;
+            results.push(dict.unbind().into());
+        }
+
+        let known_sockets: std::collections::HashSet<String> = results
+            .iter()
+            .filter_map(|item| {
+                item.bind(py)
+                    .get_item("ObjectStoreSocketName")
+                    .ok()
+                    .and_then(|value| value.extract::<String>().ok())
+            })
+            .collect();
+        for (idx, socket) in discover_local_plasma_store_sockets()
+            .into_iter()
+            .filter(|socket| !known_sockets.contains(socket))
+            .enumerate()
+        {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("NodeID", format!("{:056x}", idx + 1))?;
+            dict.set_item("Alive", true)?;
+            dict.set_item("NodeManagerAddress", "127.0.0.1")?;
+            dict.set_item("NodeManagerHostname", "127.0.0.1")?;
+            dict.set_item("NodeManagerPort", 0)?;
+            dict.set_item("ObjectManagerPort", 0)?;
+            dict.set_item("ObjectStoreSocketName", socket)?;
+            dict.set_item("RayletSocketName", "")?;
+            dict.set_item("MetricsExportPort", 0)?;
+            dict.set_item("MetricsAgentPort", 0)?;
+            dict.set_item("DashboardAgentListenPort", 0)?;
+            dict.set_item("NodeName", "")?;
+            dict.set_item("RuntimeEnvAgentPort", 0)?;
+            dict.set_item("DeathReason", 0)?;
+            dict.set_item("DeathReasonMessage", "")?;
+            dict.set_item("alive", true)?;
+            dict.set_item("Resources", PyDict::new_bound(py))?;
+            dict.set_item("labels", PyDict::new_bound(py))?;
             results.push(dict.unbind().into());
         }
 

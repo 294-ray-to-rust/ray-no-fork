@@ -332,6 +332,23 @@ impl PyCoreWorker {
         base
     }
 
+    fn overlay_current_env_for_keys(
+        py: pyo3::Python<'_>,
+        mut base: Vec<(String, String)>,
+    ) -> pyo3::PyResult<Vec<(String, String)>> {
+        if base.is_empty() {
+            return Ok(base);
+        }
+        let os = pyo3::types::PyModule::import_bound(py, "os")?;
+        let environ = os.getattr("environ")?;
+        for (key, value) in base.iter_mut() {
+            if let Ok(Some(current)) = environ.call_method1("get", (key.as_str(),)).and_then(|v| v.extract::<Option<String>>()) {
+                *value = current;
+            }
+        }
+        Ok(base)
+    }
+
     fn call_with_env_vars<'py>(
         py: pyo3::Python<'py>,
         callable: &pyo3::Bound<'py, pyo3::PyAny>,
@@ -1684,8 +1701,12 @@ impl PyCoreWorker {
                         }
 
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
-                        let env_vars = Self::merge_env_vars(
+                        let job_env_vars = Self::overlay_current_env_for_keys(
+                            py,
                             self.job_runtime_env_vars(py)?,
+                        )?;
+                        let env_vars = Self::merge_env_vars(
+                            job_env_vars,
                             Self::runtime_env_vars_from_json(py, args.get_item(11).ok().as_ref())?,
                         );
                         let value = Self::call_with_env_vars(

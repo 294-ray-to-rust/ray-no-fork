@@ -34,6 +34,33 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
 #[cfg(feature = "python")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "python")]
+use std::collections::HashMap;
+#[cfg(feature = "python")]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(feature = "python")]
+static PLACEMENT_GROUPS: OnceLock<Mutex<HashMap<Vec<u8>, ray_proto::ray::rpc::PlacementGroupTableData>>> = OnceLock::new();
+
+#[cfg(feature = "python")]
+pub(crate) fn record_placement_group(data: ray_proto::ray::rpc::PlacementGroupTableData) {
+    PLACEMENT_GROUPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("placement group table lock poisoned")
+        .insert(data.placement_group_id.clone(), data);
+}
+
+#[cfg(feature = "python")]
+fn placement_group_snapshot() -> Vec<ray_proto::ray::rpc::PlacementGroupTableData> {
+    PLACEMENT_GROUPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("placement group table lock poisoned")
+        .values()
+        .cloned()
+        .collect()
+}
 
 #[cfg(feature = "python")]
 fn empty_subscriber_poll_delay(timeout: Option<f64>) -> std::time::Duration {
@@ -746,12 +773,15 @@ impl GlobalStateAccessor {
         } else {
             pg_id.call_method0("binary")?.extract()?
         };
-        let data = ray_proto::ray::rpc::PlacementGroupTableData {
-            placement_group_id,
-            state: ray_proto::ray::rpc::placement_group_table_data::PlacementGroupState::Created
-                as i32,
-            ..Default::default()
-        };
+        let data = placement_group_snapshot()
+            .into_iter()
+            .find(|data| data.placement_group_id == placement_group_id)
+            .unwrap_or_else(|| ray_proto::ray::rpc::PlacementGroupTableData {
+                placement_group_id,
+                state: ray_proto::ray::rpc::placement_group_table_data::PlacementGroupState::Created
+                    as i32,
+                ..Default::default()
+            });
         let mut buf = Vec::new();
         prost::Message::encode(&data, &mut buf).map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!(

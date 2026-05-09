@@ -855,20 +855,37 @@ impl PyCoreWorker {
         args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
     ) -> pyo3::PyResult<crate::ids::PyPlacementGroupID> {
+        let pg_id = crate::ids::PyPlacementGroupID::from_random();
+        let mut proto_bundles = Vec::new();
         if let Ok(bundles) = args.get_item(0) {
             if let Ok(iter) = bundles.iter() {
-                for bundle in iter.flatten() {
+                for (i, bundle) in iter.flatten().enumerate() {
                     if let Ok(dict) = bundle.downcast::<pyo3::types::PyDict>() {
                         if dict.contains("bundle")? {
                             return Err(pyo3::exceptions::PyValueError::new_err(
-                                "resource name 'bundle' is reserved for placement group bundles",
+                                "resource name bundle is reserved for placement group bundles",
                             ));
                         }
+                        let resources: std::collections::HashMap<String, f64> = dict.extract()?;
+                        proto_bundles.push(ray_proto::ray::rpc::Bundle {
+                            bundle_id: Some(ray_proto::ray::rpc::bundle::BundleIdentifier {
+                                placement_group_id: pg_id.inner().binary(),
+                                bundle_index: i as i32,
+                            }),
+                            unit_resources: resources,
+                            ..Default::default()
+                        });
                     }
                 }
             }
         }
-        Ok(crate::ids::PyPlacementGroupID::from_random())
+        crate::record_placement_group(ray_proto::ray::rpc::PlacementGroupTableData {
+            placement_group_id: pg_id.inner().binary(),
+            state: ray_proto::ray::rpc::placement_group_table_data::PlacementGroupState::Created as i32,
+            bundles: proto_bundles,
+            ..Default::default()
+        });
+        Ok(pg_id)
     }
 
     /// Cython-compatible CoreWorker.wait_placement_group_ready() API.

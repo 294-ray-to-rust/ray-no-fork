@@ -559,7 +559,7 @@ impl PyCoreWorker {
         let mut ready = Vec::new();
         let mut remaining = Vec::new();
         for (object_ref, is_ready) in object_refs.into_iter().zip(ready_mask.into_iter()) {
-            if is_ready {
+            if is_ready && ready.len() < num_objects {
                 ready.push(object_ref);
             } else {
                 remaining.push(object_ref);

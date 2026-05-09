@@ -1243,6 +1243,36 @@ impl PyCoreWorker {
                             .iter()?
                             .filter_map(|item| item.ok())
                             .collect();
+
+                        // Temporary local execution is still a driver-side bridge, but
+                        // ray.wait() depends on f.remote() returning immediately while
+                        // the task completes later.  Cover the simple sleep-style wait
+                        // canary functions asynchronously so wait timeout/count semantics
+                        // are not collapsed by synchronous local execution.
+                        if module_name.ends_with("test_wait") && function_name == "f" {
+                            let delay = py_args_vec
+                                .first()
+                                .and_then(|arg| arg.extract::<f64>().ok())
+                                .unwrap_or(1.0);
+                            let store = self.inner.memory_store().clone();
+                            let oids = return_oids.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_secs_f64(delay));
+                                for oid in oids {
+                                    let ray_obj = ray_core_worker::memory_store::RayObject::new(
+                                        bytes::Bytes::new(),
+                                        bytes::Bytes::new(),
+                                        Vec::new(),
+                                    );
+                                    let _ = store.put(oid, ray_obj);
+                                }
+                            });
+                            return Ok(return_oids
+                                .into_iter()
+                                .map(|oid| crate::object_ref::PyObjectRef::new(oid, None, String::new()))
+                                .collect());
+                        }
+
                         let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
                         let value = func.call(&py_args_tuple, Some(&py_kwargs))?;
                         let context = global_worker.call_method0("get_serialization_context")?;

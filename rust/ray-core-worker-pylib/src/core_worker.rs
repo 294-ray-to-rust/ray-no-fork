@@ -987,8 +987,12 @@ impl PyCoreWorker {
                     .collect();
                 let py_args_tuple = pyo3::types::PyTuple::new_bound(py, py_args_vec);
                 let runtime_env_info = kwargs.and_then(|kwargs| kwargs.get_item("serialized_runtime_env_info").ok());
-                let env_vars = Self::merge_env_vars(
+                let job_env_vars = Self::overlay_current_env_for_keys(
+                    py,
                     self.job_runtime_env_vars(py)?,
+                )?;
+                let env_vars = Self::merge_env_vars(
+                    job_env_vars,
                     Self::runtime_env_vars_from_json(py, runtime_env_info.as_ref())?,
                 );
                 let instance = Self::call_with_env_vars(

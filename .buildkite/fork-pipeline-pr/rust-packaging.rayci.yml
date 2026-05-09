@@ -73,6 +73,7 @@ steps:
         --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
+      - rust-pr-fast-fail
       - rust-corebuild-py310
       - rust-ray-core-py310
       - rust-ray-dashboard
@@ -110,6 +111,7 @@ steps:
           --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" \
           --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 1
     depends_on:
+      - rust-pr-fast-fail
       - rust-corebuild-py310
       - rust-ray-core-py310
       - rust-ray-dashboard

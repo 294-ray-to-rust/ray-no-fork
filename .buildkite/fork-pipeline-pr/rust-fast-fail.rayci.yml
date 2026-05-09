@@ -1,0 +1,35 @@
+group: rust fast-fail preflight
+sort_key: rust-fast-fail-preflight
+steps:
+  # The fast-fail step runs the small, hand-curated tripwire manifest at
+  # .buildkite/rayrust-pr-fast-fail-targets.txt before the rest of PR CI.
+  # If any listed target fails, downstream PR tests/builds should not run.
+  # See that manifest's header for editing rules — entries should be removed
+  # as soon as the active fix makes the target green here.
+  #
+  # The step uses the same test_in_docker semantics and the same
+  # corebuild/ray-core/dashboard images as the canary, so a green here
+  # implies the same environment a canary failure would surface in.
+  - label: ":ray: rust PR fast-fail tripwire"
+    key: rust-pr-fast-fail
+    tags:
+      - always
+      - python
+    instance_type: medium
+    commands:
+      - |
+        MANIFEST=.buildkite/rayrust-pr-fast-fail-targets.txt
+        RAYRUST_FAST_FAIL_TARGETS="$$(grep -Ev '^[[:space:]]*(#|$$)' "$$MANIFEST" 2>/dev/null | tr '\n' ' ')"
+        if [ -z "$${RAYRUST_FAST_FAIL_TARGETS// /}" ]; then
+          echo "Fast-fail manifest has no live entries; skipping."
+          exit 0
+        fi
+        echo "RayRust PR fast-fail targets: $$RAYRUST_FAST_FAIL_TARGETS"
+        bazel run //ci/ray_ci:test_in_docker -- $$RAYRUST_FAST_FAIL_TARGETS core \
+          --install-mask all-ray-libraries \
+          --python-version 3.10 --build-name corebuild-py3.10
+    depends_on:
+      - forge
+      - rust-corebuild-py310
+      - rust-ray-core-py310
+      - rust-ray-dashboard

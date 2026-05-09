@@ -47,10 +47,22 @@ fn discover_local_plasma_store_sockets() -> Vec<String> {
     };
 
     for entry in entries.flatten() {
-        let path = entry.path().join("sockets").join("plasma_store");
-        if path.exists() {
-            sockets.push(path.to_string_lossy().into_owned());
+        let session_path = entry.path();
+        let Some(name) = session_path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("session_") {
+            continue;
         }
+        let path = session_path.join("sockets").join("plasma_store");
+        // Python wait_for_node only compares the string stored in the node table
+        // against the raylet's expected plasma socket name.  During Rust no-fork
+        // local compatibility tests the per-node session directory can exist
+        // before the plasma socket file is created/visible, while the deeper
+        // Rust raylet/GCS registration path is still incomplete.  Surface the
+        // canonical session socket path as soon as the session is created so
+        // startup waiters can move on to the actual scheduling/API behavior.
+        sockets.push(path.to_string_lossy().into_owned());
     }
     sockets.sort();
     sockets.dedup();

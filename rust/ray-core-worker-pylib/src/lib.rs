@@ -41,9 +41,9 @@ use std::sync::{Mutex, OnceLock};
 
 #[cfg(feature = "python")]
 fn discover_local_plasma_store_sockets() -> Vec<String> {
-    let mut sockets = Vec::new();
+    let mut sessions = Vec::new();
     let Ok(entries) = std::fs::read_dir("/tmp/ray") else {
-        return sockets;
+        return Vec::new();
     };
 
     for entry in entries.flatten() {
@@ -54,6 +54,27 @@ fn discover_local_plasma_store_sockets() -> Vec<String> {
         if !name.starts_with("session_") {
             continue;
         }
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        sessions.push((modified, session_path));
+    }
+
+    // New worker nodes ask GcsClient for the head node's session/temp dirs.  The
+    // Bazel canary leaves older /tmp/ray/session_* directories behind between
+    // placement-group cases, so lexicographic ordering can mark a stale session
+    // as the synthetic head and send the next worker to a dead cluster address.
+    // Prefer the newest local session as head while still surfacing all session
+    // plasma paths to GlobalState.node_table waiters.
+    sessions.sort_by(|(a_time, a_path), (b_time, b_path)| {
+        b_time
+            .cmp(a_time)
+            .then_with(|| b_path.file_name().cmp(&a_path.file_name()))
+    });
+
+    let mut sockets = Vec::new();
+    for (_, session_path) in sessions {
         let path = session_path.join("sockets").join("plasma_store");
         // Python wait_for_node only compares the string stored in the node table
         // against the raylet's expected plasma socket name.  During Rust no-fork
@@ -62,10 +83,11 @@ fn discover_local_plasma_store_sockets() -> Vec<String> {
         // Rust raylet/GCS registration path is still incomplete.  Surface the
         // canonical session socket path as soon as the session is created so
         // startup waiters can move on to the actual scheduling/API behavior.
-        sockets.push(path.to_string_lossy().into_owned());
+        let socket = path.to_string_lossy().into_owned();
+        if !sockets.contains(&socket) {
+            sockets.push(socket);
+        }
     }
-    sockets.sort();
-    sockets.dedup();
     sockets
 }
 

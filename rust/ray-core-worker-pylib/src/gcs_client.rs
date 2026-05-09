@@ -519,9 +519,9 @@ impl PyGcsClient {
             }
         }
 
-        let nodes = self
+        let mut nodes = self
             .runtime
-            .block_on(self.client.get_all_node_info(req))
+            .block_on(self.client.get_all_node_info(req.clone()))
             .map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!(
                     "get_all_node_info failed: {}",
@@ -529,6 +529,41 @@ impl PyGcsClient {
                 ))
             })?
             .node_info_list;
+
+        // The temporary Rust no-fork/Python bridge may create local Ray session
+        // directories before the Rust raylet has fully persisted GCS node info.
+        // Python startup for worker nodes asks GcsClient directly for the head
+        // node's temp/session dirs, so mirror the synthetic local node entries
+        // used by GlobalStateAccessor.get_node_table here as well.
+        let known_sockets: std::collections::HashSet<String> = nodes
+            .iter()
+            .map(|node| node.object_store_socket_name.clone())
+            .collect();
+        nodes.extend(
+            crate::discover_local_session_node_infos()
+                .into_iter()
+                .filter(|node| !known_sockets.contains(&node.object_store_socket_name)),
+        );
+
+        if let Some(state_filter) = req.state_filter {
+            nodes.retain(|node| node.state == state_filter);
+        }
+        for selector in &req.node_selectors {
+            use rpc::get_all_node_info_request::node_selector::NodeSelector;
+            match selector.node_selector.as_ref() {
+                Some(NodeSelector::NodeId(node_id)) => nodes.retain(|node| node.node_id == *node_id),
+                Some(NodeSelector::NodeName(node_name)) => {
+                    nodes.retain(|node| node.node_name == *node_name)
+                }
+                Some(NodeSelector::NodeIpAddress(address)) => {
+                    nodes.retain(|node| node.node_manager_address == *address)
+                }
+                Some(NodeSelector::IsHeadNode(is_head)) => {
+                    nodes.retain(|node| node.is_head_node == *is_head)
+                }
+                None => {}
+            }
+        }
 
         let gcs_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;
         let gcs_node_info_cls = gcs_pb2.getattr("GcsNodeInfo")?;

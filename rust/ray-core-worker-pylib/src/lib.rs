@@ -70,6 +70,38 @@ fn discover_local_plasma_store_sockets() -> Vec<String> {
 }
 
 #[cfg(feature = "python")]
+pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::GcsNodeInfo> {
+    discover_local_plasma_store_sockets()
+        .into_iter()
+        .enumerate()
+        .map(|(idx, socket)| {
+            let session_dir = std::path::Path::new(&socket)
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            ray_proto::ray::rpc::GcsNodeInfo {
+                node_id: {
+                    let mut node_id = vec![0; 28];
+                    if let Some(last) = node_id.last_mut() {
+                        *last = (idx + 1).min(u8::MAX as usize) as u8;
+                    }
+                    node_id
+                },
+                node_manager_address: "127.0.0.1".to_string(),
+                node_manager_hostname: "127.0.0.1".to_string(),
+                object_store_socket_name: socket,
+                state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,
+                is_head_node: idx == 0,
+                temp_dir: "/tmp/ray".to_string(),
+                session_dir,
+                ..Default::default()
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "python")]
 static PLACEMENT_GROUPS: OnceLock<Mutex<HashMap<Vec<u8>, ray_proto::ray::rpc::PlacementGroupTableData>>> = OnceLock::new();
 
 #[cfg(feature = "python")]

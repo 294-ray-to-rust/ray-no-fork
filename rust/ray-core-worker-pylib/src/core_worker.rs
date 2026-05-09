@@ -430,6 +430,36 @@ impl PyCoreWorker {
         Ok(crate::ids::PyObjectID::from_inner(oid))
     }
 
+    /// Cython-compatible CoreWorker.put_object() API used by ray.put().
+    ///
+    /// Python passes a SerializedObject-compatible value with `to_bytes()` and
+    /// `metadata` attributes plus several keyword-only storage hints. The Rust
+    /// compatibility store only needs the serialized bytes and metadata for the
+    /// current in-memory fast-fail targets.
+    #[pyo3(name = "put_object", signature = (serialized_value, **_kwargs))]
+    fn py_put_object_legacy(
+        &self,
+        py: pyo3::Python<'_>,
+        serialized_value: &pyo3::Bound<'_, pyo3::PyAny>,
+        _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+    ) -> pyo3::PyResult<crate::object_ref::PyObjectRef> {
+        let data: Vec<u8> = serialized_value.call_method0("to_bytes")?.extract()?;
+        let metadata_obj = serialized_value.getattr("metadata")?;
+        let metadata: Vec<u8> = if metadata_obj.is_none() {
+            Vec::new()
+        } else {
+            metadata_obj.extract()?
+        };
+        let oid = ObjectID::from_random();
+        py.allow_threads(|| self.put_object(oid, data, metadata))
+            .map_err(crate::common::to_py_err)?;
+        Ok(crate::object_ref::PyObjectRef::new(
+            oid,
+            None,
+            String::new(),
+        ))
+    }
+
     /// Get objects by their binary IDs.
     ///
     /// Returns a list of (data_bytes, metadata_bytes) or None for each object.

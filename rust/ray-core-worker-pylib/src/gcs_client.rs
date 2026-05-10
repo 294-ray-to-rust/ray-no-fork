@@ -606,21 +606,22 @@ impl PyGcsClient {
         if let Some(state_filter) = req.state_filter {
             nodes.retain(|node| node.state == state_filter);
         }
-        for selector in &req.node_selectors {
+        if !req.node_selectors.is_empty() {
             use rpc::get_all_node_info_request::node_selector::NodeSelector;
-            match selector.node_selector.as_ref() {
-                Some(NodeSelector::NodeId(node_id)) => nodes.retain(|node| node.node_id == *node_id),
-                Some(NodeSelector::NodeName(node_name)) => {
-                    nodes.retain(|node| node.node_name == *node_name)
-                }
-                Some(NodeSelector::NodeIpAddress(address)) => {
-                    nodes.retain(|node| node.node_manager_address == *address)
-                }
-                Some(NodeSelector::IsHeadNode(is_head)) => {
-                    nodes.retain(|node| node.is_head_node == *is_head)
-                }
-                None => {}
-            }
+            // Python passes one NodeSelector per locally discovered raylet node id
+            // when resolving a connect-only driver.  The GCS API treats that list
+            // as alternatives, not as an impossible conjunction of all IDs.  Keep
+            // nodes that match any selector so multi-raylet local clusters can
+            // still resolve the current head node.
+            nodes.retain(|node| {
+                req.node_selectors.iter().any(|selector| match selector.node_selector.as_ref() {
+                    Some(NodeSelector::NodeId(node_id)) => node.node_id == *node_id,
+                    Some(NodeSelector::NodeName(node_name)) => node.node_name == *node_name,
+                    Some(NodeSelector::NodeIpAddress(address)) => node.node_manager_address == *address,
+                    Some(NodeSelector::IsHeadNode(is_head)) => node.is_head_node == *is_head,
+                    None => true,
+                })
+            });
         }
 
         let gcs_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;

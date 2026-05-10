@@ -72,12 +72,12 @@ def _dump_ray_sessions():
             [
                 "bash",
                 "-lc",
-                'ls -ld /tmp/ray/session* 2>/dev/null || true; '
-                'for d in /tmp/ray/session_*; do '
+                "ls -ld /tmp/ray/session* 2>/dev/null || true; "
+                "for d in /tmp/ray/session_*; do "
                 '[ -d "$d" ] || continue; '
                 'echo SESSION "$d"; '
                 'ls -l "$d/sockets" 2>/dev/null || true; '
-                'done',
+                "done",
             ],
             text=True,
             stderr=subprocess.STDOUT,

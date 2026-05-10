@@ -92,7 +92,49 @@ fn discover_local_plasma_store_sockets() -> Vec<String> {
 }
 
 #[cfg(feature = "python")]
+#[derive(Clone, Debug, Default)]
+struct LocalRayletMetadata {
+    node_id: Vec<u8>,
+    node_ip_address: String,
+    node_manager_port: i32,
+    raylet_socket_name: String,
+}
+
+fn parse_raylet_arg(args: &[String], name: &str) -> Option<String> {
+    let prefix = format!("--{}=", name);
+    args.iter()
+        .find_map(|arg| arg.strip_prefix(&prefix).map(|value| value.to_string()))
+        .or_else(|| {
+            args.windows(2).find_map(|pair| {
+                if pair[0] == format!("--{}", name) { Some(pair[1].clone()) } else { None }
+            })
+        })
+}
+
+fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
+    if hex.len() % 2 != 0 { return None; }
+    (0..hex.len()).step_by(2).map(|idx| u8::from_str_radix(&hex[idx..idx + 2], 16).ok()).collect()
+}
+
+fn discover_local_raylet_metadata() -> std::collections::HashMap<String, LocalRayletMetadata> {
+    let mut by_session = std::collections::HashMap::new();
+    let Ok(entries) = std::fs::read_dir("/proc") else { return by_session; };
+    for entry in entries.flatten() {
+        let Ok(bytes) = std::fs::read(entry.path().join("cmdline")) else { continue; };
+        if !bytes.windows(6).any(|window| window == b"raylet") { continue; }
+        let args: Vec<String> = bytes.split(|byte| *byte == 0).filter(|part| !part.is_empty()).map(|part| String::from_utf8_lossy(part).into_owned()).collect();
+        let Some(raylet_socket_name) = parse_raylet_arg(&args, "raylet_socket_name") else { continue; };
+        let Some(session_dir) = std::path::Path::new(&raylet_socket_name).parent().and_then(|path| path.parent()).map(|path| path.to_string_lossy().into_owned()) else { continue; };
+        let node_id = parse_raylet_arg(&args, "node_id").and_then(|value| hex_to_bytes(&value)).unwrap_or_default();
+        let node_ip_address = parse_raylet_arg(&args, "node_ip_address").unwrap_or_else(|| node_ip_address_from_perspective(None));
+        let node_manager_port = parse_raylet_arg(&args, "node_manager_port").and_then(|value| value.parse::<i32>().ok()).unwrap_or_default();
+        by_session.insert(session_dir, LocalRayletMetadata { node_id, node_ip_address, node_manager_port, raylet_socket_name });
+    }
+    by_session
+}
+
 pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::GcsNodeInfo> {
+    let raylets_by_session = discover_local_raylet_metadata();
     discover_local_plasma_store_sockets()
         .into_iter()
         .enumerate()
@@ -102,16 +144,28 @@ pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::Gc
                 .and_then(|p| p.parent())
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default();
+            let raylet = raylets_by_session.get(&session_dir);
             ray_proto::ray::rpc::GcsNodeInfo {
-                node_id: {
-                    let mut node_id = vec![0; 28];
-                    if let Some(last) = node_id.last_mut() {
-                        *last = (idx + 1).min(u8::MAX as usize) as u8;
-                    }
-                    node_id
-                },
-                node_manager_address: "127.0.0.1".to_string(),
-                node_manager_hostname: "127.0.0.1".to_string(),
+                node_id: raylet
+                    .filter(|metadata| !metadata.node_id.is_empty())
+                    .map(|metadata| metadata.node_id.clone())
+                    .unwrap_or_else(|| {
+                        let mut node_id = vec![0; 28];
+                        if let Some(last) = node_id.last_mut() {
+                            *last = (idx + 1).min(u8::MAX as usize) as u8;
+                        }
+                        node_id
+                    }),
+                node_manager_address: raylet
+                    .map(|metadata| metadata.node_ip_address.clone())
+                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
+                node_manager_hostname: raylet
+                    .map(|metadata| metadata.node_ip_address.clone())
+                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
+                node_manager_port: raylet.map(|metadata| metadata.node_manager_port).unwrap_or_default(),
+                raylet_socket_name: raylet
+                    .map(|metadata| metadata.raylet_socket_name.clone())
+                    .unwrap_or_default(),
                 object_store_socket_name: socket,
                 state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,
                 is_head_node: idx == 0,

@@ -654,7 +654,21 @@ impl PyGcsClient {
             .iter()
             .map(|node| node.object_store_socket_name.clone())
             .collect();
-        nodes.retain(|node| !known_sockets.contains(&node.object_store_socket_name));
+        let known_node_ids: std::collections::HashSet<Vec<u8>> = synthetic_nodes
+            .iter()
+            .map(|node| node.node_id.clone())
+            .collect();
+        // Python receives this response as a dict keyed by NodeID.  If a stale
+        // real GCS row has the same requested local node ID as one of the
+        // mirrored synthetic entries, inserting it after the synthetic node
+        // overwrites the synthetic head/session in that dict and sends
+        // connect-only drivers back to the dead default address.  Drop both
+        // duplicate sockets and duplicate node IDs before prepending the
+        // synthetic compatibility rows.
+        nodes.retain(|node| {
+            !known_sockets.contains(&node.object_store_socket_name)
+                && !known_node_ids.contains(&node.node_id)
+        });
         nodes.splice(0..0, synthetic_nodes);
 
         if let Some(state_filter) = req.state_filter {

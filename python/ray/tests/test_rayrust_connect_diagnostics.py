@@ -111,6 +111,8 @@ def test_rayrust_connect_only_selection_diagnostics(ray_start_cluster):
     _dump(f"cluster_address={cluster.address}")
     _dump_raylet_processes()
     _dump_ray_sessions()
+    _dump(f"find_node_ids={sorted(services.find_node_ids())}")
+    _dump(f"find_gcs_addresses={sorted(services.find_gcs_addresses())}")
 
     gcs_client = ray._raylet.GcsClient(address=cluster.address)
     try:

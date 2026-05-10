@@ -105,5 +105,5 @@ def test_rayrust_connect_only_selection_diagnostics(ray_start_cluster):
     _dump("ray_init_ok")
 
 
-if __name__ == __main__:
-    sys.exit(pytest.main([-sv, __file__]))
+if __name__ == "__main__":
+    sys.exit(pytest.main(["-sv", __file__]))

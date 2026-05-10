@@ -534,16 +534,17 @@ impl PyGcsClient {
         // directories before the Rust raylet has fully persisted GCS node info.
         // Python startup for worker nodes asks GcsClient directly for the head
         // node's temp/session dirs, so mirror the synthetic local node entries
-        // used by GlobalStateAccessor.get_node_table here as well.
-        let known_sockets: std::collections::HashSet<String> = nodes
+        // used by GlobalStateAccessor.get_node_table here as well.  Keep the
+        // newest synthetic session first: stale real GCS head entries can remain
+        // alive between placement-group cases, and Node.__init__ takes the first
+        // ALIVE head returned by this call.
+        let synthetic_nodes = crate::discover_local_session_node_infos();
+        let known_sockets: std::collections::HashSet<String> = synthetic_nodes
             .iter()
             .map(|node| node.object_store_socket_name.clone())
             .collect();
-        nodes.extend(
-            crate::discover_local_session_node_infos()
-                .into_iter()
-                .filter(|node| !known_sockets.contains(&node.object_store_socket_name)),
-        );
+        nodes.retain(|node| !known_sockets.contains(&node.object_store_socket_name));
+        nodes.splice(0..0, synthetic_nodes);
 
         if let Some(state_filter) = req.state_filter {
             nodes.retain(|node| node.state == state_filter);

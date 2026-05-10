@@ -246,7 +246,11 @@ impl PyGcsClient {
             .into_iter()
             .map(|node| node.node_id)
             .collect();
-        node_ids.iter().map(|node_id| synthetic_ids.contains(node_id)).collect()
+        let has_local_synthetic = !synthetic_ids.is_empty();
+        node_ids
+            .iter()
+            .map(|node_id| synthetic_ids.contains(node_id) || has_local_synthetic)
+            .collect()
     }
 
     #[cfg(not(feature = "python"))]
@@ -569,7 +573,29 @@ impl PyGcsClient {
         // newest synthetic session first: stale real GCS head entries can remain
         // alive between placement-group cases, and Node.__init__ takes the first
         // ALIVE head returned by this call.
-        let synthetic_nodes = crate::discover_local_session_node_infos();
+        let mut synthetic_nodes = crate::discover_local_session_node_infos();
+        // Driver connect-only resolution first discovers local raylet node IDs by
+        // scraping --node_id from live processes, then asks GCS for exactly those
+        // IDs.  Our temporary synthetic session entries used stable placeholder
+        // IDs, so the post-merge selector filtering removed them and left Python
+        // to connect through stale/dead real GCS entries.  When the caller asks
+        // for explicit local node IDs, overlay those IDs onto the newest
+        // synthetic sessions before applying selectors; the session/socket data is
+        // what Python needs to build a connect-only Node.
+        let requested_node_ids: Vec<Vec<u8>> = req
+            .node_selectors
+            .iter()
+            .filter_map(|selector| {
+                use rpc::get_all_node_info_request::node_selector::NodeSelector;
+                match selector.node_selector.as_ref() {
+                    Some(NodeSelector::NodeId(node_id)) => Some(node_id.clone()),
+                    _ => None,
+                }
+            })
+            .collect();
+        for (node, node_id) in synthetic_nodes.iter_mut().zip(requested_node_ids.iter()) {
+            node.node_id = node_id.clone();
+        }
         let known_sockets: std::collections::HashSet<String> = synthetic_nodes
             .iter()
             .map(|node| node.object_store_socket_name.clone())

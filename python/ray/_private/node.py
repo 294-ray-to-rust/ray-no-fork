@@ -296,6 +296,24 @@ class Node:
 
         # Resolve socket and port names
         if connect_only:
+            assert node_to_connect_info is not None
+            rayrust_connect_selected = (
+                "RayRust connect selected: "
+                f"node_id={getattr(getattr(node_to_connect_info, 'node_id', None), 'hex', lambda: getattr(node_to_connect_info, 'node_id', None))()} "
+                f"addr={getattr(node_to_connect_info, 'node_manager_address', None)} "
+                f"port={getattr(node_to_connect_info, 'node_manager_port', None)} "
+                f"raylet={getattr(node_to_connect_info, 'raylet_socket_name', None)} "
+                f"object_store={getattr(node_to_connect_info, 'object_store_socket_name', None)} "
+                f"temp_dir={getattr(node_to_connect_info, 'temp_dir', None)} "
+                f"session_dir={getattr(node_to_connect_info, 'session_dir', None)} "
+                f"is_head={getattr(node_to_connect_info, 'is_head_node', None)} "
+                f"ray_params_raylet={ray_params.raylet_socket_name} "
+                f"ray_params_object_store={ray_params.plasma_store_socket_name} "
+                f"ray_params_node_manager_port={ray_params.node_manager_port}"
+            )
+            print(rayrust_connect_selected, file=sys.stderr, flush=True)
+            logger.warning("%s", rayrust_connect_selected)
+
             # Get socket names from the configuration.
             self._plasma_store_socket_name = ray_params.plasma_store_socket_name
             self._raylet_socket_name = ray_params.raylet_socket_name

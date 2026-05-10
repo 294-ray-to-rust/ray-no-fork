@@ -101,14 +101,25 @@ struct LocalRayletMetadata {
 }
 
 fn parse_raylet_arg(args: &[String], name: &str) -> Option<String> {
-    let prefix = format!("--{}=", name);
-    args.iter()
-        .find_map(|arg| arg.strip_prefix(&prefix).map(|value| value.to_string()))
-        .or_else(|| {
-            args.windows(2).find_map(|pair| {
-                if pair[0] == format!("--{}", name) { Some(pair[1].clone()) } else { None }
-            })
-        })
+    let dashed = name.replace('_', "-");
+    let ray_prefixed = format!("ray_{}", name);
+    let ray_prefixed_dashed = ray_prefixed.replace('_', "-");
+    let candidates = [name.to_string(), dashed, ray_prefixed, ray_prefixed_dashed];
+    for candidate in candidates {
+        let prefix = format!("--{}=", candidate);
+        if let Some(value) = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix(&prefix).map(|value| value.to_string()))
+        {
+            return Some(value);
+        }
+        if let Some(value) = args.windows(2).find_map(|pair| {
+            if pair[0] == format!("--{}", candidate) { Some(pair[1].clone()) } else { None }
+        }) {
+            return Some(value);
+        }
+    }
+    None
 }
 
 fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {

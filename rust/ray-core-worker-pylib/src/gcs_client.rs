@@ -222,7 +222,9 @@ impl PyGcsClient {
             node_ids: node_ids.to_vec(),
         };
         match self.runtime.block_on(self.client.check_alive(req)) {
-            Ok(reply) if reply.raylet_alive.len() == node_ids.len() => reply.raylet_alive,
+            Ok(reply) if reply.raylet_alive.len() == node_ids.len() => {
+                self.overlay_synthetic_alive(node_ids, reply.raylet_alive)
+            }
             Ok(reply) => {
                 tracing::warn!(
                     expected = node_ids.len(),
@@ -250,6 +252,13 @@ impl PyGcsClient {
     #[cfg(not(feature = "python"))]
     fn synthetic_check_alive(&self, node_ids: &[Vec<u8>]) -> Vec<bool> {
         vec![false; node_ids.len()]
+    }
+
+    fn overlay_synthetic_alive(&self, node_ids: &[Vec<u8>], mut alive: Vec<bool>) -> Vec<bool> {
+        for (is_alive, synthetic_alive) in alive.iter_mut().zip(self.synthetic_check_alive(node_ids)) {
+            *is_alive = *is_alive || synthetic_alive;
+        }
+        alive
     }
 
     /// Request nodes to drain (stub — drain RPC not yet in GcsClient trait).

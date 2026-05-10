@@ -318,7 +318,11 @@ class Node:
                 )
                 logger.warning(
                     "RayRust connect selected: node_id=%s addr=%s port=%s raylet=%s object_store=%s temp_dir=%s session_dir=%s is_head=%s",
-                    getattr(getattr(node_to_connect_info, "node_id", None), "hex", lambda: getattr(node_to_connect_info, "node_id", None))(),
+                    getattr(
+                        getattr(node_to_connect_info, "node_id", None),
+                        "hex",
+                        lambda: getattr(node_to_connect_info, "node_id", None),
+                    )(),
                     getattr(node_to_connect_info, "node_manager_address", None),
                     getattr(node_to_connect_info, "node_manager_port", None),
                     getattr(node_to_connect_info, "raylet_socket_name", None),

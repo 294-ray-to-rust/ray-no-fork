@@ -533,7 +533,11 @@ def get_node_to_connect_for_driver(
             logger.warning(
                 "RayRust connect candidate: selector_ids=%s node_id=%s addr=%s port=%s raylet=%s object_store=%s temp_dir=%s session_dir=%s is_head=%s state=%s",
                 possible_node_ids,
-                getattr(getattr(node_info, "node_id", None), "hex", lambda: getattr(node_info, "node_id", None))(),
+                getattr(
+                    getattr(node_info, "node_id", None),
+                    "hex",
+                    lambda: getattr(node_info, "node_id", None),
+                )(),
                 getattr(node_info, "node_manager_address", None),
                 getattr(node_info, "node_manager_port", None),
                 getattr(node_info, "raylet_socket_name", None),

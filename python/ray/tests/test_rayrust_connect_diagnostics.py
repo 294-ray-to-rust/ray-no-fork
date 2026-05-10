@@ -55,6 +55,15 @@ def _dump_raylet_processes():
         return
     for line in out.splitlines():
         _dump(f"process {line}")
+        pid = line.split(maxsplit=1)[0]
+        if not pid.isdigit():
+            continue
+        try:
+            raw = open(f"/proc/{pid}/cmdline", "rb").read()
+            cmdline = raw.replace(b"\0", b" ").decode("utf-8", "replace")
+            _dump(f"cmdline[{pid}]={cmdline}")
+        except Exception as exc:  # pragma: no cover - diagnostic only
+            _dump(f"cmdline_error[{pid}]={exc!r}")
 
 
 @pytest.mark.parametrize(

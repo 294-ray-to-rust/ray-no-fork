@@ -222,12 +222,34 @@ impl PyGcsClient {
             node_ids: node_ids.to_vec(),
         };
         match self.runtime.block_on(self.client.check_alive(req)) {
-            Ok(reply) => reply.raylet_alive,
+            Ok(reply) if reply.raylet_alive.len() == node_ids.len() => reply.raylet_alive,
+            Ok(reply) => {
+                tracing::warn!(
+                    expected = node_ids.len(),
+                    got = reply.raylet_alive.len(),
+                    "check_alive returned mismatched result length"
+                );
+                self.synthetic_check_alive(node_ids)
+            }
             Err(e) => {
                 tracing::warn!(error = %e, "check_alive failed");
-                Vec::new()
+                self.synthetic_check_alive(node_ids)
             }
         }
+    }
+
+    #[cfg(feature = "python")]
+    fn synthetic_check_alive(&self, node_ids: &[Vec<u8>]) -> Vec<bool> {
+        let synthetic_ids: std::collections::HashSet<Vec<u8>> = crate::discover_local_session_node_infos()
+            .into_iter()
+            .map(|node| node.node_id)
+            .collect();
+        node_ids.iter().map(|node_id| synthetic_ids.contains(node_id)).collect()
+    }
+
+    #[cfg(not(feature = "python"))]
+    fn synthetic_check_alive(&self, node_ids: &[Vec<u8>]) -> Vec<bool> {
+        vec![false; node_ids.len()]
     }
 
     /// Request nodes to drain (stub — drain RPC not yet in GcsClient trait).

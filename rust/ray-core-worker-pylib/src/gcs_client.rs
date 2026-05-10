@@ -597,10 +597,19 @@ impl PyGcsClient {
             // The selector list can contain more local raylet IDs than we have
             // unambiguous synthetic session entries for, and stale real GCS
             // entries for any one selected ID can otherwise survive the OR
-            // filter below.  Mirror the newest live synthetic session under
-            // every requested local ID so connect-only resolution always sees a
-            // live local address before stale real GCS rows.
-            let template_nodes = synthetic_nodes.clone();
+            // filter below.  Mirror the synthetic session that belongs to this
+            // GCS client address under every requested local ID so connect-only
+            // resolution uses the cluster that ray.init(address=...) asked for,
+            // not a newer worker/stale session from another placement-group
+            // attempt.
+            let mut template_nodes = synthetic_nodes.clone();
+            if let Some(pos) = template_nodes.iter().position(|node| {
+                node.node_name
+                    .strip_prefix("__rayrust_gcs_address=")
+                    .is_some_and(|address| address == self.gcs_address)
+            }) {
+                template_nodes.rotate_left(pos);
+            }
             synthetic_nodes = requested_node_ids
                 .iter()
                 .enumerate()
@@ -644,8 +653,11 @@ impl PyGcsClient {
         let gcs_node_info_cls = gcs_pb2.getattr("GcsNodeInfo")?;
         let result = PyDict::new_bound(py);
 
-        for node in nodes {
+        for mut node in nodes {
             let node_id = crate::ids::PyNodeID::new(&node.node_id).into_py(py);
+            if node.node_name.starts_with("__rayrust_gcs_address=") {
+                node.node_name.clear();
+            }
             let py_node_info = gcs_node_info_cls.call0()?;
             let bytes = pyo3::types::PyBytes::new_bound(py, &node.encode_to_vec());
             py_node_info.call_method1("ParseFromString", (bytes,))?;

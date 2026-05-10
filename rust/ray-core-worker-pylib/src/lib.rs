@@ -98,6 +98,7 @@ struct LocalRayletMetadata {
     node_ip_address: String,
     node_manager_port: i32,
     raylet_socket_name: String,
+    gcs_address: String,
 }
 
 fn parse_raylet_arg(args: &[String], name: &str) -> Option<String> {
@@ -139,7 +140,8 @@ fn discover_local_raylet_metadata() -> std::collections::HashMap<String, LocalRa
         let node_id = parse_raylet_arg(&args, "node_id").and_then(|value| hex_to_bytes(&value)).unwrap_or_default();
         let node_ip_address = parse_raylet_arg(&args, "node_ip_address").unwrap_or_else(|| node_ip_address_from_perspective(None));
         let node_manager_port = parse_raylet_arg(&args, "node_manager_port").and_then(|value| value.parse::<i32>().ok()).unwrap_or_default();
-        by_session.insert(session_dir, LocalRayletMetadata { node_id, node_ip_address, node_manager_port, raylet_socket_name });
+        let gcs_address = parse_raylet_arg(&args, "gcs_address").unwrap_or_default();
+        by_session.insert(session_dir, LocalRayletMetadata { node_id, node_ip_address, node_manager_port, raylet_socket_name, gcs_address });
     }
     by_session
 }
@@ -191,6 +193,14 @@ pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::Gc
                 node_manager_port: raylet.map(|metadata| metadata.node_manager_port).unwrap_or_default(),
                 raylet_socket_name: raylet
                     .map(|metadata| metadata.raylet_socket_name.clone())
+                    .unwrap_or_default(),
+                // Temporary internal marker used by the Python-facing GCS shim
+                // to associate a synthetic local session with the GCS address
+                // used by ray.init(address=...). It is stripped before the node
+                // info is returned to Python.
+                node_name: raylet
+                    .filter(|metadata| !metadata.gcs_address.is_empty())
+                    .map(|metadata| format!("__rayrust_gcs_address={}", metadata.gcs_address))
                     .unwrap_or_default(),
                 object_store_socket_name: socket,
                 state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,

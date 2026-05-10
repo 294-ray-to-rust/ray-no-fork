@@ -530,6 +530,20 @@ def get_node_to_connect_for_driver(
                 f" when trying to resolve node to connect to. Error: {repr(e)}"
             )
         for node_info in node_to_connect_infos:
+            rayrust_connect_candidate = (
+                "RayRust connect candidate: "
+                f"selector_ids={possible_node_ids} "
+                f"node_id={getattr(getattr(node_info, 'node_id', None), 'hex', lambda: getattr(node_info, 'node_id', None))()} "
+                f"addr={getattr(node_info, 'node_manager_address', None)} "
+                f"port={getattr(node_info, 'node_manager_port', None)} "
+                f"raylet={getattr(node_info, 'raylet_socket_name', None)} "
+                f"object_store={getattr(node_info, 'object_store_socket_name', None)} "
+                f"temp_dir={getattr(node_info, 'temp_dir', None)} "
+                f"session_dir={getattr(node_info, 'session_dir', None)} "
+                f"is_head={getattr(node_info, 'is_head_node', None)} "
+                f"state={getattr(node_info, 'state', None)}"
+            )
+            print(rayrust_connect_candidate, file=sys.stderr, flush=True)
             logger.warning(
                 "RayRust connect candidate: selector_ids=%s node_id=%s addr=%s port=%s raylet=%s object_store=%s temp_dir=%s session_dir=%s is_head=%s state=%s",
                 possible_node_ids,

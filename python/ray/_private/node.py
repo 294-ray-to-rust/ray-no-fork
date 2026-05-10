@@ -316,6 +316,18 @@ class Node:
                 self._ray_params.node_manager_port = (
                     node_to_connect_info.node_manager_port
                 )
+                rayrust_connect_selected = (
+                    "RayRust connect selected: "
+                    f"node_id={getattr(getattr(node_to_connect_info, 'node_id', None), 'hex', lambda: getattr(node_to_connect_info, 'node_id', None))()} "
+                    f"addr={getattr(node_to_connect_info, 'node_manager_address', None)} "
+                    f"port={getattr(node_to_connect_info, 'node_manager_port', None)} "
+                    f"raylet={getattr(node_to_connect_info, 'raylet_socket_name', None)} "
+                    f"object_store={getattr(node_to_connect_info, 'object_store_socket_name', None)} "
+                    f"temp_dir={getattr(node_to_connect_info, 'temp_dir', None)} "
+                    f"session_dir={getattr(node_to_connect_info, 'session_dir', None)} "
+                    f"is_head={getattr(node_to_connect_info, 'is_head_node', None)}"
+                )
+                print(rayrust_connect_selected, file=sys.stderr, flush=True)
                 logger.warning(
                     "RayRust connect selected: node_id=%s addr=%s port=%s raylet=%s object_store=%s temp_dir=%s session_dir=%s is_head=%s",
                     getattr(

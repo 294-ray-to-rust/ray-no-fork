@@ -316,6 +316,17 @@ class Node:
                 self._ray_params.node_manager_port = (
                     node_to_connect_info.node_manager_port
                 )
+                logger.warning(
+                    "RayRust connect selected: node_id=%s addr=%s port=%s raylet=%s object_store=%s temp_dir=%s session_dir=%s is_head=%s",
+                    getattr(getattr(node_to_connect_info, "node_id", None), "hex", lambda: getattr(node_to_connect_info, "node_id", None))(),
+                    getattr(node_to_connect_info, "node_manager_address", None),
+                    getattr(node_to_connect_info, "node_manager_port", None),
+                    getattr(node_to_connect_info, "raylet_socket_name", None),
+                    getattr(node_to_connect_info, "object_store_socket_name", None),
+                    getattr(node_to_connect_info, "temp_dir", None),
+                    getattr(node_to_connect_info, "session_dir", None),
+                    getattr(node_to_connect_info, "is_head_node", None),
+                )
         else:
             # If the user specified a socket name, use it.
             self._plasma_store_socket_name = self._prepare_socket_file(

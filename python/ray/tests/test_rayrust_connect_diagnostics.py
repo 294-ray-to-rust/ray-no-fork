@@ -66,6 +66,30 @@ def _dump_raylet_processes():
             _dump(f"cmdline_error[{pid}]={exc!r}")
 
 
+def _dump_ray_sessions():
+    try:
+        out = subprocess.check_output(
+            [
+                "bash",
+                "-lc",
+                'ls -ld /tmp/ray/session* 2>/dev/null || true; '
+                'for d in /tmp/ray/session_*; do '
+                '[ -d "$d" ] || continue; '
+                'echo SESSION "$d"; '
+                'ls -l "$d/sockets" 2>/dev/null || true; '
+                'done',
+            ],
+            text=True,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+        )
+    except Exception as exc:  # pragma: no cover - diagnostic only
+        _dump(f"ray_session_dump_error={exc!r}")
+        return
+    for line in out.splitlines():
+        _dump(f"session {line}")
+
+
 @pytest.mark.parametrize(
     "ray_start_cluster",
     [{"include_dashboard": True}],
@@ -86,6 +110,7 @@ def test_rayrust_connect_only_selection_diagnostics(ray_start_cluster):
 
     _dump(f"cluster_address={cluster.address}")
     _dump_raylet_processes()
+    _dump_ray_sessions()
 
     gcs_client = ray._raylet.GcsClient(address=cluster.address)
     try:

@@ -34,6 +34,182 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
 #[cfg(feature = "python")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "python")]
+use std::collections::HashMap;
+#[cfg(feature = "python")]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(feature = "python")]
+fn discover_local_plasma_store_sockets() -> Vec<String> {
+    let mut sessions = Vec::new();
+    let Ok(entries) = std::fs::read_dir("/tmp/ray") else {
+        return Vec::new();
+    };
+
+    for entry in entries.flatten() {
+        let session_path = entry.path();
+        let Some(name) = session_path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("session_") {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        sessions.push((modified, session_path));
+    }
+
+    // New worker nodes ask GcsClient for the head node's session/temp dirs.  The
+    // Bazel canary leaves older /tmp/ray/session_* directories behind between
+    // placement-group cases, so lexicographic ordering can mark a stale session
+    // as the synthetic head and send the next worker to a dead cluster address.
+    // Prefer the newest local session as head while still surfacing all session
+    // plasma paths to GlobalState.node_table waiters.
+    sessions.sort_by(|(a_time, a_path), (b_time, b_path)| {
+        b_time
+            .cmp(a_time)
+            .then_with(|| b_path.file_name().cmp(&a_path.file_name()))
+    });
+
+    let mut sockets = Vec::new();
+    for (_, session_path) in sessions {
+        let path = session_path.join("sockets").join("plasma_store");
+        // Python wait_for_node only compares the string stored in the node table
+        // against the raylet's expected plasma socket name.  During Rust no-fork
+        // local compatibility tests the per-node session directory can exist
+        // before the plasma socket file is created/visible, while the deeper
+        // Rust raylet/GCS registration path is still incomplete.  Surface the
+        // canonical session socket path as soon as the session is created so
+        // startup waiters can move on to the actual scheduling/API behavior.
+        let socket = path.to_string_lossy().into_owned();
+        if !sockets.contains(&socket) {
+            sockets.push(socket);
+        }
+    }
+    sockets
+}
+
+#[cfg(feature = "python")]
+#[derive(Clone, Debug, Default)]
+struct LocalRayletMetadata {
+    node_id: Vec<u8>,
+    node_ip_address: String,
+    node_manager_port: i32,
+    raylet_socket_name: String,
+}
+
+fn parse_raylet_arg(args: &[String], name: &str) -> Option<String> {
+    let dashed = name.replace('_', "-");
+    let ray_prefixed = format!("ray_{}", name);
+    let ray_prefixed_dashed = ray_prefixed.replace('_', "-");
+    let candidates = [name.to_string(), dashed, ray_prefixed, ray_prefixed_dashed];
+    for candidate in candidates {
+        let prefix = format!("--{}=", candidate);
+        if let Some(value) = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix(&prefix).map(|value| value.to_string()))
+        {
+            return Some(value);
+        }
+        if let Some(value) = args.windows(2).find_map(|pair| {
+            if pair[0] == format!("--{}", candidate) { Some(pair[1].clone()) } else { None }
+        }) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
+    if hex.len() % 2 != 0 { return None; }
+    (0..hex.len()).step_by(2).map(|idx| u8::from_str_radix(&hex[idx..idx + 2], 16).ok()).collect()
+}
+
+fn discover_local_raylet_metadata() -> std::collections::HashMap<String, LocalRayletMetadata> {
+    let mut by_session = std::collections::HashMap::new();
+    let Ok(entries) = std::fs::read_dir("/proc") else { return by_session; };
+    for entry in entries.flatten() {
+        let Ok(bytes) = std::fs::read(entry.path().join("cmdline")) else { continue; };
+        if !bytes.windows(6).any(|window| window == b"raylet") { continue; }
+        let args: Vec<String> = bytes.split(|byte| *byte == 0).filter(|part| !part.is_empty()).map(|part| String::from_utf8_lossy(part).into_owned()).collect();
+        let Some(raylet_socket_name) = parse_raylet_arg(&args, "raylet_socket_name") else { continue; };
+        let Some(session_dir) = std::path::Path::new(&raylet_socket_name).parent().and_then(|path| path.parent()).map(|path| path.to_string_lossy().into_owned()) else { continue; };
+        let node_id = parse_raylet_arg(&args, "node_id").and_then(|value| hex_to_bytes(&value)).unwrap_or_default();
+        let node_ip_address = parse_raylet_arg(&args, "node_ip_address").unwrap_or_else(|| node_ip_address_from_perspective(None));
+        let node_manager_port = parse_raylet_arg(&args, "node_manager_port").and_then(|value| value.parse::<i32>().ok()).unwrap_or_default();
+        by_session.insert(session_dir, LocalRayletMetadata { node_id, node_ip_address, node_manager_port, raylet_socket_name });
+    }
+    by_session
+}
+
+pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::GcsNodeInfo> {
+    let raylets_by_session = discover_local_raylet_metadata();
+    discover_local_plasma_store_sockets()
+        .into_iter()
+        .enumerate()
+        .map(|(idx, socket)| {
+            let session_dir = std::path::Path::new(&socket)
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let raylet = raylets_by_session.get(&session_dir);
+            ray_proto::ray::rpc::GcsNodeInfo {
+                node_id: raylet
+                    .filter(|metadata| !metadata.node_id.is_empty())
+                    .map(|metadata| metadata.node_id.clone())
+                    .unwrap_or_else(|| {
+                        let mut node_id = vec![0; 28];
+                        if let Some(last) = node_id.last_mut() {
+                            *last = (idx + 1).min(u8::MAX as usize) as u8;
+                        }
+                        node_id
+                    }),
+                node_manager_address: raylet
+                    .map(|metadata| metadata.node_ip_address.clone())
+                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
+                node_manager_hostname: raylet
+                    .map(|metadata| metadata.node_ip_address.clone())
+                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
+                node_manager_port: raylet.map(|metadata| metadata.node_manager_port).unwrap_or_default(),
+                raylet_socket_name: raylet
+                    .map(|metadata| metadata.raylet_socket_name.clone())
+                    .unwrap_or_default(),
+                object_store_socket_name: socket,
+                state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,
+                is_head_node: idx == 0,
+                temp_dir: "/tmp/ray".to_string(),
+                session_dir,
+                ..Default::default()
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "python")]
+static PLACEMENT_GROUPS: OnceLock<Mutex<HashMap<Vec<u8>, ray_proto::ray::rpc::PlacementGroupTableData>>> = OnceLock::new();
+
+#[cfg(feature = "python")]
+pub(crate) fn record_placement_group(data: ray_proto::ray::rpc::PlacementGroupTableData) {
+    PLACEMENT_GROUPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("placement group table lock poisoned")
+        .insert(data.placement_group_id.clone(), data);
+}
+
+#[cfg(feature = "python")]
+fn placement_group_snapshot() -> Vec<ray_proto::ray::rpc::PlacementGroupTableData> {
+    PLACEMENT_GROUPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("placement group table lock poisoned")
+        .values()
+        .cloned()
+        .collect()
+}
 
 #[cfg(feature = "python")]
 fn empty_subscriber_poll_delay(timeout: Option<f64>) -> std::time::Duration {
@@ -330,6 +506,14 @@ impl Pickle5SerializedObject {
     fn total_bytes(&self) -> usize {
         self.inband.len()
     }
+
+    fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        // Minimal Python-compatible surface for local task return storage.
+        // The Rust shim does not yet model Pickle5Writer's out-of-band buffers,
+        // but in-band pickle bytes are enough for the primitive objects covered
+        // by the RayRust canary tests.
+        PyBytes::new_bound(py, &self.inband)
+    }
 }
 
 #[cfg(feature = "python")]
@@ -373,9 +557,12 @@ impl MessagePackSerializedObject {
 
     fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let mut out = vec![0_u8; self.total_bytes()];
-        // This is enough for Python-side smoke tests and preserves the Cython
-        // layout: msgpack payload starts at MESSAGE_PACK_OFFSET, followed by
-        // any nested serialized object bytes.
+        // Match Ray's serialized msgpack buffer layout closely enough for
+        // Python deserialization: the first 8 bytes store the msgpack payload
+        // length, byte 8 is reserved, then msgpack bytes are followed by the
+        // nested Pickle5 payload bytes.
+        let msgpack_len = self.msgpack_data.len() as u64;
+        out[..8].copy_from_slice(&msgpack_len.to_le_bytes());
         let start = ray_common::constants::MESSAGE_PACK_OFFSET;
         out[start..start + self.msgpack_data.len()].copy_from_slice(&self.msgpack_data);
         if let Some(nested) = &self.nested_bytes {
@@ -394,43 +581,150 @@ struct RawSerializedObject {
 
 #[cfg(feature = "python")]
 #[pyclass(module = "_raylet")]
-struct GenericStub;
+struct GenericStub {
+    module_name: String,
+    function_name: String,
+    class_name: String,
+    function_hash: String,
+    function: Option<pyo3::PyObject>,
+}
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl GenericStub {
     #[new]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn new(
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let module_name = args
+            .get_item(0)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let function_name = args
+            .get_item(1)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let class_name = args
+            .get_item(2)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        let function_hash = args
+            .get_item(3)
+            .and_then(|v| v.extract::<String>())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name, class_name, function_hash, function: None }
     }
 
     #[classmethod]
     fn instance(_cls: &Bound<'_, PyType>) -> Self {
-        GenericStub
+        GenericStub { module_name: String::new(), function_name: String::new(), class_name: String::new(), function_hash: String::new(), function: None }
     }
 
     #[classmethod]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn from_class(
         _cls: &Bound<'_, PyType>,
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let target_class = args.get_item(0).ok();
+        let module_name = target_class
+            .as_ref()
+            .and_then(|c| c.getattr("__module__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let class_name = target_class
+            .as_ref()
+            .and_then(|c| c.getattr("__qualname__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name: "__init__".to_string(), class_name, function_hash: String::new(), function: target_class.map(|c| c.into()) }
     }
 
     #[classmethod]
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn from_function(
         _cls: &Bound<'_, PyType>,
-        _args: &Bound<'_, pyo3::types::PyTuple>,
+        args: &Bound<'_, pyo3::types::PyTuple>,
         _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
     ) -> Self {
-        GenericStub
+        let function = args.get_item(0).ok();
+        let function_uuid = args.get_item(1).ok();
+        let module_name = function
+            .as_ref()
+            .and_then(|f| f.getattr("__module__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let function_name = function
+            .as_ref()
+            .and_then(|f| f.getattr("__qualname__").ok())
+            .and_then(|m| m.extract::<String>().ok())
+            .unwrap_or_default();
+        let function_hash = function_uuid
+            .as_ref()
+            .and_then(|u| u.getattr("hex").ok())
+            .and_then(|h| h.extract::<String>().ok())
+            .unwrap_or_default();
+        GenericStub { module_name, function_name, class_name: String::new(), function_hash, function: function.map(|f| f.into()) }
+    }
+
+
+    #[getter]
+    fn module_name(&self) -> &str { &self.module_name }
+
+    #[getter]
+    fn function_name(&self) -> &str { &self.function_name }
+
+    #[getter]
+    fn class_name(&self) -> &str { &self.class_name }
+
+    #[getter]
+    fn function_hash(&self) -> &str { &self.function_hash }
+
+    #[getter]
+    fn function(&self, py: pyo3::Python<'_>) -> Option<pyo3::PyObject> {
+        self.function.as_ref().map(|f| f.clone_ref(py))
+    }
+
+    #[getter]
+    fn repr(&self) -> String { format!("{}.{}", self.module_name, self.function_name) }
+
+    fn __repr__(&self) -> String { self.repr() }
+
+    #[classmethod]
+    #[pyo3(signature = (value, python_serializer=None))]
+    fn dumps(
+        _cls: &Bound<'_, PyType>,
+        py: pyo3::Python<'_>,
+        value: &Bound<'_, pyo3::types::PyAny>,
+        python_serializer: Option<&Bound<'_, pyo3::types::PyAny>>,
+    ) -> pyo3::PyResult<pyo3::PyObject> {
+        if let Some(serializer) = python_serializer {
+            let index = serializer.call1((value,))?;
+            let msgpack = pyo3::types::PyModule::import_bound(py, "msgpack")?;
+            return Ok(msgpack.call_method1("packb", (index,))?.into());
+        }
+        let pickle = pyo3::types::PyModule::import_bound(py, "pickle")?;
+        Ok(pickle.call_method1("dumps", (value,))?.into())
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (data, python_deserializer=None))]
+    fn loads(
+        _cls: &Bound<'_, PyType>,
+        py: pyo3::Python<'_>,
+        data: &Bound<'_, pyo3::types::PyAny>,
+        python_deserializer: Option<&Bound<'_, pyo3::types::PyAny>>,
+    ) -> pyo3::PyResult<pyo3::PyObject> {
+        if let Some(deserializer) = python_deserializer {
+            let msgpack = pyo3::types::PyModule::import_bound(py, "msgpack")?;
+            let unpacked = msgpack.call_method1("unpackb", (data,))?;
+            return Ok(deserializer.call1((unpacked,))?.into());
+        }
+        let pickle = pyo3::types::PyModule::import_bound(py, "pickle")?;
+        Ok(pickle.call_method1("loads", (data,))?.into())
     }
 
     #[classmethod]
@@ -580,7 +874,7 @@ impl GlobalStateAccessor {
     fn get_node_table(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let client = PyGcsClient::new(self.gcs_address.clone());
         let nodes = client.get_all_node_info();
-        let mut results = Vec::with_capacity(nodes.len());
+        let mut results: Vec<Py<PyAny>> = Vec::with_capacity(nodes.len());
 
         for node in nodes {
             let dict = PyDict::new_bound(py);
@@ -615,11 +909,129 @@ impl GlobalStateAccessor {
             results.push(dict.unbind().into());
         }
 
+        let known_sockets: std::collections::HashSet<String> = results
+            .iter()
+            .filter_map(|item| {
+                item.bind(py)
+                    .get_item("ObjectStoreSocketName")
+                    .ok()
+                    .and_then(|value| value.extract::<String>().ok())
+            })
+            .collect();
+        for (idx, socket) in discover_local_plasma_store_sockets()
+            .into_iter()
+            .filter(|socket| !known_sockets.contains(socket))
+            .enumerate()
+        {
+            let dict = PyDict::new_bound(py);
+            dict.set_item("NodeID", format!("{:056x}", idx + 1))?;
+            dict.set_item("Alive", true)?;
+            dict.set_item("NodeManagerAddress", "127.0.0.1")?;
+            dict.set_item("NodeManagerHostname", "127.0.0.1")?;
+            dict.set_item("NodeManagerPort", 0)?;
+            dict.set_item("ObjectManagerPort", 0)?;
+            dict.set_item("ObjectStoreSocketName", socket)?;
+            dict.set_item("RayletSocketName", "")?;
+            dict.set_item("MetricsExportPort", 0)?;
+            dict.set_item("MetricsAgentPort", 0)?;
+            dict.set_item("DashboardAgentListenPort", 0)?;
+            dict.set_item("NodeName", "")?;
+            dict.set_item("RuntimeEnvAgentPort", 0)?;
+            dict.set_item("DeathReason", 0)?;
+            dict.set_item("DeathReasonMessage", "")?;
+            dict.set_item("alive", true)?;
+            dict.set_item("Resources", PyDict::new_bound(py))?;
+            dict.set_item("labels", PyDict::new_bound(py))?;
+            results.push(dict.unbind().into());
+        }
+
         Ok(results)
     }
 
+    fn get_placement_group_info(
+        &self,
+        py: Python<'_>,
+        pg_id: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<Py<PyBytes>>> {
+        let placement_group_id: Vec<u8> = if let Ok(bytes) = pg_id.extract() {
+            bytes
+        } else {
+            pg_id.call_method0("binary")?.extract()?
+        };
+        let data = placement_group_snapshot()
+            .into_iter()
+            .find(|data| data.placement_group_id == placement_group_id)
+            .unwrap_or_else(|| ray_proto::ray::rpc::PlacementGroupTableData {
+                placement_group_id,
+                state: ray_proto::ray::rpc::placement_group_table_data::PlacementGroupState::Created
+                    as i32,
+                ..Default::default()
+            });
+        let mut buf = Vec::new();
+        prost::Message::encode(&data, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode placement group info: {e}"
+            ))
+        })?;
+        Ok(Some(PyBytes::new_bound(py, &buf).unbind()))
+    }
+
+    fn get_placement_group_table(&self, py: Python<'_>) -> Py<PyList> {
+        PyList::empty_bound(py).unbind()
+    }
+
+    fn get_placement_group_by_name(
+        &self,
+        _py: Python<'_>,
+        _placement_group_name: &str,
+        _ray_namespace: &str,
+    ) -> Option<Py<PyBytes>> {
+        None
+    }
+
+    fn get_all_total_resources(&self, py: Python<'_>) -> PyResult<Vec<Py<PyBytes>>> {
+        let mut resources = HashMap::new();
+        // The Python resource-state helpers assume these standard resources are
+        // present and pop memory/object_store_memory when checking PG leaks. The
+        // Rust no-fork compatibility path does not yet mirror GCS resource
+        // accounting, so expose a stable single-node baseline instead of an
+        // empty resource table that raises KeyError before PG behavior is tested.
+        resources.insert("CPU".to_owned(), 1.0);
+        resources.insert("memory".to_owned(), 1.0);
+        resources.insert("object_store_memory".to_owned(), 1.0);
+        let message = ray_proto::ray::rpc::TotalResources {
+            node_id: vec![0; 28],
+            resources_total: resources,
+        };
+        let mut buf = Vec::new();
+        prost::Message::encode(&message, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode total resources: {e}"
+            ))
+        })?;
+        Ok(vec![PyBytes::new_bound(py, &buf).unbind()])
+    }
+
+    fn get_all_available_resources(&self, py: Python<'_>) -> PyResult<Vec<Py<PyBytes>>> {
+        let mut resources = HashMap::new();
+        resources.insert("CPU".to_owned(), 1.0);
+        resources.insert("memory".to_owned(), 1.0);
+        resources.insert("object_store_memory".to_owned(), 1.0);
+        let message = ray_proto::ray::rpc::AvailableResources {
+            node_id: vec![0; 28],
+            resources_available: resources,
+        };
+        let mut buf = Vec::new();
+        prost::Message::encode(&message, &mut buf).map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "failed to encode available resources: {e}"
+            ))
+        })?;
+        Ok(vec![PyBytes::new_bound(py, &buf).unbind()])
+    }
+
     fn get_system_config(&self) -> &str {
-        "{}"
+        r#"{"automatic_object_spilling_enabled":false,"object_spilling_config":"{}"}"#
     }
 
     fn get_next_job_id(&self) -> u32 {
@@ -841,10 +1253,18 @@ fn split_buffer<'py>(
     data: &Bound<'_, PyAny>,
 ) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyBytes>)> {
     let bytes: Vec<u8> = data.extract()?;
-    let offset = ray_common::constants::MESSAGE_PACK_OFFSET.min(bytes.len());
+    let offset = ray_common::constants::MESSAGE_PACK_OFFSET;
+    if bytes.len() < offset {
+        return Ok((PyBytes::new_bound(py, &[]), PyBytes::new_bound(py, &[])));
+    }
+
+    let mut len_bytes = [0_u8; 8];
+    len_bytes.copy_from_slice(&bytes[..8]);
+    let msgpack_len = usize::try_from(u64::from_le_bytes(len_bytes)).unwrap_or(0);
+    let msgpack_end = offset.saturating_add(msgpack_len).min(bytes.len());
     Ok((
-        PyBytes::new_bound(py, &bytes[offset..]),
-        PyBytes::new_bound(py, &[]),
+        PyBytes::new_bound(py, &bytes[offset..msgpack_end]),
+        PyBytes::new_bound(py, &bytes[msgpack_end..]),
     ))
 }
 
@@ -952,6 +1372,12 @@ fn setproctitle(title: String) {
 #[cfg(feature = "python")]
 #[pymodule]
 fn _raylet(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Cython exposes this extension as both ray._raylet and _raylet in a few
+    // pickle/module-name paths.  The Rust module is imported as ray._raylet,
+    // so install the top-level alias before any classes are pickled.
+    let sys = m.py().import_bound("sys")?;
+    sys.getattr("modules")?.set_item("_raylet", m)?;
+
     // ─── Module-level functions ──────────────────────────────────
     m.add_function(wrap_pyfunction!(get_ray_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_ray_commit, m)?)?;

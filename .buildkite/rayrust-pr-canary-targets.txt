@@ -1,0 +1,28 @@
+# RayRust PR canary manifest.
+#
+# This is a stable representative Rust-port surface slice, not an
+# append-only list of escaped failures. Add a target only when full
+# main coverage exposes an important missing Rust-facing failure class.
+# Prefer the smallest representative target for that class; remove or
+# replace targets if PR CI drifts beyond the ~15-20 minute iteration
+# budget. Slow, flaky, duplicated, or non-Rust-port coverage stays in
+# main.
+
+# _raylet/CoreWorker Python API shape and legacy import surface.
+//python/ray/tests:test_raylet_compat_surface
+
+# Baseline task submission, ray.get/put, and actor smoke.
+//python/ray/tests:test_mini
+//python/ray/tests:test_basic_2
+
+# Raylet startup, GCS node registration, labels, resources, and scheduling.
+//python/ray/tests:test_node_labels
+//python/ray/tests:test_label_scheduling
+
+# Placement group scheduling, including bundle label selectors.
+//python/ray/tests:test_placement_group
+//python/ray/tests:test_bundle_label_selector
+
+# Runtime env smoke for task/actor startup and environment propagation.
+//python/ray/tests:test_runtime_env_ray_minimal
+//python/ray/tests:test_runtime_env_env_vars

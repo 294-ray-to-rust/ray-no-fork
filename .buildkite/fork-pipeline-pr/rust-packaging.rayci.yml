@@ -2,8 +2,8 @@ group: rust packaging preflight
 sort_key: rust-packaging-preflight
 steps:
   # Stage 2 prerequisite chain: keep the image build path minimal, then run
-  # the fail-fast compat check and previous Rust smoke shard inside the built
-  # core image. Stage 3 remains GitHub merge queue/main full CI.
+  # the fail-fast compat check and the RayRust PR canary manifest inside the
+  # built core image. Full main remains the exhaustive CI signal.
   - name: rust-ray-core-py310
     label: "wanda: rust ray-core py3.10 (x86_64)"
     wanda: ci/docker/ray-core.wanda.yaml
@@ -73,6 +73,7 @@ steps:
         --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
+      - rust-pr-fast-fail
       - rust-corebuild-py310
       - rust-ray-core-py310
       - rust-ray-dashboard
@@ -90,27 +91,27 @@ steps:
       - always
       - release_wheels
 
-  - label: ":ray: rust smoke tests"
-    key: rust-smoke-tests
+  - label: ":ray: rust PR canary manifest"
+    key: rust-pr-canary-manifest
     tags:
       - always
       - python
     instance_type: medium
-    # Keep PR smoke to Rust-compatible coverage. The broader previous shard exposed
-    # remaining Rust CoreWorker gaps in dashboard startup/node resolution, nested
-    # task submission, multiprocessing resource/node-table APIs, namespace actor
-    # lookup, and bundle-label/placement startup; leave those for full CI /
-    # follow-up work.
+    # Broad but bounded Rust-port canary. The manifest is the stable PR
+    # iteration contract; keep packaging/minimal/wheel/tmpfs modes on narrow
+    # smoke tests instead of repeating this whole suite.
     parallelism: 4
     commands:
-      - bazel run //ci/ray_ci:test_in_docker --
-        //python/ray/tests:test_raylet_compat_surface
-        core
-        --install-mask all-ray-libraries
-        --python-version 3.10 --build-name corebuild-py3.10
-        --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}"
-        --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 1
+      - |
+        RAYRUST_CANARY_TARGETS="$$(grep -Ev '^[[:space:]]*(#|$$)' .buildkite/rayrust-pr-canary-targets.txt | tr '\n' ' ')"
+        echo "RayRust PR canary targets: $$RAYRUST_CANARY_TARGETS"
+        bazel run //ci/ray_ci:test_in_docker -- $$RAYRUST_CANARY_TARGETS core \
+          --install-mask all-ray-libraries \
+          --python-version 3.10 --build-name corebuild-py3.10 \
+          --workers "$${BUILDKITE_PARALLEL_JOB_COUNT}" \
+          --worker-id "$${BUILDKITE_PARALLEL_JOB}" --parallelism-per-worker 1
     depends_on:
+      - rust-pr-fast-fail
       - rust-corebuild-py310
       - rust-ray-core-py310
       - rust-ray-dashboard

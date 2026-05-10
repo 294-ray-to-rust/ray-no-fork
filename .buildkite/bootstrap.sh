@@ -19,11 +19,10 @@ mkdir -p "$ARTIFACT_DIR"
 echo "--- :gear: Generating pipeline"
 
 # Select pipeline directory based on branch type.
-# PRs get lightweight forge + lint/preflight only.
-# Merge queue gets the main-equivalent reduced matrix so it exercises
-# the same rayci/image/test-in-docker paths as main, but only the
-# representative Python/platform axes needed for fast iteration.
-# Main remains the full authoritative suite.
+# PRs run the RayRust fast-iteration gate: forge, lint, packaging
+# sanity, and the representative canary manifest.
+# Merge queue is intentionally lightweight; PR CI is the real gate and
+# main remains the full authoritative suite.
 case "${BUILDKITE_BRANCH:-}" in
   main|get-the-build-working)
     PIPELINE_DIR=".buildkite/fork-pipeline/"
@@ -31,11 +30,11 @@ case "${BUILDKITE_BRANCH:-}" in
     ;;
   gh-readonly-queue/*)
     PIPELINE_DIR=".buildkite/fork-pipeline-mq/"
-    echo "Branch '${BUILDKITE_BRANCH}': using REDUCED MAIN merge-queue pipeline"
+    echo "Branch '${BUILDKITE_BRANCH}': using lightweight merge-queue sanity pipeline"
     ;;
   *)
     PIPELINE_DIR=".buildkite/fork-pipeline-pr/"
-    echo "Branch '${BUILDKITE_BRANCH:-unknown}': using PR pipeline (forge + lint/preflight only)"
+    echo "Branch '${BUILDKITE_BRANCH:-unknown}': using PR pipeline (canary gate + packaging sanity)"
     ;;
 esac
 

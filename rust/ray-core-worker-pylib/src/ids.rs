@@ -15,6 +15,9 @@ use ray_common::id;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "python")]
+use pyo3::IntoPy;
+
+#[cfg(feature = "python")]
 use pyo3::types::PyBytes;
 
 /// Macro to generate a Python-facing wrapper for a Ray ID type.
@@ -177,6 +180,13 @@ macro_rules! py_id_wrapper {
 
             fn __bool__(&self) -> bool {
                 !self.is_nil()
+            }
+
+            fn __reduce__<'py>(&self, py: pyo3::Python<'py>) -> pyo3::PyResult<pyo3::PyObject> {
+                let cls = py.get_type_bound::<Self>();
+                let binary = PyBytes::new_bound(py, &self.binary());
+                let args = pyo3::types::PyTuple::new_bound(py, [binary]);
+                Ok((cls, args).into_py(py))
             }
 
             $($extra)*

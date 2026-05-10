@@ -10,6 +10,7 @@
 
 use std::hash::{Hash, Hasher};
 
+use prost::Message;
 use ray_common::id::ObjectID;
 use ray_proto::ray::rpc::Address;
 
@@ -79,9 +80,27 @@ impl Hash for PyObjectRef {
 #[pyo3::pymethods]
 impl PyObjectRef {
     /// Construct an ObjectRef from raw binary object ID bytes.
+    ///
+    /// Ray's Python deserializer calls this with the Cython-compatible shape
+    /// `ObjectRef(binary, owner_address, call_site, tensor_transport=...)`.
+    /// The Rust compatibility layer only needs the object id and enough owner
+    /// metadata to round-trip nested refs, so accept and ignore extra local-ref
+    /// and tensor-transport arguments.
     #[new]
-    fn py_new(object_id_bytes: &[u8]) -> Self {
-        Self::new(ObjectID::from_binary(object_id_bytes), None, String::new())
+    #[pyo3(signature = (object_id_bytes, owner_address = None, call_site = "", *_args, **_kwargs))]
+    fn py_new(
+        object_id_bytes: &[u8],
+        owner_address: Option<&[u8]>,
+        call_site: &str,
+        _args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        let owner_address = owner_address.and_then(|bytes| Address::decode(bytes).ok());
+        Self::new(
+            ObjectID::from_binary(object_id_bytes),
+            owner_address,
+            call_site.to_string(),
+        )
     }
 
     /// Return a nil (all-zeroes) object reference.
@@ -134,6 +153,17 @@ impl PyObjectRef {
     #[pyo3(name = "call_site")]
     fn py_call_site(&self) -> String {
         self.call_site.clone()
+    }
+
+    /// Return tensor transport metadata for this ObjectRef.
+    ///
+    /// The Rust compatibility path does not implement GPU tensor transport yet;
+    /// Ray's Python serializer still calls this unconditionally when reducing an
+    /// ObjectRef contained inside another object, so expose the normal non-GPU
+    /// value.
+    #[pyo3(name = "tensor_transport")]
+    fn py_tensor_transport(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        py.None()
     }
 
     /// Get the owner IP address (if set).

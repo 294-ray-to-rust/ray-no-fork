@@ -9,6 +9,7 @@ steps:
     label: "wanda: mq-hot minbuild-core py3.10"
     wanda: ci/docker/min.build.wanda.yaml
     depends_on:
+      - rust-pr-fast-fail
       - rust-oss-ci-base-test-py310
     tags:
       - always
@@ -29,6 +30,7 @@ steps:
       - release_wheels
       - java
     depends_on:
+      - rust-pr-fast-fail
       - forge
 
   - name: mq-hot-ray-wheel-build-py310
@@ -44,6 +46,7 @@ steps:
       - release_wheels
       - linux_wheels
     depends_on:
+      - rust-pr-fast-fail
       - forge
       - rust-ray-core-py310
       - mq-hot-ray-java-build
@@ -71,6 +74,7 @@ steps:
         --install-mask all-ray-libraries
         --python-version 3.10 --build-name corebuild-py3.10
     depends_on:
+      - rust-pr-fast-fail
       - forge
       - mq-hot-minbuild-core-py310
       - rust-ray-core-py310
@@ -90,6 +94,7 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --tmp-filesystem=tmpfs
     depends_on:
+      - rust-pr-fast-fail
       - forge
       - rust-corebuild-py310
       - rust-ray-core-py310
@@ -110,6 +115,7 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
+      - rust-pr-fast-fail
       - forge
       - rust-corebuild-py310
       - mq-hot-ray-wheel-build-py310
@@ -127,6 +133,7 @@ steps:
         --python-version 3.10 --build-name corebuild-py3.10
         --test-env=RAY_CI_POST_WHEEL_TESTS=True
     depends_on:
+      - rust-pr-fast-fail
       - forge
       - rust-corebuild-py310
       - mq-hot-ray-wheel-build-py310

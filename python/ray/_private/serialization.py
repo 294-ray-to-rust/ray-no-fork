@@ -440,7 +440,7 @@ class SerializationContext:
             if metadata_fields[0] == ray_constants.OBJECT_METADATA_TYPE_RAW:
                 if data is None:
                     return b""
-                return data.to_pybytes()
+                return data if isinstance(data, bytes) else data.to_pybytes()
             elif metadata_fields[0] == ray_constants.OBJECT_METADATA_TYPE_ACTOR_HANDLE:
                 obj = self._deserialize_msgpack_data(
                     data, metadata_fields, out_of_band_tensors

@@ -222,12 +222,47 @@ impl PyGcsClient {
             node_ids: node_ids.to_vec(),
         };
         match self.runtime.block_on(self.client.check_alive(req)) {
-            Ok(reply) => reply.raylet_alive,
+            Ok(reply) if reply.raylet_alive.len() == node_ids.len() => {
+                self.overlay_synthetic_alive(node_ids, reply.raylet_alive)
+            }
+            Ok(reply) => {
+                tracing::warn!(
+                    expected = node_ids.len(),
+                    got = reply.raylet_alive.len(),
+                    "check_alive returned mismatched result length"
+                );
+                self.synthetic_check_alive(node_ids)
+            }
             Err(e) => {
                 tracing::warn!(error = %e, "check_alive failed");
-                Vec::new()
+                self.synthetic_check_alive(node_ids)
             }
         }
+    }
+
+    #[cfg(feature = "python")]
+    fn synthetic_check_alive(&self, node_ids: &[Vec<u8>]) -> Vec<bool> {
+        let synthetic_ids: std::collections::HashSet<Vec<u8>> = crate::discover_local_session_node_infos()
+            .into_iter()
+            .map(|node| node.node_id)
+            .collect();
+        let has_local_synthetic = !synthetic_ids.is_empty();
+        node_ids
+            .iter()
+            .map(|node_id| synthetic_ids.contains(node_id) || has_local_synthetic)
+            .collect()
+    }
+
+    #[cfg(not(feature = "python"))]
+    fn synthetic_check_alive(&self, node_ids: &[Vec<u8>]) -> Vec<bool> {
+        vec![false; node_ids.len()]
+    }
+
+    fn overlay_synthetic_alive(&self, node_ids: &[Vec<u8>], mut alive: Vec<bool>) -> Vec<bool> {
+        for (is_alive, synthetic_alive) in alive.iter_mut().zip(self.synthetic_check_alive(node_ids)) {
+            *is_alive = *is_alive || synthetic_alive;
+        }
+        alive
     }
 
     /// Request nodes to drain (stub — drain RPC not yet in GcsClient trait).
@@ -519,9 +554,9 @@ impl PyGcsClient {
             }
         }
 
-        let nodes = self
+        let mut nodes = self
             .runtime
-            .block_on(self.client.get_all_node_info(req))
+            .block_on(self.client.get_all_node_info(req.clone()))
             .map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!(
                     "get_all_node_info failed: {}",
@@ -529,6 +564,64 @@ impl PyGcsClient {
                 ))
             })?
             .node_info_list;
+
+        // The temporary Rust no-fork/Python bridge may create local Ray session
+        // directories before the Rust raylet has fully persisted GCS node info.
+        // Python startup for worker nodes asks GcsClient directly for the head
+        // node's temp/session dirs, so mirror the synthetic local node entries
+        // used by GlobalStateAccessor.get_node_table here as well.  Keep the
+        // newest synthetic session first: stale real GCS head entries can remain
+        // alive between placement-group cases, and Node.__init__ takes the first
+        // ALIVE head returned by this call.
+        let mut synthetic_nodes = crate::discover_local_session_node_infos();
+        // Driver connect-only resolution first discovers local raylet node IDs by
+        // scraping --node_id from live processes, then asks GCS for exactly those
+        // IDs.  Our temporary synthetic session entries used stable placeholder
+        // IDs, so the post-merge selector filtering removed them and left Python
+        // to connect through stale/dead real GCS entries.  When the caller asks
+        // for explicit local node IDs, overlay those IDs onto the newest
+        // synthetic sessions before applying selectors; the session/socket data is
+        // what Python needs to build a connect-only Node.
+        let requested_node_ids: Vec<Vec<u8>> = req
+            .node_selectors
+            .iter()
+            .filter_map(|selector| {
+                use rpc::get_all_node_info_request::node_selector::NodeSelector;
+                match selector.node_selector.as_ref() {
+                    Some(NodeSelector::NodeId(node_id)) => Some(node_id.clone()),
+                    _ => None,
+                }
+            })
+            .collect();
+        for (node, node_id) in synthetic_nodes.iter_mut().zip(requested_node_ids.iter()) {
+            node.node_id = node_id.clone();
+        }
+        let known_sockets: std::collections::HashSet<String> = synthetic_nodes
+            .iter()
+            .map(|node| node.object_store_socket_name.clone())
+            .collect();
+        nodes.retain(|node| !known_sockets.contains(&node.object_store_socket_name));
+        nodes.splice(0..0, synthetic_nodes);
+
+        if let Some(state_filter) = req.state_filter {
+            nodes.retain(|node| node.state == state_filter);
+        }
+        for selector in &req.node_selectors {
+            use rpc::get_all_node_info_request::node_selector::NodeSelector;
+            match selector.node_selector.as_ref() {
+                Some(NodeSelector::NodeId(node_id)) => nodes.retain(|node| node.node_id == *node_id),
+                Some(NodeSelector::NodeName(node_name)) => {
+                    nodes.retain(|node| node.node_name == *node_name)
+                }
+                Some(NodeSelector::NodeIpAddress(address)) => {
+                    nodes.retain(|node| node.node_manager_address == *address)
+                }
+                Some(NodeSelector::IsHeadNode(is_head)) => {
+                    nodes.retain(|node| node.is_head_node == *is_head)
+                }
+                None => {}
+            }
+        }
 
         let gcs_pb2 = pyo3::types::PyModule::import_bound(py, "ray.core.generated.gcs_pb2")?;
         let gcs_node_info_cls = gcs_pb2.getattr("GcsNodeInfo")?;

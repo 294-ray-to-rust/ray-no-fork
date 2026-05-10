@@ -1,0 +1,35 @@
+# RayRust PR fast-fail manifest.
+#
+# Bazel targets listed here run as the FIRST test step on every PR build,
+# before the canary manifest and the rest of the PR process. If any target
+# in this file fails, the PR build short-circuits and the slower canary /
+# packaging / wheel steps never run. That is the entire point: catch
+# previously-broken targets immediately instead of waiting ~15 minutes for
+# the canary to surface the same failure.
+#
+# Editing rules — read these before adding or removing entries.
+#
+# 1. Add a target ONLY when it has just been broken (or just been fixed
+#    after a regression) and we want a tight tripwire on it. Branch-local
+#    fixes do not qualify; this manifest runs everywhere and must stay
+#    green on `main`.
+# 2. Keep the list short. Five-ish targets is healthy; double-digit is
+#    abuse. Long lists make the step slow, defeating the fast-fail goal.
+#    If you find yourself pasting a dozen targets, pick the smallest
+#    representative one(s) and put the rest in the canary manifest
+#    (.buildkite/rayrust-pr-canary-targets.txt) instead.
+# 3. Once a target goes green here because the active bug is fixed,
+#    REMOVE IT from this file. The canary/main suites still provide the
+#    durable coverage; this manifest exists only as an active tripwire
+#    for the blocker currently being worked.
+# 4. Blank lines and `#`-prefixed comments are ignored. If the only
+#    surviving lines are comments/blanks, the fast-fail step no-ops and
+#    PR CI proceeds straight to the canary.
+#
+# When in doubt: smaller is better. The canary is the durable coverage;
+# this list is just the tripwire.
+
+# Currently-watched targets (recent task-dispatch / ObjectRef fixes — remove
+# as soon as the fix makes them green here; normal canary/main coverage
+# still covers them afterward).
+//python/ray/tests:test_mini

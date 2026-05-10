@@ -593,8 +593,24 @@ impl PyGcsClient {
                 }
             })
             .collect();
-        for (node, node_id) in synthetic_nodes.iter_mut().zip(requested_node_ids.iter()) {
-            node.node_id = node_id.clone();
+        if !requested_node_ids.is_empty() && !synthetic_nodes.is_empty() {
+            // The selector list can contain more local raylet IDs than we have
+            // unambiguous synthetic session entries for, and stale real GCS
+            // entries for any one selected ID can otherwise survive the OR
+            // filter below.  Mirror the newest live synthetic session under
+            // every requested local ID so connect-only resolution always sees a
+            // live local address before stale real GCS rows.
+            let template_nodes = synthetic_nodes.clone();
+            synthetic_nodes = requested_node_ids
+                .iter()
+                .enumerate()
+                .map(|(idx, node_id)| {
+                    let mut node = template_nodes[idx % template_nodes.len()].clone();
+                    node.node_id = node_id.clone();
+                    node.is_head_node = idx == 0;
+                    node
+                })
+                .collect();
         }
         let known_sockets: std::collections::HashSet<String> = synthetic_nodes
             .iter()

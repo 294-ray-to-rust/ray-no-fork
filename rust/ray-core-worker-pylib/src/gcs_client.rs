@@ -630,11 +630,13 @@ impl PyGcsClient {
             }
             synthetic_nodes = requested_node_ids
                 .iter()
-                .enumerate()
-                .map(|(idx, node_id)| {
-                    let mut node = template_nodes[idx % template_nodes.len()].clone();
+                .map(|node_id| {
+                    let mut node = template_nodes
+                        .iter()
+                        .find(|template| template.node_id == *node_id)
+                        .cloned()
+                        .unwrap_or_else(|| template_nodes[0].clone());
                     node.node_id = node_id.clone();
-                    node.is_head_node = idx == 0;
                     node
                 })
                 .collect();

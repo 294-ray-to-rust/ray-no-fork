@@ -574,6 +574,24 @@ impl PyGcsClient {
         // alive between placement-group cases, and Node.__init__ takes the first
         // ALIVE head returned by this call.
         let mut synthetic_nodes = crate::discover_local_session_node_infos();
+        let asks_for_head_node = req.node_selectors.iter().any(|selector| {
+            use rpc::get_all_node_info_request::node_selector::NodeSelector;
+            matches!(selector.node_selector.as_ref(), Some(NodeSelector::IsHeadNode(true)))
+        });
+        if asks_for_head_node && synthetic_nodes.is_empty() {
+            let session_dir = "/tmp/ray/session_latest".to_string();
+            synthetic_nodes.push(rpc::GcsNodeInfo {
+                node_id: vec![0; 28],
+                node_manager_address: crate::node_ip_address_from_perspective(None),
+                node_manager_hostname: crate::node_ip_address_from_perspective(None),
+                object_store_socket_name: format!("{}/sockets/plasma_store", session_dir),
+                state: rpc::gcs_node_info::GcsNodeState::Alive as i32,
+                is_head_node: true,
+                temp_dir: "/tmp/ray".to_string(),
+                session_dir,
+                ..Default::default()
+            });
+        }
         // Scope synthetic session ordering to this GCS client address before any
         // selector filtering. Python asks for the head node by is_head_node
         // during worker-node startup before the later connect-only node-id path;

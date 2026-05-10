@@ -628,15 +628,24 @@ impl PyGcsClient {
             }) {
                 template_nodes.rotate_left(pos);
             }
+            let head_template = template_nodes
+                .iter()
+                .find(|template| template.is_head_node)
+                .cloned()
+                .unwrap_or_else(|| template_nodes[0].clone());
             synthetic_nodes = requested_node_ids
                 .iter()
                 .map(|node_id| {
-                    let mut node = template_nodes
-                        .iter()
-                        .find(|template| template.node_id == *node_id)
-                        .cloned()
-                        .unwrap_or_else(|| template_nodes[0].clone());
+                    // The selector IDs come from all local raylets that happen to
+                    // be visible in /proc, and may not include the actual head
+                    // raylet for this GCS client by the time connect-only
+                    // resolution runs.  Return the current client's synthetic
+                    // head/session under every requested ID so Python always
+                    // connects to the address it explicitly requested rather than
+                    // to a stale or worker-local default address.
+                    let mut node = head_template.clone();
                     node.node_id = node_id.clone();
+                    node.is_head_node = true;
                     node
                 })
                 .collect();

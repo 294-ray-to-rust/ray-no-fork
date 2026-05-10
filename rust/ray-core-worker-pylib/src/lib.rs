@@ -148,67 +148,56 @@ fn discover_local_raylet_metadata() -> std::collections::HashMap<String, LocalRa
 
 pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::GcsNodeInfo> {
     let raylets_by_session = discover_local_raylet_metadata();
-    let mut sockets = discover_local_plasma_store_sockets();
-    // A stale session directory can be newer than the head session after a
-    // previous timed-out placement-group case leaves dashboard/log activity
-    // behind.  Prefer sessions that still have a live raylet process scraped
-    // from /proc; those are the only entries with a node-manager port that a
-    // connect-only driver can actually use.  Keep the existing newest-first
-    // order within the live/stale groups.
-    sockets.sort_by_key(|socket| {
-        let session_dir = std::path::Path::new(socket)
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if raylets_by_session.contains_key(&session_dir) { 0 } else { 1 }
-    });
+    let sockets = discover_local_plasma_store_sockets();
+    // Stale session directories can be newer than live cluster sessions after
+    // timed-out tests leave dashboard/log activity behind. Only synthesize
+    // ALIVE nodes for sessions that still have a live raylet process scraped
+    // from /proc; otherwise the Python connect-only path can select an
+    // unusable node with node_manager_port=0 and an empty raylet socket.
     sockets
         .into_iter()
-        .enumerate()
-        .map(|(idx, socket)| {
+        .filter_map(|socket| {
             let session_dir = std::path::Path::new(&socket)
                 .parent()
                 .and_then(|p| p.parent())
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let raylet = raylets_by_session.get(&session_dir);
-            ray_proto::ray::rpc::GcsNodeInfo {
-                node_id: raylet
-                    .filter(|metadata| !metadata.node_id.is_empty())
-                    .map(|metadata| metadata.node_id.clone())
-                    .unwrap_or_else(|| {
-                        let mut node_id = vec![0; 28];
-                        if let Some(last) = node_id.last_mut() {
-                            *last = (idx + 1).min(u8::MAX as usize) as u8;
-                        }
-                        node_id
-                    }),
-                node_manager_address: raylet
-                    .map(|metadata| metadata.node_ip_address.clone())
-                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
-                node_manager_hostname: raylet
-                    .map(|metadata| metadata.node_ip_address.clone())
-                    .unwrap_or_else(|| node_ip_address_from_perspective(None)),
-                node_manager_port: raylet.map(|metadata| metadata.node_manager_port).unwrap_or_default(),
-                raylet_socket_name: raylet
-                    .map(|metadata| metadata.raylet_socket_name.clone())
-                    .unwrap_or_default(),
-                // Temporary internal marker used by the Python-facing GCS shim
-                // to associate a synthetic local session with the GCS address
-                // used by ray.init(address=...). It is stripped before the node
-                // info is returned to Python.
-                node_name: raylet
-                    .filter(|metadata| !metadata.gcs_address.is_empty())
-                    .map(|metadata| format!("__rayrust_gcs_address={}", metadata.gcs_address))
-                    .unwrap_or_default(),
-                object_store_socket_name: socket,
-                state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,
-                is_head_node: idx == 0,
-                temp_dir: "/tmp/ray".to_string(),
-                session_dir,
-                ..Default::default()
+            let raylet = raylets_by_session.get(&session_dir)?;
+            if raylet.node_manager_port == 0 || raylet.raylet_socket_name.is_empty() {
+                return None;
             }
+            Some((socket, session_dir, raylet))
+        })
+        .enumerate()
+        .map(|(idx, (socket, session_dir, raylet))| ray_proto::ray::rpc::GcsNodeInfo {
+            node_id: if raylet.node_id.is_empty() {
+                let mut node_id = vec![0; 28];
+                if let Some(last) = node_id.last_mut() {
+                    *last = (idx + 1).min(u8::MAX as usize) as u8;
+                }
+                node_id
+            } else {
+                raylet.node_id.clone()
+            },
+            node_manager_address: raylet.node_ip_address.clone(),
+            node_manager_hostname: raylet.node_ip_address.clone(),
+            node_manager_port: raylet.node_manager_port,
+            raylet_socket_name: raylet.raylet_socket_name.clone(),
+            // Temporary internal marker used by the Python-facing GCS shim
+            // to associate a synthetic local session with the GCS address
+            // used by ray.init(address=...). It is stripped before the node
+            // info is returned to Python.
+            node_name: if raylet.gcs_address.is_empty() {
+                String::new()
+            } else {
+                format!("__rayrust_gcs_address={}", raylet.gcs_address)
+            },
+            object_store_socket_name: socket,
+            state: ray_proto::ray::rpc::gcs_node_info::GcsNodeState::Alive as i32,
+            is_head_node: idx == 0,
+            temp_dir: "/tmp/ray".to_string(),
+            session_dir,
+            ..Default::default()
         })
         .collect()
 }

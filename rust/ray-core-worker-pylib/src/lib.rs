@@ -146,7 +146,22 @@ fn discover_local_raylet_metadata() -> std::collections::HashMap<String, LocalRa
 
 pub(crate) fn discover_local_session_node_infos() -> Vec<ray_proto::ray::rpc::GcsNodeInfo> {
     let raylets_by_session = discover_local_raylet_metadata();
-    discover_local_plasma_store_sockets()
+    let mut sockets = discover_local_plasma_store_sockets();
+    // A stale session directory can be newer than the head session after a
+    // previous timed-out placement-group case leaves dashboard/log activity
+    // behind.  Prefer sessions that still have a live raylet process scraped
+    // from /proc; those are the only entries with a node-manager port that a
+    // connect-only driver can actually use.  Keep the existing newest-first
+    // order within the live/stale groups.
+    sockets.sort_by_key(|socket| {
+        let session_dir = std::path::Path::new(socket)
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if raylets_by_session.contains_key(&session_dir) { 0 } else { 1 }
+    });
+    sockets
         .into_iter()
         .enumerate()
         .map(|(idx, socket)| {

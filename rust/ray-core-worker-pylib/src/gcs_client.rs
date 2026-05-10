@@ -574,6 +574,24 @@ impl PyGcsClient {
         // alive between placement-group cases, and Node.__init__ takes the first
         // ALIVE head returned by this call.
         let mut synthetic_nodes = crate::discover_local_session_node_infos();
+        // Scope synthetic session ordering to this GCS client address before any
+        // selector filtering. Python asks for the head node by is_head_node
+        // during worker-node startup before the later connect-only node-id path;
+        // if another local Ray attempt created a newer live session, the global
+        // newest-first ordering marks that unrelated session as head and the
+        // driver connects to a dead/default cluster address. Prefer the
+        // synthetic entry whose scraped raylet --gcs_address matches this client
+        // and make exactly that entry the synthetic head for this response.
+        if let Some(pos) = synthetic_nodes.iter().position(|node| {
+            node.node_name
+                .strip_prefix("__rayrust_gcs_address=")
+                .is_some_and(|address| address == self.gcs_address)
+        }) {
+            synthetic_nodes.rotate_left(pos);
+            for (idx, node) in synthetic_nodes.iter_mut().enumerate() {
+                node.is_head_node = idx == 0;
+            }
+        }
         // Driver connect-only resolution first discovers local raylet node IDs by
         // scraping --node_id from live processes, then asks GCS for exactly those
         // IDs.  Our temporary synthetic session entries used stable placeholder

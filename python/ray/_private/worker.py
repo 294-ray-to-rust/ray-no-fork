@@ -1950,6 +1950,12 @@ def init(
                 connect_only=True,
             )
         except (ConnectionError, RuntimeError) as e:
+            rayrust_connect_error = (
+                f"RayRust connect error: gcs_address={gcs_address} "
+                f"exc_type={type(e).__name__} exc={e!r}"
+            )
+            print(rayrust_connect_error, file=sys.stderr, flush=True)
+            logger.warning("%s", rayrust_connect_error)
             if gcs_address == ray._private.utils.read_ray_address(_temp_dir):
                 logger.info(
                     "Failed to connect to the default Ray cluster address at "

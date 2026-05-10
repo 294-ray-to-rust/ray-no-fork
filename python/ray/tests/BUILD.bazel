@@ -647,6 +647,7 @@ py_test_module_list(
         "test_object_assign_owner.py",
         "test_object_manager.py",
         "test_placement_group.py",
+        "test_rayrust_connect_diagnostics.py",
     ],
     tags = [
         "custom_setup",

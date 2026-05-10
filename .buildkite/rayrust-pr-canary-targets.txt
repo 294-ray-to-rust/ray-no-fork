@@ -20,6 +20,9 @@
 //python/ray/tests:test_label_scheduling
 
 # Placement group scheduling, including bundle label selectors.
+# RayRust-focused connect-only diagnostic comes first so Buildkite logs show
+# selected GCS rows before the broader placement-group target times out.
+//python/ray/tests:test_rayrust_connect_diagnostics
 //python/ray/tests:test_placement_group
 //python/ray/tests:test_bundle_label_selector
 
